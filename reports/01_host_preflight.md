@@ -2,14 +2,15 @@
 
 ## Result
 
-**State:** `BLOCKED_PENDING_FIREWALL_CAPTURE`
+**State:** `READY_FOR_CONTAINER_RUNTIME_PHASE`
 
 The host satisfies the observed operating-system, architecture, resource,
 kernel, TUN, cgroup, and security-module prerequisites for a container-runtime
-phase. No runtime installation should begin until the live privileged firewall
-and Network Address Translation (NAT) rules are captured and reviewed. The
-Uncomplicated Firewall (UFW) unit/configuration observations are inconsistent,
-so an empty or harmless ruleset must not be assumed.
+phase. The live privileged firewall and Network Address Translation (NAT)
+rules were subsequently captured and reviewed. No blocking conflict was found.
+Runtime installation still requires the user's explicit continuation and a
+review of the exact versioned commands, expected host effects, verification,
+and rollback procedure.
 
 This report records a read-only inspection performed on 2026-08-01. No package,
 service, interface, route, firewall rule, kernel module, container, or cluster
@@ -93,19 +94,28 @@ immediately before use.
 Absence is not permission to install. The selected runtime procedure and its
 host effects require explicit review before Phase 2.
 
-## Firewall Evidence Gap
+## Firewall And NAT Baseline
 
 The installed firewall commands use the nftables-compatible iptables backend.
-The UFW systemd unit reported enabled and active, while `/etc/ufw/ufw.conf`
-reported `ENABLED=no`. Readable defaults specify drop policies for inbound and
-forwarded traffic. The live UFW, nftables, IPv4 iptables, and IPv6 iptables
-rulesets require administrative read access and could not be captured in the
-current session.
+The UFW systemd unit appeared enabled/active during unprivileged inspection,
+while `/etc/ufw/ufw.conf` reported `ENABLED=no`. The subsequent privileged
+command confirmed the effective result: UFW status is inactive.
 
-This gap blocks a final ready decision because Docker documents that published
-ports can bypass some UFW policy and that Docker manages iptables-compatible
-firewall state. The live baseline is required for a meaningful before/after
-comparison.
+The live nftables ruleset contains only LXC-owned state:
+
+- an `inet lxc` input chain permitting Domain Name System (DNS) and Dynamic
+  Host Configuration Protocol (DHCP) traffic arriving from `lxcbr0`;
+- an `inet lxc` forward chain accepting traffic entering or leaving `lxcbr0`;
+  and
+- an `ip lxc` post-routing NAT rule that masquerades traffic sourced from
+  `10.0.3.0/24` when its destination is outside that range.
+
+The live IPv4 and IPv6 `iptables-save` outputs were empty. No Docker-owned
+chain exists because Docker is not installed. These observations do not make
+future Docker firewall changes harmless: Docker will add its own
+iptables-compatible state, and the LXC table, policies, packet counters, and
+`10.0.3.0/24` behavior must remain present and functional after installation
+and cleanup.
 
 ## Candidate Network And Port Plan
 
@@ -229,24 +239,27 @@ Phase 2 should therefore:
 | --- | --- |
 | Correct directory and required reading | Pass |
 | Scaffold and private/public boundary reviewed | Pass |
-| Read-only host inspection | Pass with one privileged evidence gap |
+| Read-only host inspection | Pass |
 | Candidate versions from official sources | Pass as provisional candidates |
 | Networking risks and provisional ranges recorded | Pass |
 | Proposed ADRs | Pass |
 | Repository-local Git identity and ignore proof | Pass |
-| Live privileged firewall/NAT baseline | **Blocked** |
-| Ready for runtime installation | **No—not until the firewall gap is closed and reviewed** |
+| Live privileged firewall/NAT baseline | Pass |
+| Ready for runtime installation | **Yes, after explicit user continuation and command review** |
 
-## Required Closure Evidence
+## Final Phase 0/1 Decision
 
-Capture and review these live, read-only results before changing the host:
+Phase 0 and Phase 1 pass. No known host prerequisite or conflict blocks the
+container-runtime phase. The following conditions remain mandatory rather than
+optional:
 
-```bash
-sudo ufw status verbose
-sudo nft list ruleset
-sudo iptables-save
-sudo ip6tables-save
-```
-
-If any command fails, record the exact error. Do not enable, disable, reset, or
-reload the firewall as part of this evidence collection.
+- do not start installation without explicit user continuation;
+- use Docker's official repository and exact reviewed package versions;
+- capture interfaces, routes, nftables, iptables, services, sockets, disk, and
+  memory immediately before and after installation;
+- preserve the LXC nftables tables and `10.0.3.0/24` network;
+- keep the host Open5GS and MongoDB services running unless a later exact test
+  requires a temporary, recorded exception;
+- avoid wildcard host port publication; and
+- stop after the Phase 2 container/Compose gate rather than creating a
+  Kubernetes cluster early.

@@ -16,13 +16,13 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The local repository boundary is established and the read-only host preflight
-is documented. Runtime implementation has not started. The Phase 0/1 gate is
-blocked pending a privileged, read-only firewall baseline; see the
-[project status](docs/project-status.md) and
-[host preflight report](reports/01_host_preflight.md). The Kubernetes
-distribution and network model remain proposed until the networking
-feasibility phase produces evidence.
+The local repository boundary and read-only host preflight are complete. The
+host is ready for the container-runtime phase, but runtime implementation has
+not started and still requires explicit user continuation; see the [project
+status](docs/project-status.md) and [host preflight
+report](reports/01_host_preflight.md). The Kubernetes distribution and network
+model remain proposed until the networking feasibility phase produces
+evidence.
 
 ## Target Capabilities
 
