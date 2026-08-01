@@ -9,7 +9,7 @@ LABEL org.opencontainers.image.title="Cloud-Native 5G Core Data Network Endpoint
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-RUN apk add --no-cache iproute2 su-exec \
+RUN apk add --no-cache busybox-extras=1.37.0-r20 iproute2 su-exec \
     && addgroup -g 65532 -S cn5g \
     && adduser -u 65532 -S -D -H -G cn5g cn5g \
     && mkdir -p /srv

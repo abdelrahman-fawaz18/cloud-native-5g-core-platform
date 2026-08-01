@@ -31,5 +31,11 @@ if [ ! -r "$config" ]; then
     exit 33
 fi
 
-exec "$binary" -c "$config"
+log_file="/opt/ueransim/logs/$component.log"
 
+# Preserve protocol-success evidence for the health check while continuing to
+# emit the same output through Docker's normal container log stream. Bash
+# process substitution lets the simulator remain the signal-receiving process.
+exec /bin/bash -c \
+    'exec "$1" -c "$2" > >(/usr/bin/tee "$3") 2>&1' \
+    ueransim "$binary" "$config" "$log_file"

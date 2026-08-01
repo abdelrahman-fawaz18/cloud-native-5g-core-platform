@@ -124,3 +124,13 @@ The guard now compares PID namespaces: processes inside running
 processes in the host namespace or an unrelated container still block the
 build. The false-positive preflight made no runtime change; validation of the
 corrected guard remains pending.
+
+The corrected guard passed with the project gNodeB running, and the endpoint
+was rebuilt in isolation. Runtime then confirmed that Alpine's base BusyBox
+binary does not contain the `httpd` applet. The endpoint now installs pinned
+`busybox-extras` `1.37.0-r20` and invokes its explicit binary. Separately, the
+gNodeB log proved SCTP association and successful NG Setup, but the health
+probe could not see evidence emitted only to container output. The UERANSIM
+entrypoint now duplicates output to both Docker logs and its private temporary
+log filesystem without replacing the simulator as the signal-receiving
+process. Targeted endpoint and UERANSIM rebuilds remain pending.

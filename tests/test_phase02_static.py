@@ -110,12 +110,28 @@ class Phase02StaticTests(unittest.TestCase):
             self.assertIn(f"      - {capability}", endpoint)
 
     def test_data_endpoint_invokes_busybox_http_server_explicitly(self):
+        dockerfile = (
+            ROOT / "containers/data-network/Dockerfile"
+        ).read_text(encoding="utf-8")
         entrypoint = (
             ROOT / "containers/data-network/entrypoint.sh"
         ).read_text(encoding="utf-8")
+        self.assertIn("busybox-extras=1.37.0-r20", dockerfile)
         self.assertIn(
-            "exec su-exec 65532:65532 /bin/busybox httpd ", entrypoint
+            "exec su-exec 65532:65532 /bin/busybox-extras httpd ", entrypoint
         )
+
+    def test_ueransim_protocol_evidence_reaches_healthcheck_and_logs(self):
+        entrypoint = (
+            ROOT / "containers/ueransim/entrypoint.sh"
+        ).read_text(encoding="utf-8")
+        healthcheck = (
+            ROOT / "containers/ueransim/healthcheck.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('log_file="/opt/ueransim/logs/$component.log"', entrypoint)
+        self.assertIn('/usr/bin/tee "$3"', entrypoint)
+        self.assertIn("NG Setup procedure is successful", healthcheck)
+        self.assertIn("PDU Session establishment is successful", healthcheck)
 
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()
