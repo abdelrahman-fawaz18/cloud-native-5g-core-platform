@@ -97,6 +97,7 @@ cloud-native-5g-core-platform/
 ├── benchmarks/             Reproducible experiment definitions and summaries
 ├── docs/                   Architecture, decisions, operation, and analysis
 ├── reports/                Sanitized validation and experiment reports
+├── versions/               Exact tool, image, and source provenance manifests
 ├── captures/               Intentionally reviewed protocol evidence
 ├── screenshots/            Selected visual evidence
 ├── diagrams/               Architecture and call-flow sources
