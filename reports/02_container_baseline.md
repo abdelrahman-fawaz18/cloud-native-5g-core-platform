@@ -70,3 +70,9 @@ images and zero containers, Compose networks, or Compose volumes.
 Docker reported 3.121 GB of build cache, including 2.37 GB currently marked
 reclaimable. It was retained because the default builder cache is not safely
 owned by one Compose project and broad pruning is prohibited.
+
+Before first deployment, the Open5GS SBI health probe was aligned with its
+cleartext HTTP/2 server. MongoDB received only the capabilities required by
+its official entrypoint to prepare named volumes and drop privileges. The
+subscriber initializer masks image-declared database paths with temporary
+filesystems to prevent unintended anonymous volumes.

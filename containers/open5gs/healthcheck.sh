@@ -7,7 +7,8 @@ case "$component" in
     nrf|scp|amf|ausf|udm|udr|pcf|nssf|smf)
         address="${2:?healthcheck requires the service address}"
         curl --silent --show-error --output /dev/null \
-            --connect-timeout 2 --max-time 3 "http://${address}:7777/"
+            --http2-prior-knowledge --connect-timeout 2 --max-time 3 \
+            "http://${address}:7777/"
         ;;
     upf)
         ip link show ogstun >/dev/null
@@ -20,4 +21,3 @@ case "$component" in
         exit 24
         ;;
 esac
-

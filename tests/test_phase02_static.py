@@ -75,6 +75,19 @@ class Phase02StaticTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("        git \\\n", dockerfile)
 
+    def test_open5gs_health_uses_cleartext_http2(self):
+        healthcheck = (
+            ROOT / "containers/open5gs/healthcheck.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--http2-prior-knowledge", healthcheck)
+
+    def test_mongodb_startup_and_init_volume_boundaries(self):
+        compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        for capability in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"):
+            self.assertIn(f"      - {capability}", compose)
+        self.assertIn("      - /data/db:mode=0700", compose)
+        self.assertIn("      - /data/configdb:mode=0700", compose)
+
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()
         candidates = (ipaddress.ip_network("172.28.0.0/24"),)

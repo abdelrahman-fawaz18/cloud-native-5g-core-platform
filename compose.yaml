@@ -43,6 +43,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     tmpfs:
       - /tmp:mode=1777
     volumes:
@@ -73,6 +79,8 @@ services:
       - ALL
     tmpfs:
       - /tmp:mode=1777
+      - /data/db:mode=0700
+      - /data/configdb:mode=0700
     volumes:
       - ./configs/compose/mongodb/subscriber-init.js:/init/subscriber-init.js:ro
     command:

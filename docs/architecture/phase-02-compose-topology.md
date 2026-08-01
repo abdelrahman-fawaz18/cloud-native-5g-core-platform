@@ -56,3 +56,8 @@ networks. `scripts/compose-lab.sh down` removes the named containers and
 networks; `destroy --confirm` also removes only the two project database
 volumes.
 
+MongoDB drops all default capabilities, then adds only `CHOWN`,
+`DAC_OVERRIDE`, `FOWNER`, `SETGID`, and `SETUID` for its official entrypoint to
+prepare the named data directories and switch to its database user. The
+subscriber initializer masks the image-declared data paths with temporary
+filesystems so it cannot create unintended anonymous volumes.
