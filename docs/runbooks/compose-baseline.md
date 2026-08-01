@@ -99,6 +99,13 @@ must be sanitized before publication.
 
 ## Scoped Cleanup
 
+Before a persistence/recreation test, create one synthetic marker in the
+project's dedicated evidence collection:
+
+```bash
+sudo ./scripts/compose-lab.sh prepare-persistence
+```
+
 Preserve MongoDB volumes:
 
 ```bash
@@ -109,6 +116,17 @@ sudo ./scripts/compose-lab.sh verify-down
 The verification requires zero project containers, zero project networks, and
 exactly the two named MongoDB volumes. It does not inspect or remove unrelated
 Docker resources.
+
+After `up` reaches healthy state again, prove that the marker survived and
+remove the dedicated evidence collection:
+
+```bash
+sudo ./scripts/compose-lab.sh verify-persistence
+sudo ./scripts/compose-lab.sh validate
+```
+
+Expected final lines are `persistence_verification=pass` and
+`compose_validation=pass`.
 
 Remove containers, networks, and only the two project volumes:
 

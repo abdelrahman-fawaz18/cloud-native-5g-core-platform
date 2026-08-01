@@ -229,6 +229,15 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("cn5g-compose_mongodb-data", lifecycle)
         self.assertIn("scoped_down_verification=pass", lifecycle)
 
+    def test_recreation_test_uses_and_removes_only_synthetic_evidence(self):
+        lifecycle = (ROOT / "scripts/compose-lab.sh").read_text(encoding="utf-8")
+        self.assertIn("prepare-persistence", lifecycle)
+        self.assertIn("verify-persistence", lifecycle)
+        self.assertIn("phase02-compose-recreation", lifecycle)
+        self.assertIn("synthetic-persistence-evidence", lifecycle)
+        self.assertIn("db.cn5g_phase_evidence.drop()", lifecycle)
+        self.assertIn("persistence_verification=pass", lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()

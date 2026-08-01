@@ -187,6 +187,40 @@ cn5g-compose_mongodb-data'
     echo "scoped_down_verification=pass"
 }
 
+prepare_persistence_test() {
+    compose exec -T mongodb mongosh --quiet open5gs --eval "
+const marker = {
+  _id: 'phase02-compose-recreation',
+  value: 'synthetic-persistence-evidence'
+};
+db.cn5g_phase_evidence.replaceOne(
+  { _id: marker._id }, marker, { upsert: true }
+);
+if (!db.cn5g_phase_evidence.findOne(marker)) {
+  quit(68);
+}
+print('persistence_marker=prepared');
+"
+}
+
+verify_persistence_test() {
+    compose exec -T mongodb mongosh --quiet open5gs --eval "
+const marker = {
+  _id: 'phase02-compose-recreation',
+  value: 'synthetic-persistence-evidence'
+};
+if (!db.cn5g_phase_evidence.findOne(marker)) {
+  quit(69);
+}
+if (!db.cn5g_phase_evidence.drop()) {
+  quit(70);
+}
+print('persistence_marker=survived_recreation');
+print('persistence_evidence_collection=removed');
+print('persistence_verification=pass');
+"
+}
+
 usage() {
     cat <<'EOF'
 usage: scripts/compose-lab.sh ACTION [--confirm]
@@ -195,6 +229,8 @@ Actions:
   preflight-build verify host lab health, idle simulators, disk, and image ownership
   verify-images   inspect built images and confirm no deployment resources exist
   verify-down     confirm containers/networks are gone and database volumes remain
+  prepare-persistence create one synthetic marker before a recreation test
+  verify-persistence prove the marker survived, then remove its evidence collection
   config         validate and render the Compose model without creating resources
   build          build the three project-owned images
   up             check subnet safety, create the lab, and wait for health
@@ -219,6 +255,12 @@ case "$action" in
         ;;
     verify-down)
         verify_down
+        ;;
+    prepare-persistence)
+        prepare_persistence_test
+        ;;
+    verify-persistence)
+        verify_persistence_test
         ;;
     config)
         compose config --quiet
