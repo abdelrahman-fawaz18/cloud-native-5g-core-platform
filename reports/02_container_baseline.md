@@ -1,6 +1,6 @@
 # Phase 2 Container Baseline Report
 
-**Status:** In progress
+**Status:** Complete — exit gate passed on 2026-08-01
 
 ## Runtime Installation And Coexistence
 
@@ -39,10 +39,16 @@ prohibited because the default builder cache may be shared by other projects.
 
 ## Compose Baseline
 
-The reviewed Compose and image definitions are present. Static rendering,
-build, protocol validation, teardown/recreation, image digest recording, and
-post-cleanup host comparison remain required before the Phase 2 exit gate can
-pass.
+The reviewed Compose and image definitions passed static rendering, image
+build, protocol validation, teardown/recreation, final image identity
+recording, and post-cleanup host comparison.
+
+### Implementation Incident Chronology
+
+The following paragraphs retain each failure and its bounded correction in
+the order observed. Statements that a retry was pending describe that point in
+the chronology; all listed corrections are included in the final passing
+baseline documented below.
 
 The first Open5GS build attempt stopped safely during Meson configuration
 because the build stage lacked `git`, which Meson requires to retrieve the
@@ -174,3 +180,78 @@ was present and readable, but retained immutable mode `0444`; UERANSIM failed
 when reopening it to append the `rt_uesimtun0` mapping. The entrypoint now keeps
 the image copy immutable while setting only the container-private temporary
 copy to owner-writable mode `0644`. Rebuild and recovery remain pending.
+
+## Final Functional Evidence
+
+The corrected topology reached all 15 Compose dependency gates: 14
+long-running services were healthy and the one-shot subscriber initializer
+exited successfully. The validation helper then proved:
+
+- exactly one managed synthetic subscriber;
+- successful gNodeB Next Generation Application Protocol setup over Stream
+  Control Transmission Protocol;
+- successful UE registration;
+- an IPv4 Protocol Data Unit session in `10.60.0.0/24` for Data Network Name
+  `internet`;
+- successful HTTP and Internet Control Message Protocol traffic from the UE
+  through the gNodeB, General Packet Radio Service (GPRS) Tunnelling Protocol
+  User Plane (GTP-U) path, UPF, and N6 return route to the controlled endpoint;
+  and
+- positive `ogstun` receive and transmit deltas of eight packets each during
+  the controlled traffic test.
+
+The counter deltas are concise bidirectional packet evidence. No raw packet
+capture, subscriber secret, or unsanitized log was retained for publication.
+Container log evidence was reviewed for successful NG Setup, registration,
+PDU-session establishment, Packet Forwarding Control Protocol association,
+and GTP-U session creation.
+
+## Recreation And Cleanup Evidence
+
+Before teardown, a dedicated collection received one synthetic persistence
+marker. `compose down` removed all 15 project containers and both project
+networks while retaining exactly the two named MongoDB volumes. A subsequent
+`compose up` recreated the topology without an image rebuild or manual repair.
+The marker survived, its dedicated evidence collection was removed, and the
+complete protocol and traffic validation passed again with eight receive and
+eight transmit packets on `ogstun`.
+
+The confirmed destructive cleanup then removed exactly 15 project containers,
+two networks, and two MongoDB volumes. Final verification found zero
+`cn5g-compose` containers, networks, or volumes. It intentionally retained the
+three project images, the pinned MongoDB image, and shared BuildKit cache; no
+prune command was used.
+
+Final verified local images were:
+
+| Image | Local image ID | Unpacked image size |
+| --- | --- | ---: |
+| `cn5g/open5gs:2.7.7` | `sha256:56b1a5aec5f3736c819b5f2edbbb1c61357740136c09c7d253dcca03f0da6cc8` | 48,037,139 bytes |
+| `cn5g/ueransim:3.2.8` | `sha256:60de10ecd55a9b96d4863319bd102d776622fcc3211f7f1b1c1a4d8026bc7f58` | 40,489,225 bytes |
+| `cn5g/data-network:0.1.0` | `sha256:c4770c4c6934e6b4f207a00304131f805b9c214ac8c9b8c365306bb58cce2b18` | 5,649,954 bytes |
+
+## Post-Cleanup Host Comparison
+
+Checksums passed for both ignored host snapshots. Comparing
+`before-compose-up-final` with `after-compose-cleanup` found:
+
+- identical interfaces, bridges, routes, and policy rules;
+- identical firewall rule structure, with only expected timestamps and packet
+  counters changed;
+- zero containers and user-created volumes, and no residual project network;
+- preserved active host Open5GS, MongoDB, and LXC services and relevant
+  listening sockets;
+- one additional retained image: the pinned MongoDB image used by Compose; and
+- approximately 1.36 GB more filesystem use from intentionally retained image
+  layers and build cache.
+
+The shared builder reported 3.274 GB of cache, of which 2.375 GB was marked
+reclaimable. It remains retained because project ownership cannot be proven
+for every cache record and broad pruning is prohibited.
+
+## Exit Gate
+
+Phase 2 passes. The Compose deployment is healthy and reproducible, the
+single-UE control and user planes work, persistence survives recreation,
+scoped destruction is verified, and no unrelated host network or service was
+damaged. Phase 3 has not started.

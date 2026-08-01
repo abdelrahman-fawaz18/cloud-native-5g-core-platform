@@ -6,8 +6,8 @@ Last updated: 2026-08-01
 | --- | --- | --- |
 | 0 — Project governance | Complete | Local Git identity, ignore boundary, and initial technical baseline verified |
 | 1 — Host preflight and decisions | Complete | Host ready; safety constraints and proposed decisions recorded |
-| 2 — Container and Compose baseline | In progress | Pinned images built and verified; Compose deployment/protocol validation pending |
-| 3-10 | Not started | Enforced by roadmap dependencies |
+| 2 — Container and Compose baseline | Complete | Healthy deployment, protocol/data path, persistence, recreation, and scoped cleanup verified |
+| 3-10 | Not started | Phase 3 requires explicit continuation and its networking feasibility gate |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The user was not added to the root-equivalent
@@ -15,10 +15,11 @@ Compose `5.3.1` are installed. The user was not added to the root-equivalent
 bridge/firewall additions and no disruption to the existing host Open5GS,
 MongoDB, or LXC services.
 
-Phase 2 remains active on a local, unpushed branch. Three pinned Linux/AMD64
-images are built and verified, with no deployment resources created during the
-image slice. The private Compose topology, synthetic subscriber initializer,
-lifecycle helper, and static tests are present. Full 5G validation,
-teardown/recreation, final evidence, and the Phase 2 exit gate remain pending.
-See the [container report](../reports/02_container_baseline.md) and [Compose
+Phase 2 is complete. Three pinned Linux/AMD64 project images and the pinned
+MongoDB image produced a healthy Compose topology. A synthetic UE registered,
+established an IPv4 session, and passed bidirectional HTTP and ICMP traffic
+through the UPF. MongoDB persistence, teardown/recreation, complete scoped
+cleanup, and post-cleanup host state were verified. No Compose container,
+network, or volume remains. See the
+[container report](../reports/02_container_baseline.md) and [Compose
 topology](architecture/phase-02-compose-topology.md).

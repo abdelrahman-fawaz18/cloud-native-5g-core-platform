@@ -19,9 +19,9 @@ community telecom image is used.
 
 The Dockerfiles verify downloaded telecom source archives with Dockerfile
 `ADD --checksum`. Base and database images use architecture-specific image
-manifests rather than moving tags. The release process will record the locally
-produced image content digests and installed package inventories after the
-build passes.
+manifests rather than moving tags. The verified local output identities are
+recorded below. A future public image release would additionally require an
+installed-package inventory and registry digest for each published artifact.
 
 ## Runtime Boundaries
 
@@ -42,13 +42,13 @@ Container Initiative image identities:
 
 | Image | Local image ID | Unpacked image size |
 | --- | --- | ---: |
-| `cn5g/open5gs:2.7.7` | `sha256:4abce03b299a8e0a10a73bd4a656e9465cfb9e0b7e1f5d5405cef0cf07b4f0f1` | 47,958,825 bytes |
-| `cn5g/ueransim:3.2.8` | `sha256:c3eb37afa7a3253afd6add6479055c42c30c5204071a2a8a791043797d060bf1` | 40,488,183 bytes |
-| `cn5g/data-network:0.1.0` | `sha256:9a14ca52a336fea4723fe9fc20f985f1ea97c4d9a89ed2fefccbd2074e0f68ed` | 5,063,524 bytes |
+| `cn5g/open5gs:2.7.7` | `sha256:56b1a5aec5f3736c819b5f2edbbb1c61357740136c09c7d253dcca03f0da6cc8` | 48,037,139 bytes |
+| `cn5g/ueransim:3.2.8` | `sha256:60de10ecd55a9b96d4863319bd102d776622fcc3211f7f1b1c1a4d8026bc7f58` | 40,489,225 bytes |
+| `cn5g/data-network:0.1.0` | `sha256:c4770c4c6934e6b4f207a00304131f805b9c214ac8c9b8c365306bb58cce2b18` | 5,649,954 bytes |
 
 All three images carry the project ownership URL, target `linux/amd64`, and
-passed the pre-deployment resource check. No Compose container, network, or
-volume existed at verification time.
+passed the post-cleanup resource check. No Compose container, network, or
+volume existed at final verification time.
 
 These local IDs identify BuildKit-exported OCI indexes that include provenance
 attestations. A later export can produce a different index ID even when its

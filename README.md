@@ -16,12 +16,13 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The repository boundary and host preflight are complete. Pinned Docker Engine
-and Compose components are installed, and before/after evidence confirms that
-the existing host Open5GS, MongoDB, LXC, routes, and firewall rules remain
-operational. The Phase 2 image and Compose definitions are undergoing build
-and protocol validation; see the [project status](docs/project-status.md),
-[container report](reports/02_container_baseline.md), and [Compose
+The repository boundary, host preflight, and Phase 2 container baseline are
+complete. Pinned images produce a healthy Compose deployment in which a
+synthetic UE registers, establishes an IPv4 session, and exchanges controlled
+traffic through the UPF. Persistence, recreation, scoped cleanup, and
+post-cleanup host safety were verified; see the [project
+status](docs/project-status.md), [container
+report](reports/02_container_baseline.md), and [Compose
 topology](docs/architecture/phase-02-compose-topology.md). The Kubernetes
 distribution remains proposed until Phase 3 networking tests produce evidence.
 
