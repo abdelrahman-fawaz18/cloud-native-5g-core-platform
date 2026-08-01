@@ -69,6 +69,12 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("10.60.0.0/24", upf)
         self.assertIn("10.60.0.0/24 via 10.62.0.2", endpoint)
 
+    def test_open5gs_build_has_upstream_fetch_tool(self):
+        dockerfile = (
+            ROOT / "containers/open5gs/Dockerfile"
+        ).read_text(encoding="utf-8")
+        self.assertIn("        git \\\n", dockerfile)
+
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()
         candidates = (ipaddress.ip_network("172.28.0.0/24"),)

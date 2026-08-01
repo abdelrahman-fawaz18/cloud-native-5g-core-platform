@@ -43,3 +43,8 @@ The reviewed Compose and image definitions are present. Static rendering,
 build, protocol validation, teardown/recreation, image digest recording, and
 post-cleanup host comparison remain required before the Phase 2 exit gate can
 pass.
+
+The first Open5GS build attempt stopped safely during Meson configuration
+because the build stage lacked `git`, which Meson requires to retrieve the
+pinned `prometheus-client-c` subproject. No deployment resources were created.
+The missing build-only dependency was added before retrying.

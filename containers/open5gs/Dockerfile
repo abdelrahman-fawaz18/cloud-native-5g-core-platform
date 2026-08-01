@@ -12,6 +12,7 @@ RUN apt-get update \
         ca-certificates \
         cmake \
         flex \
+        git \
         libbson-dev \
         libcurl4-gnutls-dev \
         libgcrypt20-dev \
