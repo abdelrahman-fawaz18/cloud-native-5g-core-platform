@@ -55,6 +55,7 @@ RUN apt-get update \
 COPY --from=build /out/ /opt/ueransim/bin/
 COPY --chmod=0755 containers/ueransim/entrypoint.sh /usr/local/bin/ueransim-entrypoint
 COPY --chmod=0755 containers/ueransim/healthcheck.sh /usr/local/bin/ueransim-healthcheck
+COPY --chmod=0444 containers/ueransim/rt_tables /opt/ueransim/share/rt_tables
 
 ENV PATH="/opt/ueransim/bin:${PATH}"
 WORKDIR /opt/ueransim

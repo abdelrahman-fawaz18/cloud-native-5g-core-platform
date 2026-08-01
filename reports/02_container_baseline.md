@@ -134,3 +134,15 @@ probe could not see evidence emitted only to container output. The UERANSIM
 entrypoint now duplicates output to both Docker logs and its private temporary
 log filesystem without replacing the simulator as the signal-receiving
 process. Targeted endpoint and UERANSIM rebuilds remain pending.
+
+After all containers became healthy, functional validation proved the
+subscriber, NG Setup, registration, PDU session, and UE address, but HTTP user
+traffic timed out. Read-only inspection proved the endpoint and direct UPF-to-N6
+path, while the UE had no route beyond its assigned subnet. Pinned UERANSIM
+source and runtime logs showed that automatic routing stopped because
+`/etc/iproute2/rt_tables` was absent. The UE now receives a private writable
+`/etc/iproute2` temporary filesystem seeded from the image; its health gate
+requires UERANSIM's connection-success message, source policy rule, and default
+route. Live logs also showed the HTTP-based SBI health requests causing repeated
+SMF URI parser errors, so SBI probes now verify the local TCP listener without
+sending application requests. Rebuild and end-to-end recovery remain pending.

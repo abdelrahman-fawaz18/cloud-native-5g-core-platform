@@ -345,6 +345,7 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     tmpfs:
+      - /etc/iproute2:mode=0755
       - /opt/ueransim/logs:mode=0750
       - /tmp:mode=1777
     volumes:

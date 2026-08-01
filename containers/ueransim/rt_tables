@@ -1,0 +1,5 @@
+# Reserved Linux routing tables used to seed the UE's private writable copy.
+255 local
+254 main
+253 default
+0 unspec

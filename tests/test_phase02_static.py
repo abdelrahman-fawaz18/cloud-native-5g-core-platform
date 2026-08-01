@@ -76,11 +76,12 @@ class Phase02StaticTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("        git \\\n", dockerfile)
 
-    def test_open5gs_health_uses_cleartext_http2(self):
+    def test_open5gs_health_checks_listener_without_sbi_requests(self):
         healthcheck = (
             ROOT / "containers/open5gs/healthcheck.sh"
         ).read_text(encoding="utf-8")
-        self.assertIn("--http2-prior-knowledge", healthcheck)
+        self.assertIn('ss -H -t -l -n | grep -Fq "${address}:7777"', healthcheck)
+        self.assertNotIn("curl ", healthcheck)
 
     def test_required_amf_registration_timer_is_explicit(self):
         amf = (
@@ -122,6 +123,10 @@ class Phase02StaticTests(unittest.TestCase):
         )
 
     def test_ueransim_protocol_evidence_reaches_healthcheck_and_logs(self):
+        compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        dockerfile = (
+            ROOT / "containers/ueransim/Dockerfile"
+        ).read_text(encoding="utf-8")
         entrypoint = (
             ROOT / "containers/ueransim/entrypoint.sh"
         ).read_text(encoding="utf-8")
@@ -130,8 +135,17 @@ class Phase02StaticTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('log_file="/opt/ueransim/logs/$component.log"', entrypoint)
         self.assertIn('/usr/bin/tee "$3"', entrypoint)
+        self.assertIn("COPY --chmod=0444 containers/ueransim/rt_tables", dockerfile)
+        self.assertIn("      - /etc/iproute2:mode=0755", compose)
+        self.assertIn(
+            "cp /opt/ueransim/share/rt_tables /etc/iproute2/rt_tables",
+            entrypoint,
+        )
         self.assertIn("NG Setup procedure is successful", healthcheck)
         self.assertIn("PDU Session establishment is successful", healthcheck)
+        self.assertIn("Connection setup for PDU session.*is successful", healthcheck)
+        self.assertIn("lookup rt_uesimtun0", healthcheck)
+        self.assertIn("default dev uesimtun0", healthcheck)
 
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()
