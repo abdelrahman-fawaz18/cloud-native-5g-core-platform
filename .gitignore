@@ -1,0 +1,61 @@
+# Local planning and assistant handoff material (never publish)
+AGENTS.md
+migration/
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.kubeconfig
+kubeconfig*
+secrets.local.yaml
+values.local.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Build and editor output
+build/
+dist/
+.cache/
+.idea/
+.vscode/
+*.swp
+*~
+
+# Runtime data and raw evidence
+artifacts/
+logs/
+*.log
+*.pcap
+*.pcapng
+*.cap
+*.har
+
+# Generated benchmark and monitoring data
+benchmarks/raw/
+monitoring/data/
+prometheus-data/
+grafana-data/
+loki-data/
+
+# Container and cluster state
+.kind/
+.k3d/
+.kube/
+docker-data/
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
