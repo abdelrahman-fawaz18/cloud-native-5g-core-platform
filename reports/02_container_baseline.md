@@ -109,3 +109,10 @@ chain to the AMF. The AMF rejected the otherwise valid configuration because
 the mandatory periodic registration timer `T3512` was absent. The pinned
 Open5GS v2.7.7 reference value of 540 seconds is now explicit. AMF and radio
 access recovery remain pending.
+
+With AMF healthy, the data endpoint's retained process then exposed a separate
+command-path defect: Alpine provides the HTTP server as a BusyBox applet, but
+the entrypoint requested a standalone `httpd` executable. The entrypoint now
+invokes `/bin/busybox httpd` explicitly after installing the private route and
+dropping to numeric user/group `65532`. Endpoint rebuild and recovery remain
+pending.

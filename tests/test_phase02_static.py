@@ -109,6 +109,14 @@ class Phase02StaticTests(unittest.TestCase):
         for capability in ("NET_ADMIN", "SETGID", "SETUID"):
             self.assertIn(f"      - {capability}", endpoint)
 
+    def test_data_endpoint_invokes_busybox_http_server_explicitly(self):
+        entrypoint = (
+            ROOT / "containers/data-network/entrypoint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "exec su-exec 65532:65532 /bin/busybox httpd ", entrypoint
+        )
+
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()
         candidates = (ipaddress.ip_network("172.28.0.0/24"),)
