@@ -22,6 +22,7 @@ case "$component" in
             exit 35
         fi
         cp /opt/ueransim/rt_tables /etc/iproute2/rt_tables
+        chmod 0644 /etc/iproute2/rt_tables
         binary=/opt/ueransim/bin/nr-ue
         config=/etc/ueransim/ue.yaml
         ;;

@@ -144,6 +144,7 @@ class Phase02StaticTests(unittest.TestCase):
             "cp /opt/ueransim/rt_tables /etc/iproute2/rt_tables",
             entrypoint,
         )
+        self.assertIn("chmod 0644 /etc/iproute2/rt_tables", entrypoint)
         self.assertIn("NG Setup procedure is successful", healthcheck)
         self.assertIn("PDU Session establishment is successful", healthcheck)
         self.assertIn("Connection setup for PDU session.*is successful", healthcheck)

@@ -168,3 +168,9 @@ directory. The immutable seed now resides directly in the already traversable
 `/opt/ueransim` runtime directory; the writable destination remains the
 container-private `/etc/iproute2` temporary filesystem. Rebuild and recovery
 remain pending.
+
+The stricter UE gate then remained unhealthy. Inspection showed that the seed
+was present and readable, but retained immutable mode `0444`; UERANSIM failed
+when reopening it to append the `rt_uesimtun0` mapping. The entrypoint now keeps
+the image copy immutable while setting only the container-private temporary
+copy to owner-writable mode `0644`. Rebuild and recovery remain pending.
