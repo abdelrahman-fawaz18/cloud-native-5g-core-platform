@@ -1,0 +1,21 @@
+# All identifiers and addresses are synthetic and restricted to this lab.
+mcc: '999'
+mnc: '70'
+
+nci: '0x000000010'
+idLength: 32
+tac: 1
+
+linkIp: 172.28.0.20
+ngapIp: 172.28.0.20
+gtpIp: 172.28.0.20
+
+amfConfigs:
+  - address: 172.28.0.12
+    port: 38412
+
+slices:
+  - sst: 1
+
+ignoreStreamIds: true
+

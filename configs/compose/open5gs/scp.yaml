@@ -1,0 +1,16 @@
+logger:
+  level: info
+
+global:
+  max:
+    ue: 32
+
+scp:
+  sbi:
+    server:
+      - address: 172.28.0.11
+        port: 7777
+    client:
+      nrf:
+        - uri: http://172.28.0.10:7777
+

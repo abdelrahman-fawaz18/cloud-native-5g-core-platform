@@ -1,0 +1,17 @@
+logger:
+  level: info
+
+global:
+  max:
+    ue: 32
+
+nrf:
+  serving:
+    - plmn_id:
+        mcc: 999
+        mnc: 70
+  sbi:
+    server:
+      - address: 172.28.0.10
+        port: 7777
+

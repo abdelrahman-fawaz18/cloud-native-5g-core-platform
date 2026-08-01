@@ -1,0 +1,24 @@
+logger:
+  level: info
+
+global:
+  max:
+    ue: 32
+
+upf:
+  pfcp:
+    server:
+      - address: 172.28.0.19
+  gtpu:
+    server:
+      - address: 172.28.0.19
+  session:
+    - subnet: 10.60.0.0/24
+      gateway: 10.60.0.1
+      dnn: internet
+      dev: ogstun
+  metrics:
+    server:
+      - address: 172.28.0.19
+        port: 9090
+

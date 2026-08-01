@@ -1,0 +1,23 @@
+logger:
+  level: info
+
+global:
+  max:
+    ue: 32
+
+udm:
+  hnet:
+    - id: 1
+      scheme: 1
+      key: /opt/open5gs/etc/open5gs/hnet/curve25519-1.key
+    - id: 2
+      scheme: 2
+      key: /opt/open5gs/etc/open5gs/hnet/secp256r1-2.key
+  sbi:
+    server:
+      - address: 172.28.0.14
+        port: 7777
+    client:
+      scp:
+        - uri: http://172.28.0.11:7777
+

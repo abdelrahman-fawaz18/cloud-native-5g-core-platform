@@ -1,0 +1,15 @@
+# Default-deny the Docker build context. Only the reviewed image inputs below
+# may be sent to the Docker daemon. In particular, private migration material,
+# host snapshots, Git history, reports, and captures never enter a build.
+**
+
+!containers/open5gs/Dockerfile
+!containers/open5gs/entrypoint.sh
+!containers/open5gs/healthcheck.sh
+!containers/ueransim/Dockerfile
+!containers/ueransim/entrypoint.sh
+!containers/ueransim/healthcheck.sh
+!containers/data-network/Dockerfile
+!containers/data-network/entrypoint.sh
+!containers/data-network/healthz
+

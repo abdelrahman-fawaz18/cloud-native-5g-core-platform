@@ -1,0 +1,42 @@
+logger:
+  level: info
+
+global:
+  max:
+    ue: 32
+
+smf:
+  sbi:
+    server:
+      - address: 172.28.0.18
+        port: 7777
+    client:
+      scp:
+        - uri: http://172.28.0.11:7777
+  pfcp:
+    server:
+      - address: 172.28.0.18
+    client:
+      upf:
+        - address: 172.28.0.19
+  gtpc:
+    server:
+      - address: 172.28.0.18
+  gtpu:
+    server:
+      - address: 172.28.0.18
+  metrics:
+    server:
+      - address: 172.28.0.18
+        port: 9090
+  session:
+    - subnet: 10.60.0.0/24
+      gateway: 10.60.0.1
+      dnn: internet
+  info:
+    - s_nssai:
+        - sst: 1
+          dnn:
+            - internet
+  mtu: 1400
+

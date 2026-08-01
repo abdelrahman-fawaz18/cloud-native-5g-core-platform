@@ -16,13 +16,14 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The local repository boundary and read-only host preflight are complete. The
-host is ready for the container-runtime phase, but runtime implementation has
-not started and still requires explicit user continuation; see the [project
-status](docs/project-status.md) and [host preflight
-report](reports/01_host_preflight.md). The Kubernetes distribution and network
-model remain proposed until the networking feasibility phase produces
-evidence.
+The repository boundary and host preflight are complete. Pinned Docker Engine
+and Compose components are installed, and before/after evidence confirms that
+the existing host Open5GS, MongoDB, LXC, routes, and firewall rules remain
+operational. The Phase 2 image and Compose definitions are undergoing build
+and protocol validation; see the [project status](docs/project-status.md),
+[container report](reports/02_container_baseline.md), and [Compose
+topology](docs/architecture/phase-02-compose-topology.md). The Kubernetes
+distribution remains proposed until Phase 3 networking tests produce evidence.
 
 ## Target Capabilities
 

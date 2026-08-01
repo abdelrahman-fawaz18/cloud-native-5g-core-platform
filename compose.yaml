@@ -1,0 +1,371 @@
+name: cn5g-compose
+
+x-open5gs: &open5gs
+  image: cn5g/open5gs:2.7.7
+  build:
+    context: .
+    dockerfile: containers/open5gs/Dockerfile
+    args:
+      BUILD_JOBS: "8"
+  init: true
+  restart: "no"
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:mode=1777
+  networks:
+    core: {}
+  stop_grace_period: 10s
+
+x-ueransim: &ueransim
+  image: cn5g/ueransim:3.2.8
+  build:
+    context: .
+    dockerfile: containers/ueransim/Dockerfile
+    args:
+      BUILD_JOBS: "8"
+  init: true
+  restart: "no"
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    core: {}
+  stop_grace_period: 10s
+
+x-sbi-health: &sbi-health
+  interval: 5s
+  timeout: 3s
+  start_period: 10s
+  retries: 24
+
+services:
+  mongodb:
+    image: mongo:8.0.28-noble@sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    networks:
+      core:
+        ipv4_address: 172.28.0.2
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 24
+
+  subscriber-init:
+    image: mongo:8.0.28-noble@sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - ./configs/compose/mongodb/subscriber-init.js:/init/subscriber-init.js:ro
+    command:
+      - mongosh
+      - --quiet
+      - mongodb://mongodb:27017/open5gs
+      - /init/subscriber-init.js
+    networks:
+      core: {}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  nrf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [nrf]
+    volumes:
+      - ./configs/compose/open5gs/nrf.yaml:/etc/open5gs/nrf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, nrf, 172.28.0.10]
+
+  scp:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [scp]
+    volumes:
+      - ./configs/compose/open5gs/scp.yaml:/etc/open5gs/scp.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.11
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, scp, 172.28.0.11]
+    depends_on:
+      nrf:
+        condition: service_healthy
+
+  ausf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [ausf]
+    volumes:
+      - ./configs/compose/open5gs/ausf.yaml:/etc/open5gs/ausf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.13
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, ausf, 172.28.0.13]
+    depends_on:
+      scp:
+        condition: service_healthy
+
+  udm:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [udm]
+    volumes:
+      - ./configs/compose/open5gs/udm.yaml:/etc/open5gs/udm.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.14
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, udm, 172.28.0.14]
+    depends_on:
+      scp:
+        condition: service_healthy
+
+  udr:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [udr]
+    volumes:
+      - ./configs/compose/open5gs/udr.yaml:/etc/open5gs/udr.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.15
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, udr, 172.28.0.15]
+    depends_on:
+      scp:
+        condition: service_healthy
+      subscriber-init:
+        condition: service_completed_successfully
+
+  pcf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [pcf]
+    volumes:
+      - ./configs/compose/open5gs/pcf.yaml:/etc/open5gs/pcf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.16
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, pcf, 172.28.0.16]
+    depends_on:
+      scp:
+        condition: service_healthy
+      subscriber-init:
+        condition: service_completed_successfully
+
+  nssf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [nssf]
+    volumes:
+      - ./configs/compose/open5gs/nssf.yaml:/etc/open5gs/nssf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.17
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, nssf, 172.28.0.17]
+    depends_on:
+      scp:
+        condition: service_healthy
+
+  upf:
+    <<: *open5gs
+    user: "0:0"
+    command: [upf]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    volumes:
+      - ./configs/compose/open5gs/upf.yaml:/etc/open5gs/upf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.19
+      data:
+        ipv4_address: 10.62.0.2
+    healthcheck:
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 24
+      test: [CMD, open5gs-healthcheck, upf]
+
+  smf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [smf]
+    volumes:
+      - ./configs/compose/open5gs/smf.yaml:/etc/open5gs/smf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.18
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, smf, 172.28.0.18]
+    depends_on:
+      scp:
+        condition: service_healthy
+      upf:
+        condition: service_healthy
+
+  amf:
+    <<: *open5gs
+    user: "65532:65532"
+    command: [amf]
+    volumes:
+      - ./configs/compose/open5gs/amf.yaml:/etc/open5gs/amf.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.12
+    healthcheck:
+      <<: *sbi-health
+      test: [CMD, open5gs-healthcheck, amf, 172.28.0.12]
+    depends_on:
+      ausf:
+        condition: service_healthy
+      nssf:
+        condition: service_healthy
+      pcf:
+        condition: service_healthy
+      smf:
+        condition: service_healthy
+      udm:
+        condition: service_healthy
+      udr:
+        condition: service_healthy
+
+  data-network:
+    image: cn5g/data-network:0.1.0
+    build:
+      context: .
+      dockerfile: containers/data-network/Dockerfile
+    init: true
+    restart: "no"
+    read_only: true
+    user: "0:0"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    tmpfs:
+      - /tmp:mode=1777
+    networks:
+      data:
+        ipv4_address: 10.62.0.10
+    depends_on:
+      upf:
+        condition: service_healthy
+
+  gnb:
+    <<: *ueransim
+    user: "65532:65532"
+    command: [gnb]
+    tmpfs:
+      - /opt/ueransim/logs:uid=65532,gid=65532,mode=0750
+      - /tmp:mode=1777
+    volumes:
+      - ./configs/compose/ueransim/gnb.yaml:/etc/ueransim/gnb.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.20
+    healthcheck:
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 24
+      test: [CMD, ueransim-healthcheck, gnb]
+    depends_on:
+      amf:
+        condition: service_healthy
+
+  ue:
+    <<: *ueransim
+    user: "0:0"
+    command: [ue]
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    tmpfs:
+      - /opt/ueransim/logs:mode=0750
+      - /tmp:mode=1777
+    volumes:
+      - ./configs/compose/ueransim/ue.yaml:/etc/ueransim/ue.yaml:ro
+    networks:
+      core:
+        ipv4_address: 172.28.0.21
+    healthcheck:
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
+      retries: 36
+      test: [CMD, ueransim-healthcheck, ue]
+    depends_on:
+      data-network:
+        condition: service_healthy
+      gnb:
+        condition: service_healthy
+
+networks:
+  core:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+          gateway: 172.28.0.1
+  data:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.62.0.0/24
+          gateway: 10.62.0.1
+
+volumes:
+  mongodb-data: {}
+  mongodb-config: {}
