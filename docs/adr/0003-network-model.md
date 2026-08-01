@@ -55,6 +55,9 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   reserved.
 - SCTP is loaded, GTP is available, TUN exists, and IPv4 forwarding was already
   enabled before this project.
+- The Compose reference proved N2 SCTP, N3 GTP-U, N4 PFCP, UE/UPF TUN devices,
+  source-policy routing, controlled N6 forwarding, and complete bridge/network
+  cleanup without host-network damage.
 - No kind packet-path test has run; the address and capability model remains
   deliberately provisional.
 

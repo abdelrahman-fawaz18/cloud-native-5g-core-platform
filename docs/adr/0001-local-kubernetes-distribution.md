@@ -15,7 +15,8 @@ the host kernel, and a local cluster can change bridges, routes, firewall
 rules, storage, and boot-time services.
 
 The host uses cgroup v2, has the required kernel primitives, and has sufficient
-initial resources. Docker and Kubernetes tooling are not currently installed.
+initial resources. Phase 2 installed pinned Docker components and verified
+their coexistence with the host lab. Kubernetes tooling is not installed.
 
 ## Decision
 
@@ -36,7 +37,7 @@ through a separate change-controlled procedure. Do not switch silently.
 - **MicroK8s:** convenient packaging, but introduces snap-managed services and
   persistent host state.
 - **Direct kubeadm:** excessive setup and cleanup scope for this single-host
-  learning and evidence project.
+  integration and evidence platform.
 
 ## Evidence
 
@@ -45,8 +46,9 @@ through a separate change-controlled procedure. Do not switch silently.
 - [kind 0.32.0 release](https://github.com/kubernetes-sigs/kind/releases/tag/v0.32.0)
   publishes a Kubernetes 1.36.1 node image and requires digest pinning for
   reproducibility.
-- No Docker or Kubernetes state currently exists, so before/after effects can
-  be measured cleanly.
+- Phase 2 established integrity-checked Docker before/after snapshots and
+  verified complete cleanup of the Compose deployment. No Kubernetes cluster
+  state currently exists, so Phase 3 effects can be measured independently.
 - No 5G networking behavior has yet been tested inside kind; acceptance would
   therefore be premature.
 

@@ -6,6 +6,31 @@ The Compose baseline uses two locally built telecom images, one locally built
 test endpoint, and the reviewed MongoDB Docker Official Image. No unreviewed
 community telecom image is used.
 
+The host's installed Open5GS, UERANSIM, and MongoDB software is deliberately
+not reused. Container images must be rebuildable from declared inputs and must
+not inherit an unrecorded host library, patch, configuration, or database.
+
+## Build And Trust Chain
+
+```mermaid
+flowchart LR
+    COMMIT["Pinned upstream commit"] --> ARCHIVE["Source archive"]
+    ARCHIVE --> CHECK["ADD --checksum verification"]
+    BASE["Digest-pinned Linux/AMD64 base"] --> BUILD["Multi-stage build"]
+    CHECK --> BUILD
+    BUILD --> RUNTIME["Minimal runtime filesystem"]
+    RUNTIME --> LABELS["Open Container Initiative labels"]
+    LABELS --> IMAGE["Project-owned local image tag"]
+    IMAGE --> TEST["Compose health + protocol + cleanup gates"]
+    TEST --> RECORD["Accepted local image ID and size"]
+```
+
+The source checksum detects an altered or incomplete archive before
+compilation. The base manifest digest prevents a tag from silently selecting a
+different platform image. Multi-stage builds separate build-time tools from
+runtime dependencies. The final identity is accepted only after the complete
+Compose and cleanup gate passes.
+
 ## Immutable Inputs
 
 | Role | Upstream input | Immutable identity | License |
@@ -23,6 +48,56 @@ manifests rather than moving tags. The verified local output identities are
 recorded below. A future public image release would additionally require an
 installed-package inventory and registry digest for each published artifact.
 
+## Identity Terminology
+
+| Identifier | Example | Guarantee |
+| --- | --- | --- |
+| Human-readable tag | `cn5g/open5gs:2.7.7` | Convenient local reference; mutable and not sufficient evidence by itself |
+| Upstream source commit | `318eeb49...` | Exact Open5GS source tree selected for compilation |
+| Source archive SHA-256 | `a1b47110...` | Exact downloaded archive bytes accepted by the Dockerfile |
+| Base-image manifest digest | `sha256:52df9b1e...` | Exact Linux/AMD64 Ubuntu input selected from the registry |
+| Local OCI image ID | `sha256:56b1a5ae...` | Exact BuildKit export tested on this host, including provenance metadata |
+| Registry digest | Assigned after a push | Immutable registry identity required if images are later published |
+
+A local image ID is an output, not a portable build input. Re-exporting the
+same runtime layers can produce another Open Container Initiative (OCI) index
+identity when provenance attestations change. Reproducibility therefore rests
+on the Dockerfile plus immutable source/base inputs and repeated functional
+tests, while the accepted local output is recorded for auditability.
+
+## Multi-Stage Image Design
+
+### Open5GS
+
+The build stage installs Meson, Ninja, compilers, headers, `git`, and protocol
+development libraries. It compiles the pinned release into a staging prefix at
+`/opt/open5gs`. The runtime stage copies only installed Open5GS artifacts and
+installs the shared libraries and diagnostic tools required at runtime. A
+single image serves multiple Network Functions; the entrypoint allowlists the
+component name and selects `/etc/open5gs/COMPONENT.yaml`.
+
+### UERANSIM
+
+The build stage compiles `nr-gnb`, `nr-ue`, `nr-cli`, `nr-binder`, and the
+required shared library from the pinned release. The runtime stage receives
+those outputs plus SCTP, routing, ping, and HTTP-client utilities. The same
+image runs the gNodeB as an unprivileged user and the UE with the narrowly
+reviewed networking exception described below.
+
+### Controlled Data Network
+
+The endpoint is intentionally small and deterministic. It contains a fixed
+health document, pinned `busybox-extras` HTTP server, `iproute2`, and `su-exec`.
+Its entrypoint adds the UE-pool return route as container root, then replaces
+itself with the HTTP server under numeric user/group `65532:65532`.
+
+### MongoDB
+
+MongoDB uses the digest-pinned Docker Official Image rather than a local
+rebuild. The server uses named volumes. A separate one-shot container from the
+same image invokes `mongosh` directly as numeric `999:999`; it does not start a
+second database server or create anonymous database volumes.
+
 ## Runtime Boundaries
 
 | Image | Default user | Elevated exception | Host ports |
@@ -34,6 +109,17 @@ installed-package inventory and registry digest for each published artifact.
 
 All services drop the default Linux capability set before adding a narrow
 exception. No service uses Docker privileged mode or host networking.
+
+`NET_ADMIN` permits network-interface and route administration inside a
+container namespace and is therefore granted only to the UPF, UE, and
+route-initializing endpoint. `NET_RAW` permits the UE's raw network operations
+and ICMP validation. `SETUID` and `SETGID` are retained only where an entrypoint
+must immediately change numeric identity. `/dev/net/tun` is mounted only into
+the UPF and UE containers that create TUN interfaces.
+
+Read-only root filesystems prevent runtime mutation of image content.
+Configuration is bind-mounted read-only; writable transient state is confined
+to `tmpfs`; persistent state is confined to the two named MongoDB volumes.
 
 ## Verified Local Build
 

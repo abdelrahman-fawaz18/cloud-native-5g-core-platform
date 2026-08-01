@@ -10,10 +10,10 @@ Last updated: 2026-08-01
 | 3-10 | Not started | Phase 3 requires explicit continuation and its networking feasibility gate |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
-Compose `5.3.1` are installed. The user was not added to the root-equivalent
-`docker` group. Integrity-checked before/after snapshots show expected Docker
-bridge/firewall additions and no disruption to the existing host Open5GS,
-MongoDB, or LXC services.
+Compose `5.3.1` are installed. The interactive account was not added to the
+root-equivalent `docker` group. Integrity-checked before/after snapshots show
+expected Docker bridge/firewall additions and no disruption to the existing
+host Open5GS, MongoDB, or LXC services.
 
 Phase 2 is complete. Three pinned Linux/AMD64 project images and the pinned
 MongoDB image produced a healthy Compose topology. A synthetic UE registered,

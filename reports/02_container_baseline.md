@@ -2,11 +2,48 @@
 
 **Status:** Complete — exit gate passed on 2026-08-01
 
+## Executive Summary
+
+Phase 2 converted the validated host-based 5G protocol lab into an isolated,
+reproducible Docker Compose reference. Open5GS and UERANSIM are built from
+pinned, checksummed source; MongoDB and base images are selected by immutable
+Linux/AMD64 manifests; configuration, health, lifecycle, persistence, and
+cleanup are declared as code.
+
+The final 15-service topology completed NG Setup, synthetic subscriber
+authentication and registration, one IPv4 Protocol Data Unit session, and
+bidirectional HTTP/Internet Control Message Protocol traffic through the User
+Plane Function. Container/network recreation preserved MongoDB data and
+required no image rebuild or manual repair. Final scoped destruction removed
+all project containers, networks, and volumes. Before/after host evidence found
+no residual project network state and no disruption to the existing Open5GS,
+MongoDB, or LXC environment.
+
+The [architecture document](../docs/architecture/phase-02-compose-topology.md)
+explains the component model, interfaces, signalling sequence, packet path,
+security boundaries, and Phase 3 dependency. The [Compose
+runbook](../docs/runbooks/compose-baseline.md) provides the reproducible
+operating and diagnostic procedure.
+
+## Acceptance Matrix
+
+| Gate | Evidence | Result |
+| --- | --- | --- |
+| Reproducible images | Pinned commits, source checksums, base manifests, runtime dependencies, OCI labels, and recorded output IDs | Pass |
+| Meaningful health | 14 long-running services healthy; one-shot subscriber initializer exited successfully | Pass |
+| Registration | gNodeB NG Setup and UE initial registration success preserved in container evidence | Pass |
+| IPv4 session | UE received `10.60.0.x/24` for DNN `internet`; UPF gateway `10.60.0.1/24` present | Pass |
+| User-plane path | Bound HTTP and ICMP traffic reached `10.62.0.10` through the UPF and returned | Pass |
+| Packet evidence | `ogstun` receive and transmit counters each increased by eight during validation | Pass |
+| Persistence and recreation | Synthetic MongoDB marker survived `down`/`up`; evidence collection removed; full validation repeated | Pass |
+| Scoped cleanup | 15 containers, two networks, and two named volumes removed; resource verification passed | Pass |
+| Host coexistence | Network snapshot identical; firewall structure unchanged; host services preserved | Pass |
+
 ## Runtime Installation And Coexistence
 
 Docker Engine `29.7.1`, containerd `2.2.6`, Docker Buildx `0.36.0`, and Docker
 Compose `5.3.1` were installed from Docker's official Ubuntu repository using
-exact package versions. The interactive user was not added to the `docker`
+exact package versions. The interactive account was not added to the `docker`
 group.
 
 Integrity-checked snapshots were captured immediately before and after the
@@ -68,7 +105,7 @@ service. Compilation layers were cached, but the exports were redundant. Each
 build definition was therefore moved to one canonical service before future
 builds and clean reproductions.
 
-Image verification passed for Linux/AMD64. The final runtime sizes were
+Image verification passed for Linux/AMD64. The initial successful build sizes were
 47,958,802 bytes for Open5GS, 40,488,183 bytes for UERANSIM, and 5,063,524
 bytes for the controlled endpoint. At verification time there were three
 images and zero containers, Compose networks, or Compose volumes.
@@ -156,8 +193,8 @@ sending application requests. Rebuild and end-to-end recovery remain pending.
 The first targeted rebuild of these corrections stopped before export because
 the default-deny Docker context did not yet allow the new routing-table seed.
 Only `containers/ueransim/rt_tables` is now added to the reviewed allowlist;
-private migration material, reports, artifacts, and Git metadata remain
-excluded. The failed build changed no image tag or running container.
+documentation, local-only artifacts, and Git metadata remain excluded. The
+failed build changed no image tag or running container.
 
 A second parallel build and a sequential retry then encountered the same
 BuildKit finalization error for one missing cached Open5GS runtime snapshot.
@@ -180,6 +217,21 @@ was present and readable, but retained immutable mode `0444`; UERANSIM failed
 when reopening it to append the `rt_uesimtun0` mapping. The entrypoint now keeps
 the image copy immutable while setting only the container-private temporary
 copy to owner-writable mode `0644`. Rebuild and recovery remain pending.
+
+## Key Engineering Findings
+
+| Area | Finding | Resulting design rule |
+| --- | --- | --- |
+| Supply chain | A source build can require fetch tools even when the runtime does not | Declare complete build-stage dependencies; keep them out of runtime stages |
+| Runtime linking | A successful compile does not prove the final image contains every shared library | Exercise each Network Function from the runtime image and pin its library package set |
+| Configuration schema | Required Open5GS fields vary by pinned release | Validate against configuration from the exact source revision, not a different installed version |
+| Health design | Process existence and generic HTTP probes can both produce false conclusions | Use component-specific listeners, interfaces, ports, protocol-success logs, routes, and rules |
+| Dependency gating | Compose correctly prevents downstream startup after an upstream failure | Diagnose the first failed dependency rather than treating every waiting service as an independent fault |
+| User-plane routing | Registration and PDU-session success do not prove payload reachability | Validate UE policy routing, N3/N4 state, UPF TUN state, N6 forwarding, and the endpoint return route separately |
+| Least privilege | TUN and route creation require elevation, but the entire topology does not | Drop all capabilities first, then add only reviewed per-service exceptions and avoid privileged mode |
+| Persistence | Re-running an idempotent initializer cannot alone prove stored data survived | Use a separate synthetic marker across container/network recreation and remove it after verification |
+| Host safety | Docker bridge/firewall changes are expected while a topology runs | Capture before/after state and distinguish rule-structure changes from normal counter changes |
+| Cache recovery | Shared BuildKit cache cannot be assumed to belong to one project | Recover a named stage with `--no-cache-filter`; never use a broad prune as routine repair |
 
 ## Final Functional Evidence
 

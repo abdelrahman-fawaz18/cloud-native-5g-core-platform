@@ -26,6 +26,54 @@ report](reports/02_container_baseline.md), and [Compose
 topology](docs/architecture/phase-02-compose-topology.md). The Kubernetes
 distribution remains proposed until Phase 3 networking tests produce evidence.
 
+## Verified Phase 2 Baseline
+
+Phase 2 establishes the protocol-correct container reference that later
+Kubernetes work must preserve. The declared topology contains 15 services on
+two internal Docker networks, with the UE session subnet routed through a TUN
+interface in the UPF rather than implemented as a Docker bridge.
+
+```mermaid
+flowchart LR
+    UE["UERANSIM UE\n10.60.0.x"]
+    GNB["UERANSIM gNodeB"]
+    AMF["Open5GS AMF"]
+    CP["Open5GS control plane\nNRF/SCP/AUSF/UDM/UDR/PCF/NSSF/SMF"]
+    DB[("MongoDB")]
+    UPF["Open5GS UPF\nogstun 10.60.0.1"]
+    DN["Controlled N6 endpoint\n10.62.0.10"]
+
+    UE <-->|"simulated radio"| GNB
+    GNB <-->|"N2: NGAP/SCTP"| AMF
+    AMF <-->|"HTTP/2 SBI"| CP
+    CP <--> DB
+    CP <-->|"N4: PFCP"| UPF
+    GNB <-->|"N3: GTP-U"| UPF
+    UPF <-->|"N6: routed IPv4"| DN
+```
+
+Verified properties:
+
+- source commits, archives, base images, runtime packages, and local output
+  identities are pinned or recorded;
+- health-gated startup reaches 14 healthy long-running containers plus one
+  successful subscriber-initialization job;
+- one synthetic UE completes authentication, registration, and an IPv4
+  Protocol Data Unit session for DNN `internet` and SST `1`;
+- HTTP and Internet Control Message Protocol traffic traverses the UE tunnel,
+  simulated radio path, N3 GTP-U tunnel, UPF, and controlled N6 return route;
+- positive receive and transmit counter deltas provide bidirectional tunnel
+  evidence without publishing a raw packet capture;
+- MongoDB data survives container/network recreation; and
+- exact destruction removes all project containers, networks, and volumes
+  while leaving host Open5GS, MongoDB, LXC, routes, and firewall structure
+  intact.
+
+The full technical model is documented in [Phase 2 Docker Compose
+architecture](docs/architecture/phase-02-compose-topology.md). Reproduction,
+diagnostics, persistence testing, and cleanup are covered by the [Compose
+runbook](docs/runbooks/compose-baseline.md).
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -43,7 +91,7 @@ distribution remains proposed until Phase 3 networking tests produce evidence.
   tests, and container artifacts;
 - concise, sanitized evidence and operational runbooks.
 
-## Target Architecture
+## Roadmap Target Architecture
 
 ```mermaid
 flowchart LR
@@ -113,6 +161,16 @@ local kubeconfigs, private keys, and packet captures are ignored by default.
 Selected captures may be added only after a documented content and privacy
 review. Performance and reliability claims must link to reproducible commands,
 machine-readable measurements, and concise reports.
+
+## Technical Documentation
+
+- [Current phase and gate status](docs/project-status.md)
+- [Phase 2 Docker Compose architecture](docs/architecture/phase-02-compose-topology.md)
+- [Container image provenance](docs/image-provenance.md)
+- [Docker Engine installation runbook](docs/runbooks/docker-engine-installation.md)
+- [Compose build, operation, validation, and cleanup runbook](docs/runbooks/compose-baseline.md)
+- [Phase 2 validation and host-safety report](reports/02_container_baseline.md)
+- [Architecture Decision Records](docs/adr/README.md)
 
 ## Authoritative References
 

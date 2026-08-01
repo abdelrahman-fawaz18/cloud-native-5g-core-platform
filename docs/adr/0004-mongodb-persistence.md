@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed
+Accepted
+
+Acceptance covers the Phase 2 Compose volume baseline. Kubernetes storage
+remains proposed.
 
 ## Context
 
@@ -41,8 +44,13 @@ provide production-grade distributed storage or high availability.
 - Host MongoDB is active and must not be reused or stopped by default.
 - The project requires persistence and recovery tests but makes no
   high-availability claim.
-- The selected kind storage class and reclaim behavior have not yet been
-  tested, so this ADR cannot be accepted in Phase 1.
+- Phase 2 proved that the two named MongoDB volumes survive container/network
+  teardown, preserve an independent synthetic marker, and support a complete
+  protocol revalidation after recreation.
+- Confirmed cleanup removed only the two project volumes and left host MongoDB
+  active.
+- The selected kind storage class, PersistentVolumeClaim behavior, and reclaim
+  policy have not yet been tested, so the Kubernetes portion remains proposed.
 
 ## Consequences
 

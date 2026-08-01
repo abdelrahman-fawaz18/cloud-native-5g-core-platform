@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
+
+Acceptance covers Phase 2 inputs. Phase-specific Kubernetes, Helm,
+observability, and Continuous Integration pins remain provisional until their
+gates pass.
 
 ## Context
 
@@ -27,10 +31,11 @@ rather than permanent stagnation.
   affected functional, networking, cleanup, and performance checks.
 - Never use a floating `latest` tag in the verified baseline.
 
-Initial tool candidates are Docker Engine 29.7.1, Docker Compose 5.3.1, kind
-0.32.0, Kubernetes/kubectl 1.36.1, and Helm 4.2.0. Initial application-source
-candidates are Open5GS 2.7.7 and UERANSIM 3.2.8. Exact image digests and the
-MongoDB patch remain Phase 2 acceptance work.
+Phase 2 accepted Docker Engine 29.7.1, containerd 2.2.6, Buildx 0.36.0, Docker
+Compose 5.3.1, Open5GS 2.7.7, UERANSIM 3.2.8, MongoDB 8.0.28, and their
+recorded package versions, source checksums, base manifests, and image
+identities. kind 0.32.0, Kubernetes/kubectl 1.36.1, Helm 4.2.0, and later
+observability/CI inputs remain candidates until their respective phase gates.
 
 ## Alternatives Considered
 
@@ -50,6 +55,9 @@ MongoDB patch remain Phase 2 acceptance work.
   per-platform checksums and signatures.
 - Kubernetes currently supports the 1.36, 1.35, and 1.34 minor branches; the
   candidate remains inside the supported window.
+- `versions/phase-02.env` records the accepted Docker package strings,
+  application commits/checksums, base manifests, MongoDB manifest, and tested
+  local image IDs.
 
 ## Consequences
 

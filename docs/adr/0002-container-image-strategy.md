@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed
+Accepted
+
+Acceptance covers the Phase 2 Compose baseline. Public image release scanning
+and distribution controls remain pending.
 
 ## Context
 
@@ -46,6 +49,15 @@ requires more than a movable image tag.
   distribution obligations must be reviewed before public release.
 - The host package versions are evidence about the predecessor topology, not a
   valid image provenance record for this topology.
+- Phase 2 built Open5GS 2.7.7 and UERANSIM 3.2.8 from checksummed source
+  archives on digest-pinned Ubuntu, used a digest-pinned MongoDB 8.0.28 image,
+  and recorded the accepted local image IDs and sizes.
+- The complete Compose health, registration, PDU-session, user-plane,
+  persistence, recreation, and cleanup gates passed with these images.
+- Runtime users, Linux capability exceptions, device mounts, host-port absence,
+  and upstream licenses are recorded in `docs/image-provenance.md`.
+- A Software Bill of Materials and vulnerability scan remain mandatory before
+  any project-built image is published to a registry.
 
 ## Consequences
 
