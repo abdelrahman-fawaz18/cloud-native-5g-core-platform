@@ -101,6 +101,20 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("host_ran_or_simulation_processes=none", lifecycle)
         self.assertIn("minimum_kib=$((12 * 1024 * 1024))", lifecycle)
         self.assertIn("project_image_tag_conflicts=none", lifecycle)
+        self.assertIn("owner_url", lifecycle)
+        self.assertIn("owner_source", lifecycle)
+
+    def test_project_images_have_project_ownership_url(self):
+        expected = (
+            'org.opencontainers.image.url="https://github.com/'
+            'abdelrahman-fawaz18/cloud-native-5g-core-platform"'
+        )
+        for path in (
+            ROOT / "containers/open5gs/Dockerfile",
+            ROOT / "containers/ueransim/Dockerfile",
+            ROOT / "containers/data-network/Dockerfile",
+        ):
+            self.assertIn(expected, path.read_text(encoding="utf-8"), str(path))
 
 
 if __name__ == "__main__":

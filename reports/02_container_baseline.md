@@ -48,3 +48,10 @@ The first Open5GS build attempt stopped safely during Meson configuration
 because the build stage lacked `git`, which Meson requires to retrieve the
 pinned `prometheus-client-c` subproject. No deployment resources were created.
 The missing build-only dependency was added before retrying.
+
+The retry preflight then correctly refused to overwrite an existing local
+endpoint tag, but review showed that the image was the project-owned endpoint
+completed by the first parallel build. Its project URL was stored in the OCI
+`source` label while the guard initially checked only the OCI `url` label. The
+guard now accepts either matching ownership label, and future endpoint builds
+write both labels.

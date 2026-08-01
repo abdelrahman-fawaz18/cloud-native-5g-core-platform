@@ -67,9 +67,12 @@ open5gs-upfd.service'
         cn5g/data-network:0.1.0
     do
         if docker image inspect "$image" >/dev/null 2>&1; then
-            owner=$(docker image inspect --format \
+            owner_url=$(docker image inspect --format \
                 '{{index .Config.Labels "org.opencontainers.image.url"}}' "$image")
-            if [ "$owner" != "$expected_owner" ]; then
+            owner_source=$(docker image inspect --format \
+                '{{index .Config.Labels "org.opencontainers.image.source"}}' "$image")
+            if [ "$owner_url" != "$expected_owner" ] \
+                && [ "$owner_source" != "$expected_owner" ]; then
                 echo "compose-lab: refusing to replace image tag not owned by this project: $image" >&2
                 return 58
             fi
