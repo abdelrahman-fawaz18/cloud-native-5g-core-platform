@@ -82,6 +82,12 @@ class Phase02StaticTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("--http2-prior-knowledge", healthcheck)
 
+    def test_required_amf_registration_timer_is_explicit(self):
+        amf = (
+            ROOT / "configs/compose/open5gs/amf.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("  time:\n    t3512:\n      value: 540", amf)
+
     def test_mongodb_startup_and_init_volume_boundaries(self):
         compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
         for capability in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"):

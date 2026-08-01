@@ -45,4 +45,6 @@ amf:
     full: CN5G Synthetic Network
     short: CN5G
   amf_name: cn5g-amf
-
+  time:
+    t3512:
+      value: 540

@@ -103,3 +103,9 @@ was absent. The configuration now includes the two IPv4 resolvers from the
 pinned Open5GS v2.7.7 reference configuration. They are PDU-session parameters;
 the Phase 2 N6 network remains intentionally isolated, so external DNS
 reachability is not claimed by this baseline. SMF recovery remains pending.
+
+The next recovery brought the SMF to healthy state and advanced the dependency
+chain to the AMF. The AMF rejected the otherwise valid configuration because
+the mandatory periodic registration timer `T3512` was absent. The pinned
+Open5GS v2.7.7 reference value of 540 seconds is now explicit. AMF and radio
+access recovery remain pending.
