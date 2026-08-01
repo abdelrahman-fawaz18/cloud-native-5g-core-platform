@@ -44,6 +44,11 @@ esac
 echo "pdu_session=pass"
 echo "ue_tunnel_address=$ue_address"
 
+upf_rx_before=$(compose exec -T upf \
+    cat /sys/class/net/ogstun/statistics/rx_packets)
+upf_tx_before=$(compose exec -T upf \
+    cat /sys/class/net/ogstun/statistics/tx_packets)
+
 http_result=$(compose exec -T ue curl --fail --silent --show-error \
     --interface uesimtun0 --max-time 10 http://10.62.0.10:8080/healthz)
 if [ "$http_result" != "cn5g-data-network-ok" ]; then
@@ -63,5 +68,18 @@ echo "n6_return_route=pass"
 compose exec -T upf ip -4 address show dev ogstun | grep -q '10\.60\.0\.1/24'
 echo "upf_tunnel=pass"
 
-echo "compose_validation=pass"
+upf_rx_after=$(compose exec -T upf \
+    cat /sys/class/net/ogstun/statistics/rx_packets)
+upf_tx_after=$(compose exec -T upf \
+    cat /sys/class/net/ogstun/statistics/tx_packets)
+upf_rx_delta=$((upf_rx_after - upf_rx_before))
+upf_tx_delta=$((upf_tx_after - upf_tx_before))
+if [ "$upf_rx_delta" -le 0 ] || [ "$upf_tx_delta" -le 0 ]; then
+    echo "validate-compose: expected positive bidirectional ogstun packet deltas; rx=$upf_rx_delta tx=$upf_tx_delta" >&2
+    exit 64
+fi
+echo "upf_tunnel_rx_packet_delta=$upf_rx_delta"
+echo "upf_tunnel_tx_packet_delta=$upf_tx_delta"
+echo "bidirectional_tunnel_counters=pass"
 
+echo "compose_validation=pass"

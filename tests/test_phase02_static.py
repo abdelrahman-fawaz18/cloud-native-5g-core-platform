@@ -162,6 +162,16 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertEqual(len(conflicts), 1)
         self.assertIn("overlaps", conflicts[0])
 
+    def test_runtime_validation_records_bidirectional_tunnel_counters(self):
+        validator = (
+            ROOT / "scripts/validate-compose.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("/sys/class/net/ogstun/statistics/rx_packets", validator)
+        self.assertIn("/sys/class/net/ogstun/statistics/tx_packets", validator)
+        self.assertIn('if [ "$upf_rx_delta" -le 0 ]', validator)
+        self.assertIn('|| [ "$upf_tx_delta" -le 0 ]', validator)
+        self.assertIn("bidirectional_tunnel_counters=pass", validator)
+
     def test_lifecycle_avoids_broad_prune_commands(self):
         scripts = "\n".join(
             path.read_text(encoding="utf-8")
@@ -209,6 +219,15 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("project_containers=none", lifecycle)
         self.assertIn("project_networks=none", lifecycle)
         self.assertIn("project_volumes=none", lifecycle)
+
+    def test_down_verification_preserves_only_named_database_volumes(self):
+        lifecycle = (ROOT / "scripts/compose-lab.sh").read_text(encoding="utf-8")
+        self.assertIn("verify-down", lifecycle)
+        self.assertIn("project container remains after down", lifecycle)
+        self.assertIn("project network remains after down", lifecycle)
+        self.assertIn("cn5g-compose_mongodb-config", lifecycle)
+        self.assertIn("cn5g-compose_mongodb-data", lifecycle)
+        self.assertIn("scoped_down_verification=pass", lifecycle)
 
 
 if __name__ == "__main__":

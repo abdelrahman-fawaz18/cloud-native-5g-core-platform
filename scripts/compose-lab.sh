@@ -160,6 +160,33 @@ verify_images() {
     echo "image_verification=pass"
 }
 
+verify_down() {
+    if [ -n "$(docker ps --all --quiet --filter label=com.docker.compose.project="$project")" ]; then
+        echo "compose-lab: project container remains after down" >&2
+        return 65
+    fi
+    if [ -n "$(docker network ls --quiet --filter label=com.docker.compose.project="$project")" ]; then
+        echo "compose-lab: project network remains after down" >&2
+        return 66
+    fi
+
+    expected_volumes='cn5g-compose_mongodb-config
+cn5g-compose_mongodb-data'
+    actual_volumes=$(docker volume ls \
+        --filter label=com.docker.compose.project="$project" \
+        --format '{{.Name}}' | sort)
+    if [ "$actual_volumes" != "$expected_volumes" ]; then
+        echo "compose-lab: expected only the two persistent MongoDB volumes after down" >&2
+        printf 'found:\n%s\n' "$actual_volumes" >&2
+        return 67
+    fi
+
+    echo "project_containers=none"
+    echo "project_networks=none"
+    printf 'preserved_volume=%s\n' $actual_volumes
+    echo "scoped_down_verification=pass"
+}
+
 usage() {
     cat <<'EOF'
 usage: scripts/compose-lab.sh ACTION [--confirm]
@@ -167,6 +194,7 @@ usage: scripts/compose-lab.sh ACTION [--confirm]
 Actions:
   preflight-build verify host lab health, idle simulators, disk, and image ownership
   verify-images   inspect built images and confirm no deployment resources exist
+  verify-down     confirm containers/networks are gone and database volumes remain
   config         validate and render the Compose model without creating resources
   build          build the three project-owned images
   up             check subnet safety, create the lab, and wait for health
@@ -188,6 +216,9 @@ case "$action" in
         ;;
     verify-images)
         verify_images
+        ;;
+    verify-down)
+        verify_down
         ;;
     config)
         compose config --quiet

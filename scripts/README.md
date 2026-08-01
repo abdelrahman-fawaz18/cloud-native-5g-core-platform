@@ -15,7 +15,9 @@ targets, and support a dry-run or read-only mode where practical.
   package set from Docker's official Ubuntu repository.
 - `compose-lab.sh`: controls only the named `cn5g-compose` project, including
   build preflight, rendering, build, startup, health wait, status, logs,
-  validation, and scoped cleanup.
+  validation, scoped cleanup, and verification that persistent volumes are
+  retained by a non-destructive teardown.
 - `validate-compose.sh`: proves the synthetic subscriber record, NG Setup,
   registration, IPv4 PDU session, UPF tunnel, controlled HTTP path, ICMP path,
-  and N6 return route.
+  N6 return route, and positive bidirectional packet-counter changes on the
+  private UPF tunnel.

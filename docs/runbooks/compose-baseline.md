@@ -83,7 +83,8 @@ compose_validation=pass
 The checks cover the synthetic subscriber, gNodeB NG Setup, UE registration,
 IPv4 Protocol Data Unit session, UE tunnel address, HTTP and Internet Control
 Message Protocol traffic through the UPF, the N6 return route, and the UPF
-tunnel.
+tunnel. Positive receive and transmit packet deltas on `ogstun` provide
+sanitized bidirectional packet evidence without retaining a raw capture.
 
 ## Inspect
 
@@ -102,7 +103,12 @@ Preserve MongoDB volumes:
 
 ```bash
 sudo ./scripts/compose-lab.sh down
+sudo ./scripts/compose-lab.sh verify-down
 ```
+
+The verification requires zero project containers, zero project networks, and
+exactly the two named MongoDB volumes. It does not inspect or remove unrelated
+Docker resources.
 
 Remove containers, networks, and only the two project volumes:
 
