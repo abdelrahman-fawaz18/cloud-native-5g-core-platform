@@ -62,6 +62,7 @@ RUN apt-get update \
         iproute2 \
         libbson-1.0-0 \
         libcurl3t64-gnutls \
+        libidn12 \
         libmicrohttpd12t64 \
         libmongoc-1.0-0 \
         libnghttp2-14 \

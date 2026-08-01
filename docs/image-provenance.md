@@ -28,8 +28,8 @@ build passes.
 | --- | --- | --- | --- |
 | `cn5g/open5gs:2.7.7` | Numeric user/group `65532` | Only the UPF runs as root with `NET_ADMIN` and `/dev/net/tun` | None |
 | `cn5g/ueransim:3.2.8` | Numeric user/group `65532` | Only the UE runs as root with `NET_ADMIN`, `NET_RAW`, and `/dev/net/tun` | None |
-| `cn5g/data-network:0.1.0` | Starts as root to add one return route, then drops to `65532` | `NET_ADMIN` for the container-local route | None |
-| MongoDB official image | Image-managed MongoDB user after initialization | No added Linux capability | None |
+| `cn5g/data-network:0.1.0` | Starts as root to add one return route, then drops to `65532` | `NET_ADMIN` for the container-local route; `SETGID` and `SETUID` only for the immediate identity drop | None |
+| MongoDB official image | Server entrypoint drops to its image-managed MongoDB user; subscriber client starts directly as numeric user/group `999` | Server receives only its entrypoint's filesystem and identity-change capabilities; subscriber client receives none | None |
 
 All services drop the default Linux capability set before adding a narrow
 exception. No service uses Docker privileged mode or host networking.

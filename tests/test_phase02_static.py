@@ -85,8 +85,22 @@ class Phase02StaticTests(unittest.TestCase):
         compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
         for capability in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"):
             self.assertIn(f"      - {capability}", compose)
-        self.assertIn("      - /data/db:mode=0700", compose)
-        self.assertIn("      - /data/configdb:mode=0700", compose)
+        self.assertIn("    user: \"999:999\"", compose)
+        self.assertIn("    entrypoint:\n      - mongosh", compose)
+        self.assertIn("      - /data/db:uid=999,gid=999,mode=0700", compose)
+        self.assertIn("      - /data/configdb:uid=999,gid=999,mode=0700", compose)
+
+    def test_runtime_dependencies_and_identity_drop_are_explicit(self):
+        dockerfile = (
+            ROOT / "containers/open5gs/Dockerfile"
+        ).read_text(encoding="utf-8")
+        compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        endpoint_start = compose.index("  data-network:")
+        endpoint_end = compose.index("\n  gnb:", endpoint_start)
+        endpoint = compose[endpoint_start:endpoint_end]
+        self.assertIn("        libidn12 \\\n", dockerfile)
+        for capability in ("NET_ADMIN", "SETGID", "SETUID"):
+            self.assertIn(f"      - {capability}", endpoint)
 
     def test_subnet_overlap_detector(self):
         module = load_subnet_module()

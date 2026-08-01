@@ -83,3 +83,15 @@ passed with image IDs `sha256:4abce03b...` (Open5GS),
 re-exported all three OCI indexes with provenance metadata; unchanged runtime
 sizes for UERANSIM and the endpoint confirm that their runtime content did not
 grow. The Open5GS image grew by 23 bytes for the health-probe option.
+
+The first Compose startup stopped at its dependency gates without starting the
+gNodeB or UE. Runtime logs identified three bounded image/configuration defects:
+the SMF runtime lacked `libidn.so.12`, the controlled data endpoint could not
+use `su-exec` to drop its group identity after installing its private route,
+and the one-shot subscriber client inherited the MongoDB server entrypoint's
+privilege-drop logic despite having no capabilities. The corrective baseline
+adds the `libidn12` runtime package, grants the endpoint only `SETGID` and
+`SETUID` in addition to `NET_ADMIN`, and starts `mongosh` directly as numeric
+user/group `999`. Functional recovery and new image identity verification are
+pending; the pre-deployment Open5GS and endpoint IDs above are therefore not
+the final Phase 2 release identities.
