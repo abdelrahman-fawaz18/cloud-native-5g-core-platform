@@ -68,6 +68,7 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("10.60.0.0/24", smf)
         self.assertIn("10.60.0.0/24", upf)
         self.assertIn("10.60.0.0/24 via 10.62.0.2", endpoint)
+        self.assertIn("  dns:\n    - 8.8.8.8\n    - 8.8.4.4", smf)
 
     def test_open5gs_build_has_upstream_fetch_tool(self):
         dockerfile = (

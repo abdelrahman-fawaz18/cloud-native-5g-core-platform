@@ -33,10 +33,12 @@ smf:
     - subnet: 10.60.0.0/24
       gateway: 10.60.0.1
       dnn: internet
+  dns:
+    - 8.8.8.8
+    - 8.8.4.4
   info:
     - s_nssai:
         - sst: 1
           dnn:
             - internet
   mtu: 1400
-

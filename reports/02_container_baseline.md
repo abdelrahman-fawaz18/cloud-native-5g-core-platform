@@ -95,3 +95,11 @@ adds the `libidn12` runtime package, grants the endpoint only `SETGID` and
 user/group `999`. Functional recovery and new image identity verification are
 pending; the pre-deployment Open5GS and endpoint IDs above are therefore not
 the final Phase 2 release identities.
+
+On the recovery attempt, the subscriber initializer completed and the data
+endpoint started, proving both permission corrections. The SMF then reached
+Open5GS configuration parsing and reported that its mandatory `smf.dns` list
+was absent. The configuration now includes the two IPv4 resolvers from the
+pinned Open5GS v2.7.7 reference configuration. They are PDU-session parameters;
+the Phase 2 N6 network remains intentionally isolated, so external DNS
+reachability is not claimed by this baseline. SMF recovery remains pending.
