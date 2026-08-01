@@ -55,3 +55,9 @@ completed by the first parallel build. Its project URL was stored in the OCI
 `source` label while the guard initially checked only the OCI `url` label. The
 guard now accepts either matching ownership label, and future endpoint builds
 write both labels.
+
+The subsequent build completed all three project images. Review of the build
+output found that Compose exported shared image definitions once per consuming
+service. Compilation layers were cached, but the exports were redundant. Each
+build definition was therefore moved to one canonical service before future
+builds and clean reproductions.

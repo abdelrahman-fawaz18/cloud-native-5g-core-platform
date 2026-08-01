@@ -84,12 +84,70 @@ open5gs-upfd.service'
     echo "build_preflight=pass"
 }
 
+verify_images() {
+    expected_owner='https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform'
+    for image in \
+        cn5g/open5gs:2.7.7 \
+        cn5g/ueransim:3.2.8 \
+        cn5g/data-network:0.1.0
+    do
+        if ! docker image inspect "$image" >/dev/null 2>&1; then
+            echo "compose-lab: required image is unavailable: $image" >&2
+            return 59
+        fi
+
+        owner_url=$(docker image inspect --format \
+            '{{index .Config.Labels "org.opencontainers.image.url"}}' "$image")
+        if [ "$owner_url" != "$expected_owner" ]; then
+            echo "compose-lab: image ownership URL is invalid: $image" >&2
+            return 60
+        fi
+
+        image_id=$(docker image inspect --format '{{.Id}}' "$image")
+        image_size=$(docker image inspect --format '{{.Size}}' "$image")
+        image_os=$(docker image inspect --format '{{.Os}}' "$image")
+        image_arch=$(docker image inspect --format '{{.Architecture}}' "$image")
+        image_user=$(docker image inspect --format '{{.Config.User}}' "$image")
+
+        if [ "$image_os" != linux ] || [ "$image_arch" != amd64 ]; then
+            echo "compose-lab: unexpected image platform for $image: $image_os/$image_arch" >&2
+            return 61
+        fi
+
+        echo "image=$image"
+        echo "image_id=$image_id"
+        echo "image_size_bytes=$image_size"
+        echo "image_platform=$image_os/$image_arch"
+        echo "image_default_user=$image_user"
+    done
+
+    if [ -n "$(docker ps --all --quiet --filter label=com.docker.compose.project="$project")" ]; then
+        echo "compose-lab: unexpected project container exists before deployment" >&2
+        return 62
+    fi
+    if [ -n "$(docker network ls --quiet --filter label=com.docker.compose.project="$project")" ]; then
+        echo "compose-lab: unexpected project network exists before deployment" >&2
+        return 63
+    fi
+    if [ -n "$(docker volume ls --quiet --filter label=com.docker.compose.project="$project")" ]; then
+        echo "compose-lab: unexpected project volume exists before deployment" >&2
+        return 64
+    fi
+
+    echo "project_containers=none"
+    echo "project_networks=none"
+    echo "project_volumes=none"
+    docker system df
+    echo "image_verification=pass"
+}
+
 usage() {
     cat <<'EOF'
 usage: scripts/compose-lab.sh ACTION [--confirm]
 
 Actions:
   preflight-build verify host lab health, idle simulators, disk, and image ownership
+  verify-images   inspect built images and confirm no deployment resources exist
   config         validate and render the Compose model without creating resources
   build          build the three project-owned images
   up             check subnet safety, create the lab, and wait for health
@@ -108,6 +166,9 @@ confirmation="${2:-}"
 case "$action" in
     preflight-build)
         build_preflight
+        ;;
+    verify-images)
+        verify_images
         ;;
     config)
         compose config --quiet

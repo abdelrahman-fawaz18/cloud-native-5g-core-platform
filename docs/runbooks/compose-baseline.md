@@ -48,6 +48,15 @@ would couple the container to the existing lab's versions and libraries. The
 multi-stage builds keep compilers and source trees out of the final images;
 Docker reuses immutable layers and successful build cache on later builds.
 
+Verify image ownership, identity, platform, runtime user, size, and the absence
+of deployment resources:
+
+```bash
+sudo ./scripts/compose-lab.sh verify-images
+```
+
+Expected final line: `image_verification=pass`.
+
 ## Start And Wait
 
 ```bash

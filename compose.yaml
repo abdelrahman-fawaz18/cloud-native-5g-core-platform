@@ -2,11 +2,6 @@ name: cn5g-compose
 
 x-open5gs: &open5gs
   image: cn5g/open5gs:2.7.7
-  build:
-    context: .
-    dockerfile: containers/open5gs/Dockerfile
-    args:
-      BUILD_JOBS: "8"
   init: true
   restart: "no"
   read_only: true
@@ -22,11 +17,6 @@ x-open5gs: &open5gs
 
 x-ueransim: &ueransim
   image: cn5g/ueransim:3.2.8
-  build:
-    context: .
-    dockerfile: containers/ueransim/Dockerfile
-    args:
-      BUILD_JOBS: "8"
   init: true
   restart: "no"
   read_only: true
@@ -98,6 +88,11 @@ services:
 
   nrf:
     <<: *open5gs
+    build:
+      context: .
+      dockerfile: containers/open5gs/Dockerfile
+      args:
+        BUILD_JOBS: "8"
     user: "65532:65532"
     command: [nrf]
     volumes:
@@ -303,6 +298,11 @@ services:
 
   gnb:
     <<: *ueransim
+    build:
+      context: .
+      dockerfile: containers/ueransim/Dockerfile
+      args:
+        BUILD_JOBS: "8"
     user: "65532:65532"
     command: [gnb]
     tmpfs:

@@ -116,6 +116,20 @@ class Phase02StaticTests(unittest.TestCase):
         ):
             self.assertIn(expected, path.read_text(encoding="utf-8"), str(path))
 
+    def test_each_project_image_has_one_canonical_compose_build(self):
+        compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        self.assertEqual(compose.count("dockerfile: containers/open5gs/Dockerfile"), 1)
+        self.assertEqual(compose.count("dockerfile: containers/ueransim/Dockerfile"), 1)
+        self.assertEqual(compose.count("dockerfile: containers/data-network/Dockerfile"), 1)
+
+    def test_image_verification_is_read_only_and_scoped(self):
+        lifecycle = (ROOT / "scripts/compose-lab.sh").read_text(encoding="utf-8")
+        self.assertIn("verify-images", lifecycle)
+        self.assertIn("image_verification=pass", lifecycle)
+        self.assertIn("project_containers=none", lifecycle)
+        self.assertIn("project_networks=none", lifecycle)
+        self.assertIn("project_volumes=none", lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()
