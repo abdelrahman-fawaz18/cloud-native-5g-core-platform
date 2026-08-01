@@ -34,10 +34,24 @@ build passes.
 All services drop the default Linux capability set before adding a narrow
 exception. No service uses Docker privileged mode or host networking.
 
+## Verified Local Build
+
+The Linux/AMD64 build completed on 2026-08-01 with the following local Open
+Container Initiative image identities:
+
+| Image | Local image ID | Unpacked image size |
+| --- | --- | ---: |
+| `cn5g/open5gs:2.7.7` | `sha256:5f6405fef6e28f20fe5d3a5b4b1a2650d0d3d4c3f87fd69b653a29b2741014a1` | 47,958,802 bytes |
+| `cn5g/ueransim:3.2.8` | `sha256:aa5325ba54115236c4f7afbb99b4cd3c375eeaca22ebaa33604cd9afb55ddf4d` | 40,488,183 bytes |
+| `cn5g/data-network:0.1.0` | `sha256:d829281e61c60b69ac8c8fc073013e85688ccaa4b48c601103c03ea944709af0` | 5,063,524 bytes |
+
+All three images carry the project ownership URL, target `linux/amd64`, and
+passed the pre-deployment resource check. No Compose container, network, or
+volume existed at verification time.
+
 ## Distribution Note
 
 Open5GS and UERANSIM source distribution obligations apply if built images are
 published. Dockerfiles, exact upstream source links, commits, checksums,
 licenses, patches if any, and build instructions must remain available with a
 public image release. Phase 2 does not publish container images.
-

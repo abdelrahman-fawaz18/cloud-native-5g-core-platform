@@ -61,3 +61,12 @@ output found that Compose exported shared image definitions once per consuming
 service. Compilation layers were cached, but the exports were redundant. Each
 build definition was therefore moved to one canonical service before future
 builds and clean reproductions.
+
+Image verification passed for Linux/AMD64. The final runtime sizes were
+47,958,802 bytes for Open5GS, 40,488,183 bytes for UERANSIM, and 5,063,524
+bytes for the controlled endpoint. At verification time there were three
+images and zero containers, Compose networks, or Compose volumes.
+
+Docker reported 3.121 GB of build cache, including 2.37 GB currently marked
+reclaimable. It was retained because the default builder cache is not safely
+owned by one Compose project and broad pruning is prohibited.
