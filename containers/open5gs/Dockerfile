@@ -43,7 +43,7 @@ RUN mkdir -p /src/open5gs /stage \
     && ninja -C /src/open5gs/build -j "$BUILD_JOBS" \
     && DESTDIR=/stage ninja -C /src/open5gs/build install
 
-FROM ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf
+FROM ubuntu:24.04@sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 

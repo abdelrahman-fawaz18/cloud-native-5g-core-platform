@@ -76,6 +76,8 @@ class Phase02StaticTests(unittest.TestCase):
             ROOT / "containers/open5gs/Dockerfile"
         ).read_text(encoding="utf-8")
         self.assertIn("        git \\\n", dockerfile)
+        self.assertIn(" AS build\n", dockerfile)
+        self.assertIn(" AS runtime\n", dockerfile)
 
     def test_open5gs_health_checks_listener_without_sbi_requests(self):
         healthcheck = (

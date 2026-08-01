@@ -152,3 +152,11 @@ the default-deny Docker context did not yet allow the new routing-table seed.
 Only `containers/ueransim/rt_tables` is now added to the reviewed allowlist;
 private migration material, reports, artifacts, and Git metadata remain
 excluded. The failed build changed no image tag or running container.
+
+A second parallel build and a sequential retry then encountered the same
+BuildKit finalization error for one missing cached Open5GS runtime snapshot.
+No image was exported. The final Dockerfile stage is now explicitly named
+`runtime`, allowing only that stage to bypass cache through Buildx's
+`--no-cache-filter` option while preserving the expensive compiled `build`
+stage and avoiding any shared-cache prune. Scoped cache recovery remains
+pending.
