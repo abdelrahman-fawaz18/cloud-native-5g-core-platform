@@ -76,3 +76,10 @@ cleartext HTTP/2 server. MongoDB received only the capabilities required by
 its official entrypoint to prepare named volumes and drop privileges. The
 subscriber initializer masks image-declared database paths with temporary
 filesystems to prevent unintended anonymous volumes.
+
+After rebuilding the corrected health probe, final pre-deployment verification
+passed with image IDs `sha256:4abce03b...` (Open5GS),
+`sha256:c3eb37af...` (UERANSIM), and `sha256:9a14ca52...` (endpoint). BuildKit
+re-exported all three OCI indexes with provenance metadata; unchanged runtime
+sizes for UERANSIM and the endpoint confirm that their runtime content did not
+grow. The Open5GS image grew by 23 bytes for the health-probe option.

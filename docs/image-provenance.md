@@ -41,13 +41,20 @@ Container Initiative image identities:
 
 | Image | Local image ID | Unpacked image size |
 | --- | --- | ---: |
-| `cn5g/open5gs:2.7.7` | `sha256:5f6405fef6e28f20fe5d3a5b4b1a2650d0d3d4c3f87fd69b653a29b2741014a1` | 47,958,802 bytes |
-| `cn5g/ueransim:3.2.8` | `sha256:aa5325ba54115236c4f7afbb99b4cd3c375eeaca22ebaa33604cd9afb55ddf4d` | 40,488,183 bytes |
-| `cn5g/data-network:0.1.0` | `sha256:d829281e61c60b69ac8c8fc073013e85688ccaa4b48c601103c03ea944709af0` | 5,063,524 bytes |
+| `cn5g/open5gs:2.7.7` | `sha256:4abce03b299a8e0a10a73bd4a656e9465cfb9e0b7e1f5d5405cef0cf07b4f0f1` | 47,958,825 bytes |
+| `cn5g/ueransim:3.2.8` | `sha256:c3eb37afa7a3253afd6add6479055c42c30c5204071a2a8a791043797d060bf1` | 40,488,183 bytes |
+| `cn5g/data-network:0.1.0` | `sha256:9a14ca52a336fea4723fe9fc20f985f1ea97c4d9a89ed2fefccbd2074e0f68ed` | 5,063,524 bytes |
 
 All three images carry the project ownership URL, target `linux/amd64`, and
 passed the pre-deployment resource check. No Compose container, network, or
 volume existed at verification time.
+
+These local IDs identify BuildKit-exported OCI indexes that include provenance
+attestations. A later export can produce a different index ID even when its
+pinned source, runtime layers, and reported runtime size are unchanged. A
+release records the verified export used for its tests; source commits,
+archive checksums, base manifests, configuration, and functional evidence
+remain the reproducibility contract.
 
 ## Distribution Note
 
