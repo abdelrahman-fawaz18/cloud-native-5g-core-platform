@@ -89,7 +89,13 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertNotIn("docker volume prune", scripts)
         self.assertNotIn("docker network prune", scripts)
 
+    def test_build_preflight_protects_host_and_disk(self):
+        lifecycle = (ROOT / "scripts/compose-lab.sh").read_text(encoding="utf-8")
+        self.assertIn("host_lab_services=active", lifecycle)
+        self.assertIn("host_ran_or_simulation_processes=none", lifecycle)
+        self.assertIn("minimum_kib=$((12 * 1024 * 1024))", lifecycle)
+        self.assertIn("project_image_tag_conflicts=none", lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()
-

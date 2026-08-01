@@ -23,10 +23,23 @@ installation. The comparison found:
 Raw snapshots remain permission-restricted under the ignored `artifacts/`
 tree and are not publication artifacts.
 
+## Existing Host Software Review
+
+The host already runs Open5GS `2.8.0` and MongoDB `8.0.28`; its UERANSIM
+source build is version `3.3.0`. These installations remain owned by the
+predecessor lab and are not copied into the container images. The container
+baseline instead uses official tagged Open5GS `2.7.7` and UERANSIM `3.2.8`
+source commits plus an isolated MongoDB container and named volumes.
+
+This intentional duplication prevents the new topology from changing the
+host subscriber database or depending on host library state. Multi-stage
+builds keep compilers and source trees out of final images, and Docker cache
+reuses unchanged layers on repeat builds. Broad cache pruning remains
+prohibited because the default builder cache may be shared by other projects.
+
 ## Compose Baseline
 
 The reviewed Compose and image definitions are present. Static rendering,
 build, protocol validation, teardown/recreation, image digest recording, and
 post-cleanup host comparison remain required before the Phase 2 exit gate can
 pass.
-

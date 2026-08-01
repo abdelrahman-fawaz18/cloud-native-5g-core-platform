@@ -16,11 +16,77 @@ compose() {
     docker compose --project-name "$project" --file "$repository_root/compose.yaml" "$@"
 }
 
+build_preflight() {
+    required_units='mongod.service
+open5gs-amfd.service
+open5gs-ausfd.service
+open5gs-nrfd.service
+open5gs-nssfd.service
+open5gs-pcfd.service
+open5gs-scpd.service
+open5gs-smfd.service
+open5gs-udmd.service
+open5gs-udrd.service
+open5gs-upfd.service'
+
+    inactive_units=$(
+        echo "$required_units" | while IFS= read -r unit; do
+            if ! systemctl is-active --quiet "$unit"; then
+                echo "$unit"
+            fi
+        done
+    )
+    if [ -n "$inactive_units" ]; then
+        echo "compose-lab: existing host lab service is not active:" >&2
+        echo "$inactive_units" >&2
+        return 55
+    fi
+    echo "host_lab_services=active"
+
+    for process in nr-gnb nr-ue ns3 waf; do
+        if pgrep -x "$process" >/dev/null 2>&1; then
+            echo "compose-lab: host process '$process' is already running" >&2
+            return 56
+        fi
+    done
+    echo "host_ran_or_simulation_processes=none"
+
+    available_kib=$(df -Pk /var/lib/docker | awk 'NR == 2 {print $4}')
+    minimum_kib=$((12 * 1024 * 1024))
+    if [ "$available_kib" -lt "$minimum_kib" ]; then
+        echo "compose-lab: at least 12 GiB free is required for the first build" >&2
+        return 57
+    fi
+    available_gib=$((available_kib / 1024 / 1024))
+    echo "docker_filesystem_available_gib=$available_gib"
+
+    expected_owner='https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform'
+    for image in \
+        cn5g/open5gs:2.7.7 \
+        cn5g/ueransim:3.2.8 \
+        cn5g/data-network:0.1.0
+    do
+        if docker image inspect "$image" >/dev/null 2>&1; then
+            owner=$(docker image inspect --format \
+                '{{index .Config.Labels "org.opencontainers.image.url"}}' "$image")
+            if [ "$owner" != "$expected_owner" ]; then
+                echo "compose-lab: refusing to replace image tag not owned by this project: $image" >&2
+                return 58
+            fi
+        fi
+    done
+    echo "project_image_tag_conflicts=none"
+    echo "host_software_reuse=disabled_for_isolation"
+    echo "build_outputs=three_project_images_and_docker_build_cache"
+    echo "build_preflight=pass"
+}
+
 usage() {
     cat <<'EOF'
 usage: scripts/compose-lab.sh ACTION [--confirm]
 
 Actions:
+  preflight-build verify host lab health, idle simulators, disk, and image ownership
   config         validate and render the Compose model without creating resources
   build          build the three project-owned images
   up             check subnet safety, create the lab, and wait for health
@@ -37,11 +103,15 @@ action="${1:-}"
 confirmation="${2:-}"
 
 case "$action" in
+    preflight-build)
+        build_preflight
+        ;;
     config)
         compose config --quiet
         compose config --images
         ;;
     build)
+        build_preflight
         compose config --quiet
         compose build
         ;;
@@ -93,4 +163,3 @@ case "$action" in
         exit 54
         ;;
 esac
-

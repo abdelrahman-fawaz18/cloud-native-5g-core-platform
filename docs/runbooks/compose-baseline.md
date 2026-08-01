@@ -22,6 +22,17 @@ volume.
 
 ## Build
 
+Run the read-only build preflight first:
+
+```bash
+sudo ./scripts/compose-lab.sh preflight-build
+```
+
+It requires the existing host Open5GS and MongoDB services to remain active,
+refuses a concurrently running host UERANSIM or ns-3 command, requires at
+least 12 GiB free, and refuses to replace a matching image tag unless its
+project ownership label is correct.
+
 ```bash
 sudo ./scripts/compose-lab.sh build
 ```
@@ -31,6 +42,11 @@ Open5GS and UERANSIM in multi-stage builds, and creates three local image tags.
 An initial build can take several minutes and consume several gigabytes of
 temporary layer/cache storage. A nonzero exit status means no deployment
 should be started; retain and inspect the first failing build step.
+
+Host Open5GS, UERANSIM, and MongoDB binaries are not copied into images. That
+would couple the container to the existing lab's versions and libraries. The
+multi-stage builds keep compilers and source trees out of the final images;
+Docker reuses immutable layers and successful build cache on later builds.
 
 ## Start And Wait
 
@@ -91,4 +107,3 @@ without affecting unrelated images:
 ```bash
 sudo ./scripts/compose-lab.sh remove-images --confirm
 ```
-
