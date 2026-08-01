@@ -145,6 +145,10 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("project_image_tag_conflicts=none", lifecycle)
         self.assertIn("owner_url", lifecycle)
         self.assertIn("owner_source", lifecycle)
+        self.assertIn('label=com.docker.compose.project="$project"', lifecycle)
+        self.assertIn('"/proc/$container_pid/ns/pid"', lifecycle)
+        self.assertIn('"/proc/$process_pid/ns/pid"', lifecycle)
+        self.assertIn('grep -Fqx "$process_namespace"', lifecycle)
 
     def test_project_images_have_project_ownership_url(self):
         expected = (

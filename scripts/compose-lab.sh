@@ -43,11 +43,30 @@ open5gs-upfd.service'
     fi
     echo "host_lab_services=active"
 
+    project_pid_namespaces=$(
+        docker ps --quiet \
+            --filter label=com.docker.compose.project="$project" \
+        | while IFS= read -r container_id; do
+            [ -n "$container_id" ] || continue
+            container_pid=$(docker inspect --format '{{.State.Pid}}' "$container_id")
+            if [ "$container_pid" -gt 0 ]; then
+                readlink "/proc/$container_pid/ns/pid" 2>/dev/null || true
+            fi
+        done
+    )
+
     for process in nr-gnb nr-ue ns3 waf; do
-        if pgrep -x "$process" >/dev/null 2>&1; then
+        process_pids=$(pgrep -x "$process" || true)
+        for process_pid in $process_pids; do
+            process_namespace=$(readlink "/proc/$process_pid/ns/pid" 2>/dev/null || true)
+            [ -n "$process_namespace" ] || continue
+            if printf '%s\n' "$project_pid_namespaces" \
+                | grep -Fqx "$process_namespace"; then
+                continue
+            fi
             echo "compose-lab: host process '$process' is already running" >&2
             return 56
-        fi
+        done
     done
     echo "host_ran_or_simulation_processes=none"
 

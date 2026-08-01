@@ -116,3 +116,11 @@ the entrypoint requested a standalone `httpd` executable. The entrypoint now
 invokes `/bin/busybox httpd` explicitly after installing the private route and
 dropping to numeric user/group `65532`. Endpoint rebuild and recovery remain
 pending.
+
+The targeted rebuild preflight then stopped because its original host-process
+guard could see the project's running `nr-gnb` process from the host PID view.
+The guard now compares PID namespaces: processes inside running
+`cn5g-compose` containers are recognized as project-owned, while matching
+processes in the host namespace or an unrelated container still block the
+build. The false-positive preflight made no runtime change; validation of the
+corrected guard remains pending.
