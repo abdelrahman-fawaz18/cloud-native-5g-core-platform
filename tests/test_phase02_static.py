@@ -34,6 +34,7 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertFalse(any("migration" in line for line in lines if line.startswith("!")))
         self.assertFalse(any("AGENTS.md" in line for line in lines if line.startswith("!")))
         self.assertFalse(any("artifacts" in line for line in lines if line.startswith("!")))
+        self.assertIn("!containers/ueransim/rt_tables", lines)
 
     def test_compose_has_no_host_port_publication_or_privileged_mode(self):
         compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")

@@ -9,7 +9,7 @@
 !containers/ueransim/Dockerfile
 !containers/ueransim/entrypoint.sh
 !containers/ueransim/healthcheck.sh
+!containers/ueransim/rt_tables
 !containers/data-network/Dockerfile
 !containers/data-network/entrypoint.sh
 !containers/data-network/healthz
-

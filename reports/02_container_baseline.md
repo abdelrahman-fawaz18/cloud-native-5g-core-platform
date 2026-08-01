@@ -146,3 +146,9 @@ requires UERANSIM's connection-success message, source policy rule, and default
 route. Live logs also showed the HTTP-based SBI health requests causing repeated
 SMF URI parser errors, so SBI probes now verify the local TCP listener without
 sending application requests. Rebuild and end-to-end recovery remain pending.
+
+The first targeted rebuild of these corrections stopped before export because
+the default-deny Docker context did not yet allow the new routing-table seed.
+Only `containers/ueransim/rt_tables` is now added to the reviewed allowlist;
+private migration material, reports, artifacts, and Git metadata remain
+excluded. The failed build changed no image tag or running container.
