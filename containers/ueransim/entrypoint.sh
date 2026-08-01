@@ -21,7 +21,7 @@ case "$component" in
             echo "ueransim-entrypoint: writable /etc/iproute2 tmpfs is unavailable" >&2
             exit 35
         fi
-        cp /opt/ueransim/share/rt_tables /etc/iproute2/rt_tables
+        cp /opt/ueransim/rt_tables /etc/iproute2/rt_tables
         binary=/opt/ueransim/bin/nr-ue
         config=/etc/ueransim/ue.yaml
         ;;

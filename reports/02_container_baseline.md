@@ -160,3 +160,11 @@ No image was exported. The final Dockerfile stage is now explicitly named
 `--no-cache-filter` option while preserving the expensive compiled `build`
 stage and avoiding any shared-cache prune. Scoped cache recovery remains
 pending.
+
+The stage-scoped Open5GS recovery and separate UERANSIM build then succeeded.
+The first UE recovery exited before UERANSIM because capability-restricted root
+could not read the seed through the newly created `/opt/ueransim/share`
+directory. The immutable seed now resides directly in the already traversable
+`/opt/ueransim` runtime directory; the writable destination remains the
+container-private `/etc/iproute2` temporary filesystem. Rebuild and recovery
+remain pending.

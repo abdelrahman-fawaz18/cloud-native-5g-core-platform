@@ -141,7 +141,7 @@ class Phase02StaticTests(unittest.TestCase):
         self.assertIn("COPY --chmod=0444 containers/ueransim/rt_tables", dockerfile)
         self.assertIn("      - /etc/iproute2:mode=0755", compose)
         self.assertIn(
-            "cp /opt/ueransim/share/rt_tables /etc/iproute2/rt_tables",
+            "cp /opt/ueransim/rt_tables /etc/iproute2/rt_tables",
             entrypoint,
         )
         self.assertIn("NG Setup procedure is successful", healthcheck)
