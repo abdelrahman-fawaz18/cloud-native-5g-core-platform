@@ -1,54 +1,1688 @@
-# Technical Documentation
+# Kubernetes Architecture Foundation And Technical Documentation
 
-This directory contains the architecture, decision records, provenance, and
-operational procedures for the platform. Documentation distinguishes verified
-behavior from roadmap intent and links every accepted claim to reproducible
-configuration or evidence.
+This document provides the conceptual and operational foundation for the
+Kubernetes implementation in this repository. It begins with the container
+model, explains the Kubernetes objects and control loops that manage those
+containers, reconstructs the Phase 3 feasibility work, and maps those results
+to the Helm-managed single-UE platform planned for Phase 4.
 
-## Recommended Technical Review Path
+The document is deliberately self-contained. A reader who understands a
+container as an isolated process with its own filesystem and networking should
+be able to use this file to answer four questions:
 
-1. [Project status](project-status.md) — completed gates, current boundary, and
-   what has not yet been claimed.
-2. [Repository overview](../README.md) — verified Phase 2 and Phase 3
-   deployment hierarchies, network layers, packet paths, and limitations.
+1. Why is Kubernetes being introduced after the Docker Compose baseline?
+2. What are the main Kubernetes components and how do they connect?
+3. What exactly did Phase 3 prove, and what did it not prove?
+4. Which Kubernetes resources and behaviors will Phase 4 implement?
+
+The explanations describe the verified local architecture. They do not claim
+that a single-node kind cluster has the availability, scale, storage,
+networking, or security controls of a production telecommunications platform.
+
+Because this is a long-form reference, it can be read in parts:
+
+- Sections 1-10 build the execution and reconciliation model.
+- Sections 11-13 build the networking and 5G address model.
+- Sections 14-20 explain configuration, storage, health, resources, security,
+  operations, and Helm.
+- Sections 21-24 connect Compose, Phase 3, Phase 4, and production practice.
+- Sections 25-30 provide troubleshooting, a concise narrative, a glossary,
+  readiness questions, the documentation index, and authoritative references.
+
+---
+
+## 1. Starting From The Container Model
+
+A container is not a small virtual machine. At runtime it is one or more Linux
+processes isolated with kernel features such as namespaces and control groups.
+The container image supplies the application filesystem and metadata; the
+host kernel still executes the processes.
+
+Docker provides several important functions around that model:
+
+- builds an image from a Dockerfile;
+- creates and starts containers from an image;
+- assigns container network interfaces and addresses;
+- attaches storage and configuration;
+- applies resource and security options; and
+- records container state and logs.
+
+Docker Compose adds a declarative description for a group of containers. The
+Phase 2 `compose.yaml` states which containers should exist, which networks
+they join, which files they mount, their dependencies, and their health
+checks. Compose is therefore already a form of orchestration, but its normal
+scope is one Docker Engine and a comparatively direct container lifecycle.
+
+Kubernetes retains the same images and Linux container fundamentals. It adds
+an Application Programming Interface (API), persistent desired-state records,
+controllers, scheduling, stable service discovery, workload identity, storage
+abstractions, rollout history, and continuous reconciliation.
+
+The transition can be summarized as follows:
+
+```text
+Host services:
+  operator edits host files and systemd manages host processes
+
+Docker containers:
+  operator builds images and Docker runs isolated processes
+
+Docker Compose:
+  operator declares a multi-container application on one Docker Engine
+
+Kubernetes:
+  operator declares API objects and controllers continuously make runtime
+  objects converge toward that declared state
+
+Helm on Kubernetes:
+  operator installs a parameterized, versioned package that renders the
+  related Kubernetes API objects as one release
+```
+
+Kubernetes does not replace containers. It decides where and how containerized
+workloads run, observes them, and replaces or reconfigures runtime objects when
+the declared state changes.
+
+---
+
+## 2. Why Use Kubernetes Here?
+
+The predecessor 5G lab runs Open5GS and UERANSIM as services directly on one
+Ubuntu host. That is a valid architecture for a controlled protocol lab. The
+Compose baseline improves isolation and reproducibility, but it still leaves
+the application tied to the lifecycle and networking model of one Docker
+Engine.
+
+This project introduces Kubernetes to evaluate and implement capabilities that
+matter when a containerized 5G core becomes an operated platform:
+
+### 2.1 Declarative desired state
+
+Instead of scripting every start operation, the repository declares what
+should exist. The cluster records that state and continuously works toward it.
+If a managed Pod disappears, its controller creates a replacement.
+
+### 2.2 Stable application discovery
+
+Pod addresses are replaceable. Kubernetes Services provide stable names and
+virtual addresses for traffic that should not depend on one Pod instance. This
+is particularly useful for the HTTP-based 5G Service-Based Interface (SBI).
+
+### 2.3 Standardized configuration and secret delivery
+
+ConfigMaps, Secrets, and volumes separate runtime configuration from an image.
+This allows the same image to be used with different controlled configuration
+without rebuilding it.
+
+### 2.4 Controlled lifecycle and rollout history
+
+Deployments manage replacement and rollout of stateless workloads.
+StatefulSets associate stable identities and storage claims with stateful
+workloads. Helm groups the complete application into revisions that can be
+installed, upgraded, rolled back, and uninstalled.
+
+### 2.5 Health and dependency signals
+
+Startup, readiness, and liveness probes express different operational facts.
+Kubernetes can delay traffic until a component is ready or restart a process
+that is alive at the operating-system level but no longer making progress.
+
+### 2.6 Resource and security boundaries
+
+Requests, limits, security contexts, Linux capabilities, ServiceAccounts, and
+Role-Based Access Control (RBAC) make resource and privilege requirements
+explicit in version-controlled configuration.
+
+### 2.7 A transferable deployment contract
+
+The API objects and Helm structure used locally are also used by managed-cloud
+and on-premises Kubernetes platforms. The infrastructure details will differ,
+but the application packaging and reconciliation concepts transfer.
+
+Kubernetes is not automatically the correct answer for every 5G deployment.
+A fixed, small installation may be simpler as host services. A high-throughput
+User Plane Function (UPF) may require dedicated nodes, secondary interfaces,
+Single Root Input/Output Virtualization (SR-IOV), Data Plane Development Kit
+(DPDK), CPU pinning, or even operation outside Kubernetes. This repository
+uses Kubernetes because orchestration, repeatability, lifecycle evidence, and
+platform operations are explicit project goals—not because Kubernetes makes
+the underlying 5G protocols work by itself.
+
+---
+
+## 3. The Most Important Mental Model: An API And Control Loops
+
+Kubernetes should first be imagined as a control system, not as a collection
+of shell commands.
+
+You submit an object to the Kubernetes API. That object contains a desired
+state. Controllers observe the desired state and the current state. When they
+differ, controllers take actions that reduce the difference. This repeating
+process is called **reconciliation**.
+
+### 3.1 Example: requesting one AMF Pod
+
+Suppose a Deployment says that one Access and Mobility Management Function
+(AMF) replica should exist.
+
+```text
+1. Desired state
+   Deployment.spec.replicas = 1
+
+2. Current state
+   zero matching Pods exist
+
+3. Reconciliation
+   Deployment controller causes a ReplicaSet to request one Pod
+
+4. Scheduling
+   scheduler assigns the new Pod to a suitable node
+
+5. Node execution
+   kubelet asks the container runtime to create the Pod and AMF container
+
+6. Observation
+   kubelet reports container and probe status through the API
+
+7. Stable state
+   one matching Ready Pod exists
+```
+
+If that Pod is deleted, Kubernetes does not repair the same Pod. The
+controller creates a new Pod because the declared replica count is still one.
+The new Pod may have a different name and IP address.
+
+This distinction is fundamental:
+
+- a **container** is a running process environment;
+- a **Pod** is a Kubernetes runtime object containing one or more containers;
+- a **Deployment** declares how a replaceable set of Pods should be managed;
+- a **Service** gives clients a stable way to find selected Pods.
+
+### 3.2 Desired state is not proof of application success
+
+Kubernetes can prove that an object exists and that configured health checks
+pass. It cannot infer that a UE registered, that a PFCP session was created, or
+that GTP-U carried bidirectional traffic. Those are application and protocol
+acceptance tests that this repository must implement separately.
+
+`Pod Running` therefore means only that the Pod's containers are running. It
+does not mean the 5G control plane or user plane works.
+
+---
+
+## 4. The Complete System Hierarchy
+
+Read the following hierarchy from top to bottom. Indentation means “is hosted
+inside” or “is managed within.” It is not a packet-flow diagram.
+
+```text
+Ubuntu host
+├── existing host Open5GS/UERANSIM lab (outside this project's cluster)
+├── Docker Engine
+│   └── kind node container: cn5g-control-plane
+│       ├── Kubernetes control plane
+│       │   ├── kube-apiserver
+│       │   ├── etcd
+│       │   ├── kube-scheduler
+│       │   └── kube-controller-manager
+│       ├── node components
+│       │   ├── kubelet
+│       │   ├── containerd
+│       │   ├── kube-proxy
+│       │   └── kindnet network plugin
+│       ├── cluster add-ons
+│       │   ├── CoreDNS
+│       │   └── local-path storage provisioner
+│       └── workload Pods
+│           └── one or more containers per Pod
+└── kubectl and Helm clients
+    └── connect to kube-apiserver using a kubeconfig
+```
+
+There are two different container-runtime layers in this local design:
+
+1. Docker runs the kind node container on Ubuntu.
+2. containerd inside the kind node runs Kubernetes Pod containers.
+
+Docker does not directly manage the application Pods. Kubernetes asks the
+node's containerd runtime to manage them.
+
+In a production cluster, a node is normally a virtual machine or physical
+server rather than a Docker container. The Kubernetes control model remains
+similar, but the local kind nesting is removed.
+
+### 4.1 One-page relationship mind map
+
+This map groups concepts by responsibility. A vertical branch means “contains
+or manages.” A horizontal arrow states the exact interaction.
+
+```text
+Kubernetes cluster
+├── control plane: stores desired state and makes cluster decisions
+│   ├── API server <-> every authenticated client and controller
+│   ├── API server <-> etcd state database
+│   ├── scheduler -> assigns pending Pods to nodes
+│   └── controllers -> create/update objects to reconcile desired state
+│
+├── node: supplies the environment where Pods execute
+│   ├── kubelet -> asks containerd to run assigned Pod containers
+│   ├── CNI plugin -> gives Pods network interfaces and Pod IPs
+│   └── kube-proxy -> implements Service forwarding in this cluster
+│
+├── workloads: declare how application Pods should be managed
+│   ├── Deployment -> ReplicaSet -> replaceable Pods
+│   ├── StatefulSet -> identity-stable Pods + storage claims
+│   └── Job -> completion-oriented Pods
+│
+├── connectivity and discovery
+│   ├── Service selector -> matching ready Pods
+│   ├── EndpointSlice -> current backend Pod addresses
+│   └── CoreDNS -> Service name resolves to discovery endpoint
+│
+├── application inputs
+│   ├── ConfigMap -> non-secret files/environment
+│   ├── Secret -> controlled sensitive files/environment
+│   └── PVC -> requested persistent storage mounted by a Pod
+│
+└── policy and observation
+    ├── probes -> startup/readiness/liveness status and actions
+    ├── requests/limits -> scheduling and runtime resource boundaries
+    ├── security context -> Linux user, capabilities, and seccomp
+    └── ServiceAccount + RBAC -> workload identity and API permissions
+
+kubectl -- authenticated API requests --> API server
+Helm -- renders a chart, then submits objects --> API server
+5G applications -- use Pod/Service networks and explicit 5G interfaces -->
+  other application Pods
+```
+
+The map separates three concerns that are often accidentally combined:
+
+1. Helm packages and submits objects.
+2. Kubernetes reconciles and runs those objects.
+3. Open5GS and UERANSIM implement the actual 5G protocols inside the Pods.
+
+---
+
+## 5. Cluster, Control Plane, And Node Components
+
+### 5.1 Cluster
+
+A **cluster** is the complete Kubernetes system: its control plane, one or
+more nodes, networking, storage integrations, and API objects.
+
+The accepted local cluster is named `cn5g`. It is disposable: project data
+required beyond a cluster lifecycle must not depend on the continued existence
+of the kind node container.
+
+### 5.2 Control plane
+
+The **control plane** stores desired state and makes cluster-wide decisions.
+Its core components are:
+
+| Component | Purpose | Useful mental shortcut |
+| --- | --- | --- |
+| `kube-apiserver` | Validates and exposes the Kubernetes API | The front door to cluster state |
+| `etcd` | Stores API data as a consistent key-value database | The cluster's state record |
+| `kube-scheduler` | Assigns unscheduled Pods to suitable nodes | Chooses where a Pod should run |
+| `kube-controller-manager` | Runs built-in reconciliation controllers | Keeps declared and actual state aligned |
+
+Clients and components normally communicate through the API server rather
+than writing directly to `etcd`.
+
+### 5.3 Node
+
+A **node** supplies compute, networking, and storage access for Pods. A node
+can be a physical machine, a virtual machine, or—in kind—a container.
+
+Important node components are:
+
+| Component | Purpose |
+| --- | --- |
+| `kubelet` | Watches assigned Pod specifications and ensures their containers run |
+| container runtime | Pulls images and starts/stops containers; this cluster uses containerd |
+| `kube-proxy` | Programs the node's Service forwarding rules in this cluster |
+| Container Network Interface (CNI) plugin | Connects Pods to the Pod network; kind uses kindnet |
+
+The local cluster has one node. That node runs both the control plane and
+workloads. This is resource-efficient and reproducible, but a node failure
+removes the entire cluster. It is not a high-availability architecture.
+
+### 5.4 Cluster add-ons
+
+- **CoreDNS** answers cluster DNS queries, including Service names.
+- **kindnet** implements the Pod network used by kind.
+- **kube-proxy** implements Service virtual-address forwarding in this
+  cluster.
+- The **local-path provisioner** can satisfy storage claims using storage on
+  the kind node. It is suitable for local testing, not equivalent to a
+  replicated production storage system.
+
+---
+
+## 6. How A Kubernetes Request Becomes A Running Container
+
+The arrows below are numbered and labeled. This is a control flow, not an
+application packet flow.
+
+```text
+[1] operator or automation
+      |
+      | kubectl/Helm sends an authenticated HTTPS API request
+      v
+[2] kube-apiserver
+      |
+      | validates and persists desired state
+      v
+[3] etcd
+
+[4] controllers watch the API
+      |
+      | create/update dependent objects such as ReplicaSets and Pods
+      v
+[5] unscheduled Pod exists
+      |
+      | scheduler selects a node and records the binding
+      v
+[6] kubelet on selected node
+      |
+      | asks containerd and the network/storage plugins for runtime resources
+      v
+[7] Pod containers, interfaces, mounts, and probes run
+      |
+      | status is reported back through the API
+      v
+[8] operator sees status using kubectl
+```
+
+Helm participates at step 1. Helm renders and submits Kubernetes objects. Helm
+does not become a controller that runs the containers; Kubernetes still owns
+reconciliation after the objects enter the API.
+
+---
+
+## 7. Kubernetes Objects And YAML
+
+A Kubernetes object is an API record. Most manifest files contain four
+important top-level sections:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example
+  namespace: cn5g
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: example
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: example
+    spec:
+      containers:
+        - name: example
+          image: example.invalid/application:1.0.0
+```
+
+- `apiVersion` selects the API version and group containing the object type.
+- `kind` identifies the type of object.
+- `metadata` contains identity and organization fields such as name,
+  namespace, labels, and annotations.
+- `spec` declares the desired state.
+- `status`, normally written by Kubernetes rather than the operator, reports
+  observed state.
+
+The sample image name is illustrative and is not a project runtime input.
+
+`kubectl apply` submits a manifest. The file is not itself the running
+application; it is a desired-state document stored through the API.
+
+---
+
+## 8. Namespaces, Names, Labels, And Selectors
+
+### 8.1 Namespace
+
+A **namespace** is a logical scope for namespaced API objects. It helps group
+and isolate resources, but it is not automatically a complete security or
+network boundary.
+
+For example, two namespaces may each contain a Service named `mongodb`.
+Cluster DNS distinguishes them using namespace-qualified names.
+
+Phase 3 used `cn5g-feasibility` so every temporary probe object had a clear
+ownership boundary. Phase 4 will use a project namespace for the Helm release.
+
+### 8.2 Name
+
+An object name identifies one resource within its kind and namespace. A Pod
+created by a controller often has a generated suffix because Pods are
+replaceable instances.
+
+### 8.3 Labels
+
+**Labels** are queryable key/value identity fields. They answer questions such
+as:
+
+- Which Pods belong to this application?
+- Which release owns this resource?
+- Which component is the AMF?
+
+Common professional labels include application name, component, instance,
+version, and managing tool.
+
+### 8.4 Selectors
+
+A **selector** matches labels. Deployments use selectors to identify the Pods
+they manage. Services use selectors to identify the Pods that should receive
+traffic.
+
+This means label correctness is functional, not cosmetic. If a Service
+selector does not match a Pod's labels, the Service can exist and have an IP
+address while forwarding to no endpoints.
+
+### 8.5 Annotations
+
+**Annotations** are non-identifying metadata used by tools and controllers.
+They are not normally used to select objects. Helm hooks, checksums that force
+configuration rollouts, and documentation references are common uses.
+
+---
+
+## 9. Pods: The Smallest Kubernetes Execution Unit
+
+A **Pod** is the smallest deployable compute object in Kubernetes. A Pod
+contains one or more containers that intentionally share:
+
+- one network namespace and therefore one Pod IP address;
+- the same loopback interface;
+- declared volumes; and
+- one scheduling and lifecycle boundary.
+
+Containers in the same Pod communicate over `localhost`. They cannot bind the
+same address and port simultaneously because they share the network stack.
+
+### 9.1 Why not manage containers directly?
+
+Kubernetes attaches networking, storage, identity, probes, and scheduling to a
+Pod. The Pod is the unit the scheduler places on a node.
+
+### 9.2 One container versus multiple containers
+
+The normal application pattern is one main container per Pod. Additional
+containers are appropriate when they share the exact lifecycle and network
+context, for example:
+
+- a sidecar that exports metrics for the main process;
+- a proxy that must share `localhost`; or
+- a tightly coupled packet observer in a controlled test Pod.
+
+Unrelated 5G Network Functions should not be combined merely to reduce the
+number of Pods. Separate Pods preserve lifecycle, configuration, health,
+resource, and security boundaries.
+
+### 9.3 Init containers
+
+An **init container** runs to completion before the main application
+containers start. It can prepare files or perform a narrow prerequisite.
+Repeated initialization of shared state must still be idempotent, meaning it
+can safely run more than once.
+
+### 9.4 Pod lifetime
+
+Pods are replaceable. A replacement is a new object and normally receives a
+new IP address. Persistent identity must come from a higher-level workload
+object, a Service, or persistent storage—not from assuming one Pod will live
+forever.
+
+---
+
+## 10. Workload Controllers
+
+Directly creating long-running Pods is uncommon because a bare Pod has no
+higher-level controller to replace it. Phase 3 used bare Pods intentionally
+because they were short-lived, precisely controlled feasibility probes. Phase
+4 will use workload controllers.
+
+### 10.1 Deployment
+
+A **Deployment** manages interchangeable, normally stateless Pods. It creates
+and manages a **ReplicaSet**, which maintains the requested number of matching
+Pods.
+
+Likely Phase 4 uses include Open5GS control-plane Network Functions for which
+one instance can be replaced by another using the same configuration. The
+initial replica count may be one; using a Deployment still gives replacement
+and rollout behavior.
+
+“Stateless” here does not mean a process has no runtime memory. It means the
+Pod does not require a unique persistent identity or local state to be a valid
+replacement.
+
+### 10.2 StatefulSet
+
+A **StatefulSet** manages Pods that require stable identity, ordered lifecycle,
+or stable association with storage. MongoDB is the main Phase 4 candidate.
+
+A StatefulSet does not make data durable by itself. Persistence comes from the
+PersistentVolumeClaim and its backing storage. The StatefulSet makes the
+relationship between a stable Pod identity and that claim manageable.
+
+### 10.3 Job
+
+A **Job** manages a task that should complete successfully and stop. Subscriber
+database initialization is a natural Job because it should provision the
+synthetic record and exit rather than run forever.
+
+The successful state for a Job is `Completed`, not `Running`.
+
+### 10.4 DaemonSet
+
+A **DaemonSet** places a Pod on every selected node. Network plugins and
+node-level collectors commonly use it. Phase 4 does not need to force an
+application Network Function into a DaemonSet simply because the local cluster
+has one node.
+
+### 10.5 Controller ownership chain
+
+```text
+Deployment
+└── ReplicaSet
+    └── Pod
+        └── container process
+
+StatefulSet
+└── identity-stable Pod
+    └── container process + mounted persistent claim
+
+Job
+└── one or more completion-oriented Pods
+    └── process exits successfully or fails
+```
+
+When troubleshooting, inspect the chain rather than only the final container.
+A scheduling problem is visible at the Pod level; a rollout problem is often
+visible at the Deployment or ReplicaSet level.
+
+---
+
+## 11. Kubernetes Networking From The Ground Up
+
+Kubernetes networking is easier to understand when its address domains are
+kept separate.
+
+### 11.1 Node network
+
+Nodes need addresses that allow cluster components and other nodes to reach
+them. In kind, the node is attached to a Docker bridge and received
+`172.18.0.2` during the accepted Phase 3 run.
+
+### 11.2 Pod network
+
+Every Pod receives its own Pod IP from the cluster's Pod range. The accepted
+kind configuration uses `10.244.0.0/16`.
+
+Containers in one Pod share that IP. Different Pods have different IPs, even
+when their containers use the same image.
+
+Pod IPs are operational endpoints, not durable identities. A replacement Pod
+may receive another address.
+
+The CNI plugin sets up Pod interfaces and reachability. In this kind cluster,
+kindnet supplied Pod networking. Phase 3 observed a node-side virtual Ethernet
+(`veth`) interface and route for each Pod rather than assuming a bridge named
+`cni0` existed.
+
+### 11.3 Service network
+
+A **Service** represents a stable network endpoint for a changing set of Pods.
+The accepted Service address range is `10.96.0.0/16`.
+
+A normal ClusterIP Service has:
+
+- a stable virtual IP inside the cluster;
+- a DNS name;
+- one or more ports; and
+- EndpointSlices containing the currently selected backend Pod addresses.
+
+The ClusterIP is usually virtual; it is not simply another address assigned to
+the application container's interface. kube-proxy programs forwarding rules
+so traffic to that virtual address reaches a selected ready endpoint.
+
+### 11.4 Service discovery by DNS
+
+CoreDNS creates names using this pattern:
+
+```text
+<service>.<namespace>.svc.cluster.local
+```
+
+For example:
+
+```text
+mongodb.cn5g.svc.cluster.local
+```
+
+Pods in the same namespace can normally use the short name `mongodb`.
+Explicit namespace-qualified names are clearer when components cross
+namespace boundaries.
+
+### 11.5 Service selectors and EndpointSlices
+
+```text
+client Pod
+  -> Service DNS name
+  -> Service ClusterIP and port
+  -> kube-proxy forwarding
+  -> one ready endpoint from an EndpointSlice
+  -> selected server Pod IP and target port
+```
+
+The Service does not start Pods. A workload controller starts Pods. The
+Service discovers them by matching labels.
+
+### 11.6 Service `port`, `targetPort`, and protocol
+
+- `port` is the port clients use on the Service.
+- `targetPort` is the port used on the selected Pod.
+- `protocol` identifies TCP, UDP, or SCTP.
+
+A container's `containerPort` entry is primarily declarative metadata. It does
+not by itself publish a host port or create a Service.
+
+### 11.7 ClusterIP is not host exposure
+
+A ClusterIP is reachable within the cluster network. It does not expose the
+application on the Ubuntu host or the public Internet.
+
+Other mechanisms such as NodePort, LoadBalancer, Ingress, Gateway API, or
+`kubectl port-forward` address different access needs. Phase 3 intentionally
+published no application workload port to Ubuntu.
+
+### 11.8 Headless Service
+
+A headless Service uses `clusterIP: None`. DNS returns endpoint addresses
+instead of a virtual ClusterIP. This is useful where clients need direct Pod
+identity or where a protocol endpoint must remain explicit. It does not make
+the Pod address permanent.
+
+### 11.9 NetworkPolicy
+
+A **NetworkPolicy** declares allowed Pod traffic when the installed CNI
+implementation enforces it. Creating a NetworkPolicy object without an
+enforcing implementation does not prove isolation. NetworkPolicy enforcement
+is not part of the accepted Phase 3 evidence and must not be assumed.
+
+---
+
+## 12. Why 5G Networking Needs Extra Care
+
+Ordinary application traffic often works well through stable Services. Some
+5G protocols also carry endpoint addresses or tunnel identifiers inside their
+own protocol messages. A virtual Service address is therefore not always a
+valid substitute for the address on which the real protocol endpoint listens.
+
+The project distinguishes these interfaces:
+
+| Interface | Protocol purpose | Initial Kubernetes approach |
+| --- | --- | --- |
+| SBI | HTTP-based communication between 5G core Network Functions | ClusterIP Services and DNS are appropriate |
+| N2 | NGAP between gNB and AMF over SCTP/38412 | Explicit reachable endpoint; validate real SCTP association |
+| N3 | GTP-U between gNB and UPF over UDP/2152 | Direct advertised Pod endpoint unless evidence supports another model |
+| N4 | PFCP between SMF and UPF over UDP/8805 | Explicit reachable endpoint and real PFCP validation |
+| N6 | Routed user IP traffic between UPF and data network | Explicit routes, forwarding, MTU, and return-path validation |
+
+**NGAP** means Next Generation Application Protocol. It carries control-plane
+signalling on N2.
+
+**SCTP** means Stream Control Transmission Protocol. It is the transport used
+by NGAP.
+
+**PFCP** means Packet Forwarding Control Protocol. The Session Management
+Function (SMF) uses it to control the UPF on N4.
+
+**GTP-U** means GPRS Tunnelling Protocol User Plane. It carries user packets
+between the gNB and UPF on N3.
+
+A successful UDP/2152 test proves that UDP can cross the path on that port. It
+does not prove that GTP-U headers, Tunnel Endpoint Identifiers (TEIDs), or
+session state are correct. Phase 4 must use real Open5GS and UERANSIM traffic
+to make that stronger claim.
+
+---
+
+## 13. The Four Address Domains In This Project
+
+Do not treat every `10.x.x.x` address as belonging to one network.
+
+```text
+Ubuntu/Docker node network
+  172.18.0.0/16
+  connects the kind node container to Docker
+
+Kubernetes Pod network
+  10.244.0.0/16
+  gives each Pod an address
+
+Kubernetes Service network
+  10.96.0.0/16
+  gives Services virtual cluster addresses
+
+5G UE session network
+  10.60.0.0/24
+  exists behind TUN/tunnel endpoints as subscriber data-plane addresses
+```
+
+The UE session address is not a Pod IP. The same UE Pod can have both:
+
+- a Pod interface with a `10.244.x.x` outer-network address; and
+- a TUN interface with a `10.60.0.x` inner subscriber address.
+
+That separation creates an inner and outer packet model:
+
+```text
+inner packet:
+  UE session source/destination, such as 10.60.0.2 -> data endpoint
+
+outer packet during tunnelling:
+  Pod-network source/destination, such as UE Pod -> UPF/router Pod on UDP/2152
+```
+
+In the real Phase 4 user plane, GTP-U provides the N3 encapsulation. Phase 3
+used a smaller synthetic encapsulator to test the infrastructure path without
+mixing it with real 5G application configuration.
+
+---
+
+## 14. Configuration: ConfigMaps And Secrets
+
+### 14.1 ConfigMap
+
+A **ConfigMap** stores non-secret configuration in the Kubernetes API. It can
+be exposed to a Pod as files or environment variables.
+
+Open5GS and UERANSIM YAML configuration belongs in ConfigMaps when it contains
+no sensitive values. Separating it from the image allows one reviewed image to
+run with environment-specific addresses and settings.
+
+### 14.2 Secret
+
+A **Secret** is a Kubernetes object intended for sensitive data delivery. In
+ordinary YAML, Secret values are commonly base64-encoded. Base64 is an
+encoding, not encryption: anyone who obtains the value can decode it.
+
+The Phase 4 rule is therefore:
+
+- synthetic secret values are generated for an installation;
+- live values are not committed;
+- public examples contain only clearly synthetic placeholders; and
+- RBAC and mount scope restrict which workloads can retrieve them.
+
+A production cluster may add encryption at rest, an external secret manager,
+key rotation, and audited access. A local Secret object alone does not provide
+all of those controls.
+
+### 14.3 Configuration updates
+
+Changing a ConfigMap or Secret does not guarantee that an application reloads
+it. Environment-variable values are fixed for a running container. Mounted
+files may update, but the application must detect and reload them. A common
+chart pattern includes a configuration checksum in the Pod template so a
+configuration change deliberately triggers a rollout.
+
+---
+
+## 15. Volumes, PersistentVolumes, And Claims
+
+Container writable layers and ordinary Pod-local volumes should be treated as
+ephemeral. A replacement Pod must not be expected to retain them.
+
+Kubernetes separates a workload's request for storage from the storage
+implementation:
+
+- a **volume** is storage mounted into a Pod;
+- a **PersistentVolume (PV)** represents storage available to the cluster;
+- a **PersistentVolumeClaim (PVC)** is a workload's request for storage; and
+- a **StorageClass** describes a class and provisioner that can create backing
+  volumes.
+
+The relationship is:
+
+```text
+MongoDB StatefulSet
+  -> Pod template mounts a claim
+  -> PersistentVolumeClaim requests capacity/access mode
+  -> StorageClass/provisioner supplies a PersistentVolume
+  -> PersistentVolume maps to actual backing storage
+```
+
+The kind local-path provisioner stores data inside the kind node environment.
+It can prove Pod replacement and Helm release persistence behavior within the
+local cluster. Deleting the disposable kind node removes that local storage;
+it is not equivalent to a production network or cloud storage service.
+
+Phase 4 must explicitly test the persistence contract recorded in ADR-0004.
+It must also distinguish Helm uninstall behavior from cluster deletion and
+must never delete unrelated claims or volumes.
+
+---
+
+## 16. Startup, Readiness, And Liveness Probes
+
+Kubernetes probes answer different questions. Reusing one weak check for all
+three hides failure modes.
+
+| Probe | Question | Effect when repeatedly failing |
+| --- | --- | --- |
+| Startup | Has this process finished starting? | Container is restarted; readiness and liveness wait while startup is pending |
+| Readiness | Should this Pod receive Service traffic now? | Pod remains running but is removed from ready Service endpoints |
+| Liveness | Is this process stuck and unlikely to recover without restart? | Container is restarted |
+
+Examples of meaningful distinctions:
+
+- A MongoDB process may be alive but not ready to answer database operations.
+- An AMF process may exist but still be initializing its SCTP listener and SBI
+  relationships.
+- A temporarily unavailable dependency should not necessarily cause another
+  component's liveness check to restart it repeatedly.
+
+Probe settings include interval, timeout, success threshold, and failure
+threshold. Aggressive liveness checks can create restart loops or cascading
+failures. Phase 4 will justify probe behavior per component.
+
+Probes are platform health evidence. End-to-end UE registration and PDU
+session validation remain separate functional evidence.
+
+---
+
+## 17. Scheduling, Resource Requests, And Limits
+
+The scheduler must decide whether a node has enough declared capacity for a
+Pod.
+
+- A **request** is the amount of CPU or memory used for scheduling and the
+  workload's resource guarantee model.
+- A **limit** is an enforced upper boundary.
+
+CPU and memory behave differently:
+
+- exceeding a CPU limit generally causes throttling;
+- exceeding a memory limit can cause the process to be terminated as
+  `OOMKilled`, meaning killed after an out-of-memory condition.
+
+Requests that are too high waste schedulable capacity. Requests that are too
+low make contention and eviction more likely. Limits that are copied from an
+unrelated example are not evidence-based.
+
+Phase 4 will first measure idle and functional single-UE behavior, then set
+initial requests and limits with documented headroom. These values will be a
+local baseline, not a production capacity claim.
+
+The one-node kind cluster cannot prove rescheduling across nodes, node
+anti-affinity, topology spread, or high availability.
+
+---
+
+## 18. Security Contexts, Linux Capabilities, And Workload Identity
+
+Kubernetes security fields configure the same Linux mechanisms used by
+containers, but they make the requirements part of the Pod specification.
+
+### 18.1 Container user
+
+`runAsNonRoot` and `runAsUser` prevent a process from running as Linux root
+when the image supports an unprivileged user. The Open5GS and UERANSIM project
+images use user `65532:65532` by default.
+
+### 18.2 Linux capabilities
+
+Linux divides some root privileges into capabilities. A strong baseline drops
+all capabilities and adds back only those proved necessary.
+
+Phase 3 established:
+
+- ordinary TCP, UDP, SCTP, and data-endpoint containers needed no effective
+  capabilities;
+- creating and configuring a TUN interface required `NET_ADMIN`;
+- raw packet observation required `NET_RAW`; and
+- no feasibility container required `privileged: true`.
+
+`NET_ADMIN` is powerful. It permits network administration inside the
+container's network namespace. It should be granted only to the UE and UPF
+containers that prove they require it.
+
+### 18.3 TUN device mount
+
+The TUN device `/dev/net/tun` lets a userspace process exchange IP packets with
+the kernel through a virtual interface. Mounting the character device makes it
+visible; `NET_ADMIN` authorizes interface configuration. Both were required by
+the positive Phase 3 test.
+
+### 18.4 Privileged mode
+
+A privileged container receives an extremely broad security boundary and can
+interact much more directly with the node. It was deliberately unnecessary in
+Phase 3 and is not a baseline Phase 4 assumption.
+
+### 18.5 Seccomp
+
+**seccomp** filters system calls. The feasibility Pods used
+`RuntimeDefault`, allowing the runtime's standard profile to block unexpected
+system calls while retaining required behavior.
+
+### 18.6 ServiceAccount and RBAC
+
+A **ServiceAccount** is a non-human Kubernetes identity assigned to Pods.
+**RBAC** grants API actions to identities through Roles and bindings.
+
+RBAC controls Kubernetes API access. It does not grant Linux `NET_ADMIN`,
+filesystem permissions, or network reachability.
+
+Most Network Functions do not need to call the Kubernetes API. Their
+ServiceAccounts should therefore receive no extra API permissions, and token
+automounting should be disabled where unnecessary. A helper that truly needs
+API access receives a dedicated ServiceAccount and the narrowest namespaced
+Role that supports its operation.
+
+---
+
+## 19. `kubectl`, Kubeconfig, Context, And Namespace
+
+`kubectl` is a command-line client for the Kubernetes API. It is not the
+cluster and it does not start containers directly.
+
+A **kubeconfig** tells a client:
+
+- which API server to contact;
+- which cluster certificate to trust;
+- which identity or credentials to use; and
+- which context and default namespace to select.
+
+A **context** combines a cluster, identity, and optional namespace. The Phase
+3 context was `kind-cn5g` and the kubeconfig was stored under ignored local
+artifacts rather than in Git.
+
+Common read operations and what they mean:
+
+| Command pattern | Question answered |
+| --- | --- |
+| `kubectl get pods` | Which Pods exist and what summary state do they report? |
+| `kubectl get all` | Which common workload and Service objects exist? It does not literally show every API kind |
+| `kubectl describe pod NAME` | Why was a Pod scheduled, rejected, restarted, or marked unready? |
+| `kubectl logs POD -c CONTAINER` | What did one container write to standard output/error? |
+| `kubectl get events` | Which recent scheduling, image, mount, and probe events occurred? |
+| `kubectl exec POD -c CONTAINER -- COMMAND` | Run a diagnostic inside one container; this is not configuration management |
+| `kubectl get endpointslices` | Which backend addresses currently serve Services? |
+| `kubectl get RESOURCE -o yaml` | Show the API object, including observed fields |
+
+Always specify the intended kubeconfig and namespace in automation. Relying on
+a global current context can direct a command at the wrong cluster.
+
+`kubectl delete` removes API objects. If a controller still declares a desired
+replica, deleting only its Pod causes a replacement. To stop a managed
+workload, change or remove the owning workload object.
+
+---
+
+## 20. Helm: Packaging Kubernetes Objects
+
+Kubernetes manifests become numerous once an application includes workloads,
+Services, configuration, Secrets, storage, identities, probes, and tests.
+Helm packages related templates and configuration as a versioned unit.
+
+### 20.1 Core terms
+
+| Term | Meaning |
+| --- | --- |
+| Chart | A package containing Kubernetes templates, defaults, metadata, and optional dependencies |
+| Template | A file that Helm renders into one or more Kubernetes manifests |
+| Value | An intended configuration input used during rendering |
+| Release | One installed instance of a chart in a cluster |
+| Revision | A numbered release state created by install, upgrade, or rollback |
+| Upgrade | Render and apply a new chart/configuration state to an existing release |
+| Rollback | Create a new revision based on an earlier release revision |
+
+### 20.2 Expected chart structure
+
+```text
+charts/<chart-name>/
+├── Chart.yaml          chart identity and versions
+├── values.yaml         reviewed default values
+├── values.schema.json  validation for supported values
+├── templates/          Kubernetes object templates
+├── templates/_helpers.tpl
+└── templates/NOTES.txt
+```
+
+### 20.3 Render path
+
+```text
+chart templates + default values + approved overrides
+  -> Helm renders ordinary Kubernetes YAML
+  -> lint/schema checks validate chart structure and inputs
+  -> Helm submits objects to kube-apiserver
+  -> Kubernetes controllers reconcile those objects
+  -> Helm records the release revision in the cluster
+```
+
+Helm does not replace Kubernetes reconciliation. A successful `helm template`
+or `helm lint` proves that rendering passed; it does not prove that Pods can
+start or that a UE can register.
+
+### 20.4 Values are an interface
+
+Chart values should expose supported variation: images, addresses, resource
+settings, storage size, subscriber inputs, and optional components. Turning
+every manifest field into a value creates an undocumented and untestable
+configuration surface.
+
+### 20.5 Rollback boundaries
+
+Helm rollback restores previously rendered Kubernetes configuration as a new
+revision. It does not automatically reverse external side effects or database
+schema/data changes. Phase 4 rollback tests must use a controlled change whose
+reversal can be verified safely.
+
+### 20.6 Ownership and uninstall
+
+Helm tracks release resources, but some resources—especially persistent claims
+or hook-created objects—may have special lifecycle behavior. Uninstall tests
+must prove exactly what was removed and what persistence was intentionally
+retained.
+
+---
+
+## 21. Compose-To-Kubernetes Translation
+
+Kubernetes is easier to understand when each familiar Compose concept is
+mapped explicitly. The mapping is not always one-to-one.
+
+| Compose concept | Kubernetes/Helm concept | Important difference |
+| --- | --- | --- |
+| Compose project | Helm release in a namespace | Release history and API ownership are recorded |
+| service definition | Deployment, StatefulSet, or Job plus Pod template | Workload controller manages replaceable Pods |
+| one service container | container inside a Pod | Pod is the scheduling/network unit |
+| `depends_on` | readiness, startup logic, retry behavior, and Jobs | Kubernetes does not provide a general application startup-order guarantee |
+| service name DNS | Kubernetes Service DNS | Service selects ready endpoints and survives Pod replacement |
+| Compose network | CNI Pod network plus Services | Every Pod has an address; Services use a separate virtual range |
+| mounted config file | ConfigMap-backed volume | Configuration is an API object and may trigger rollout logic |
+| environment secret | Secret reference or mounted Secret | Base64 is not encryption; live values remain uncommitted |
+| named volume | PVC/PV/StorageClass | Claim is separated from backing storage implementation |
+| healthcheck | startup/readiness/liveness probes | Each probe has different controller behavior |
+| restart policy | workload controller plus Pod/container restart policy | Controllers replace Pods; kubelet may restart containers |
+| resource limits | requests and limits | Requests also influence scheduling |
+| `cap_add` | container security context capabilities | Baseline drops all, then adds only proved needs |
+| `docker compose up` | `helm install` plus readiness/functional validation | API acceptance is not application acceptance |
+| `docker compose down` | `helm uninstall` plus scoped verification | Persistent and hook resources need explicit lifecycle review |
+
+The largest conceptual change is `depends_on`. Distributed applications must
+handle temporarily unavailable dependencies with retries. Kubernetes may
+start Pods in an order different from the order written in a file, and a
+dependency can disappear later even if startup was ordered initially.
+
+---
+
+## 22. Phase 3: What Was Built And Why
+
+Phase 3 was a **feasibility spike**: a bounded experiment used to answer risky
+technical questions before investing in the full application migration.
+
+The central question was not “Can Kubernetes run a web container?” It was:
+
+> Can a disposable local kind cluster support the transport protocols, TUN
+> devices, Linux capabilities, nested routing, packet visibility, and scoped
+> cleanup needed for a real Open5GS/UERANSIM deployment?
+
+Testing these primitives separately prevents two problem domains from being
+mixed:
+
+- Kubernetes infrastructure and networking failures; and
+- Open5GS/UERANSIM protocol configuration failures.
+
+### 22.1 Pinned local cluster
+
+Phase 3 installed checksum-pinned `kind` 0.32.0 and `kubectl` 1.36.1. The
+cluster used the digest-pinned Kubernetes 1.36.1 kind node image.
+
+The cluster definition fixed:
+
+- cluster name: `cn5g`;
+- one control-plane node;
+- API access on a random loopback-only host port;
+- Pod range: `10.244.0.0/16`;
+- Service range: `10.96.0.0/16`; and
+- repository-local ignored kubeconfig.
+
+Before creation, automation checked host services, running radio simulation
+processes, memory, Docker storage, existing clusters, kubeconfig ownership,
+and subnet conflicts.
+
+### 22.2 Project-owned feasibility probe
+
+A small C probe was built into `cn5g/feasibility-probe:0.1.0`. It provided
+controlled TCP, UDP, SCTP, TUN, tunnel, and packet-observation behavior without
+installing broad debugging suites into application images.
+
+The image reused the pinned UERANSIM runtime base, ran as `65532:65532` by
+default, and was loaded directly into the kind node's containerd image store.
+Loading is required because locally built Docker images are not automatically
+present inside the nested node runtime.
+
+### 22.3 Transport probe
+
+The transport server Pod contained separate listener containers for:
+
+- TCP/8080;
+- UDP/9091;
+- SCTP/38412, representing the N2 transport prerequisite;
+- UDP/8805, representing the N4 port prerequisite; and
+- UDP/2152, representing the N3 port prerequisite.
+
+A client Pod tested every transport twice:
+
+1. directly to the server Pod IP; and
+2. through the `transport-server` ClusterIP Service DNS name.
+
+Each server returned an exact application-level acknowledgement so a passing
+test proved request and response behavior, not merely that a socket existed.
+
+All direct and Service paths passed with zero effective Linux capabilities.
+
+What this proved:
+
+- the Pod network carried TCP, UDP, and SCTP;
+- ClusterIP Service forwarding handled those declared protocols and ports;
+- CoreDNS and Service endpoint selection worked; and
+- ordinary transport did not require elevated privilege.
+
+What it did not prove:
+
+- NGAP messages on SCTP were valid;
+- PFCP messages on UDP/8805 were valid; or
+- GTP-U messages on UDP/2152 were valid.
+
+### 22.4 TUN negative and positive controls
+
+Two Pods isolated the TUN permission question:
+
+- `tun-denied` mounted `/dev/net/tun` but had all Linux capabilities dropped;
+  the TUN creation operation failed with `Operation not permitted` as
+  expected.
+- `tun-allowed` mounted the same device and added only `NET_ADMIN`; it created
+  `cn5gtun0`, assigned `10.63.0.1/30`, and brought the interface up.
+
+The positive Pod was not privileged. This paired negative/positive design
+proved that `NET_ADMIN` was both relevant and sufficient for the tested
+operation rather than granting broad privilege and assuming it was necessary.
+
+### 22.5 Synthetic N6 path
+
+The synthetic N6 experiment modeled the network shape needed by UE and UPF
+traffic while deliberately avoiding a claim of GTP-U protocol correctness.
+
+The logical objects were:
+
+```text
+n6-ue Pod
+  cn5gue0 = 10.60.0.2/24
+  synthetic tunnel client over UDP/2152
+
+n6-router Pod
+  cn5gupf0 = 10.60.0.1/24
+  synthetic tunnel server over UDP/2152
+  represents the routing position of the UPF
+
+n6-data Pod
+  TCP listener on 8080
+  zero effective Linux capabilities
+
+n6-node-observer Pod
+  shares the disposable kind-node network namespace
+  observes UDP/2152 with NET_RAW
+```
+
+Both TUN interfaces used Maximum Transmission Unit (MTU) 1400 to leave room
+for outer encapsulation headers.
+
+### 22.6 Forward request path
+
+Read each arrow as “the packet is handed to the next interface or process.”
+
+```text
+[1] test client in n6-ue opens TCP connection to n6-data:8080
+      |
+[2] exact route sends the inner IP packet into cn5gue0
+      |
+[3] UE relay reads the inner packet from TUN
+      |
+[4] relay encapsulates it in synthetic UDP/2152
+      |
+[5] outer packet crosses Pod network: n6-ue Pod IP -> n6-router Pod IP
+      |
+[6] router relay removes synthetic outer framing
+      |
+[7] relay writes inner packet into cn5gupf0
+      |
+[8] n6-router kernel routes inner packet toward n6-data Pod
+      |
+[9] n6-data TCP listener receives the request
+```
+
+### 22.7 Return response path
+
+```text
+[1] n6-data creates response for inner destination 10.60.0.2
+      |
+[2] data Pod sends it through its normal default gateway
+      |
+[3] kind node has one exact project-owned route for 10.60.0.0/24
+      |
+[4] node route forwards to n6-router through its discovered node-side veth
+      |
+[5] n6-router kernel sends packet into cn5gupf0
+      |
+[6] router relay reads it and encapsulates it over UDP/2152
+      |
+[7] outer packet crosses Pod network back to n6-ue
+      |
+[8] UE relay writes the inner response into cn5gue0
+      |
+[9] original TCP client receives the exact acknowledgement
+```
+
+This return route was installed in the kind node's network namespace, not in
+the Ubuntu host network namespace. The automation discovered the router Pod's
+node-side `veth` dynamically because Pod addresses and generated interface
+names are not stable inputs.
+
+### 22.8 Packet and counter evidence
+
+The validation required multiple independent observations:
+
+- the application received the expected TCP acknowledgement;
+- both TUN interfaces existed with the expected addresses and MTU;
+- both receive and transmit TUN counters increased in both directions;
+- a Pod-level observer saw UDP/2152 packets; and
+- a kind-node network observer saw UDP/2152 packets.
+
+The observer that used the node network shared the disposable kind node's
+network namespace. It did not share the Ubuntu host network namespace.
+
+### 22.9 Capability evidence
+
+| Workload role | Effective capability requirement |
+| --- | --- |
+| ordinary transport client/server | none |
+| controlled data endpoint | none |
+| UE and router TUN endpoints | `NET_ADMIN` only |
+| packet observers | `NET_RAW` only |
+| any feasibility container | privileged mode not required |
+
+### 22.10 Cleanup evidence
+
+Cleanup was a first-class test, not an afterthought. It removed:
+
+- transport, TUN, and N6 probe resources;
+- the exact project-marked node return route;
+- the named `cn5g` cluster node container;
+- the project kubeconfig; and
+- the `kind` Docker network only after verifying it was empty and matched the
+  expected ownership contract.
+
+A complete create/delete recheck reproduced readiness and cleanup. Same-runtime
+host snapshots showed identical interfaces, routes, policy rules, listening
+services, Docker resource structure, and firewall rule structure after
+cleanup. Volatile counters, timestamps, memory use, and ordering were not
+treated as configuration drift.
+
+### 22.11 Phase 3 conclusion
+
+kind is accepted for the local single-node Kubernetes baseline. The k3s
+fallback is not needed. The result proves that the infrastructure primitives
+required for the next phase are available with narrowly scoped privilege.
+
+Phase 3 did not deploy the real Kubernetes Open5GS/UERANSIM platform. Real
+NGAP, authentication, registration, PFCP session creation, GTP-U traffic, and
+N6 behavior are Phase 4 acceptance evidence.
+
+---
+
+## 23. Phase 4 Mental Model
+
+Phase 4 converts the working Compose topology into one declarative Helm
+release without changing the required 5G functional outcome.
+
+### 23.1 Planned object hierarchy
+
+This is a responsibility map. Indentation means “manages or supplies.”
+
+```text
+Helm release in project namespace
+├── ConfigMaps
+│   └── non-secret Open5GS and UERANSIM configuration
+├── generated Secrets
+│   └── synthetic authentication material not stored in Git
+├── ServiceAccounts and minimum RBAC
+├── MongoDB StatefulSet
+│   ├── MongoDB Pod
+│   ├── MongoDB Service
+│   └── PersistentVolumeClaim -> PersistentVolume
+├── subscriber initialization Job
+│   └── writes idempotent synthetic subscriber state to MongoDB
+├── Open5GS workload controllers
+│   ├── control-plane Pods
+│   ├── SBI Services and DNS
+│   ├── SMF N4 endpoint
+│   └── UPF TUN/N3/N6 configuration
+├── UERANSIM workload controllers
+│   ├── gNB Pod and explicit N2/N3 endpoints
+│   └── UE Pod with TUN access
+├── controlled data-network workload and Service
+└── validation hooks or Jobs where lifecycle semantics are appropriate
+```
+
+The exact object type and endpoint strategy for each component becomes an
+accepted decision only after implementation and real-protocol validation.
+
+### 23.2 Planned control flow
+
+```text
+[1] preflight verifies host, cluster ranges, ownership, and pinned tools
+[2] project images are made available to the kind node runtime
+[3] Helm chart is linted and rendered deterministically
+[4] installation-specific synthetic Secrets are generated outside Git
+[5] Helm submits the release objects to the Kubernetes API
+[6] controllers create Pods; scheduler and kubelet make them run
+[7] startup probes permit slow initialization
+[8] readiness probes add functional endpoints to Services
+[9] subscriber Job completes idempotently
+[10] gNB establishes real N2 SCTP/NGAP with AMF
+[11] UE authenticates, registers, and establishes a PDU session
+[12] SMF and UPF establish real PFCP state
+[13] bidirectional GTP-U and N6 traffic reaches the data endpoint
+[14] controlled upgrade and rollback prove release revision behavior
+[15] uninstall and scoped checks prove ownership and persistence behavior
+```
+
+### 23.3 Planned real 5G packet and signalling map
+
+Every arrow names an interface and protocol:
+
+```text
+UERANSIM UE
+  <-> simulated radio <->
+UERANSIM gNB
+  -- N2: NGAP over SCTP/38412 --> AMF
+  -- N3: GTP-U over UDP/2152 <-> UPF
+
+AMF and other control-plane Network Functions
+  <-> SBI: HTTP-based Service communication through Kubernetes Services/DNS
+  <-> MongoDB where the function's data model requires it
+
+SMF
+  -- N4: PFCP over UDP/8805 <-> UPF
+
+UE inner address on TUN
+  <-> simulated radio/N3 tunnel <-> UPF TUN/routing
+  <-> N6 routed IPv4 <-> controlled data-network endpoint
+```
+
+### 23.4 Phase 4 acceptance gate
+
+Phase 4 is complete only when all of the following are reproducibly true:
+
+- `helm lint` passes;
+- rendered manifests are deterministic for pinned inputs;
+- documented values are validated;
+- installation reaches meaningful Ready state;
+- MongoDB persistence matches its accepted lifecycle contract;
+- startup, readiness, and liveness probes have distinct justified behavior;
+- initial resource requests and limits are based on observed behavior;
+- ServiceAccounts and RBAC grant no unjustified API access;
+- the gNB establishes a real SCTP association and NG Setup;
+- 5G Authentication and Key Agreement (5G-AKA), Non-Access Stratum (NAS)
+  security, UE registration, and PDU session establishment pass;
+- real PFCP session creation and bidirectional GTP-U traffic are visible;
+- the controlled N6 endpoint is reachable with a working return path;
+- install, validate, upgrade, rollback, and uninstall helpers pass; and
+- uninstall removes only project-owned resources.
+
+Passing Kubernetes readiness alone is insufficient.
+
+---
+
+## 24. How Close Is This To A Real Deployment?
+
+This work is a professional local integration and operations baseline. It is
+not a claim of production readiness.
+
+### 24.1 Practices that transfer directly
+
+The following methods are representative of real Kubernetes engineering:
+
+- immutable, pinned container inputs;
+- declarative API objects;
+- controller-managed workloads rather than manually maintained Pods;
+- stable Service discovery and explicit endpoint selection;
+- configuration and secret separation;
+- startup, readiness, and liveness semantics;
+- resource requests and limits;
+- non-root containers, dropped capabilities, seccomp, ServiceAccounts, and
+  least-privilege RBAC;
+- persistent storage claims;
+- Helm charts, schemas, releases, upgrades, rollback, and scoped uninstall;
+- repeatable validation and negative controls; and
+- evidence-backed architecture decisions and cleanup.
+
+### 24.2 Local simplifications
+
+| Local baseline | Typical production difference |
+| --- | --- |
+| one kind node inside Docker | multiple physical or virtual nodes, often with separate control-plane nodes |
+| one control-plane replica | redundant control plane and failure-domain planning |
+| kindnet CNI | production CNI selected for policy, performance, routing, and observability requirements |
+| local-path storage | Container Storage Interface driver backed by durable, monitored storage |
+| locally loaded images | authenticated container registry, signing, scanning, and promotion workflow |
+| one synthetic UE in Phase 4 | measured concurrency and capacity targets |
+| software TUN and ordinary kernel networking | possible Multus, SR-IOV, DPDK, huge pages, CPU isolation, and hardware acceleration for demanding user planes |
+| loopback-only API | secured operator/automation access across managed networks |
+| no external load balancer or ingress | controlled north-south exposure and production Domain Name System/certificates where required |
+| generated synthetic Secrets | external secret management, encryption at rest, rotation, and audit controls |
+| cluster recreated on one workstation | backup, disaster recovery, upgrades, node maintenance, and multi-zone behavior |
+
+### 24.3 What the local system can legitimately demonstrate
+
+It can demonstrate that the application is packaged declaratively, that
+Kubernetes reconciliation and networking work for the tested topology, that
+privileges are minimized, and that the complete 5G signalling and user path is
+reproducible in a controlled cluster.
+
+It cannot yet demonstrate production availability, geographic redundancy,
+carrier-scale throughput, public-cloud portability, zero-downtime upgrades,
+or hardened multi-tenant isolation.
+
+### 24.4 Containerized is not automatically cloud-native
+
+Putting an existing daemon in a Pod makes it containerized. Cloud-native
+operation additionally requires that configuration, health, identity,
+persistence, replacement, upgrade, observation, and failure behavior fit the
+orchestrator's model.
+
+Phase 4 tests that operational fit for one UE. Later phases add concurrent
+UEs, observability, performance, recovery, Continuous Integration, and supply
+chain evidence before any broader claim is made.
+
+---
+
+## 25. Failure-Oriented Mental Model
+
+When something fails, identify the layer before changing configuration.
+
+| Symptom | First layer to inspect | Typical evidence |
+| --- | --- | --- |
+| object rejected immediately | API/schema/Helm rendering | Helm lint output, API validation message |
+| Pod remains Pending | scheduler, resources, volume, node constraints | Pod events and conditions |
+| Pod shows ImagePullBackOff | image name, digest, registry/runtime availability | Pod events, node image inventory |
+| container restarts | process exit, liveness, memory limit | previous logs, exit code, restart reason |
+| Pod Running but not Ready | readiness or application dependency | probe output, Pod conditions, endpoints |
+| Service resolves but connection fails | selector, EndpointSlice, protocol/port, NetworkPolicy | Service YAML, EndpointSlices, direct Pod test |
+| direct Pod connection works but Service fails | Service/kube-proxy path | ClusterIP rules and endpoint selection |
+| N2 association fails | SCTP reachability or AMF/gNB advertised addresses/configuration | direct SCTP test, both component logs |
+| PFCP session absent | SMF/UPF discovery, N4 address, protocol configuration | SMF and UPF logs, UDP/8805 packets |
+| UE registers but user traffic fails | PDU session, GTP-U, TUN, routes, MTU, N6 return path | session logs, routes, TUN counters, UDP/2152 packets |
+| data works one way only | return route, reverse-path filtering, NAT | route lookup in each namespace and counters |
+| data disappears after Pod replacement | storage was ephemeral or claim was incorrect | Pod mounts, PVC/PV state, storage policy |
+
+Do not use a broad privilege increase as the first diagnostic. A failed
+minimum-permission test is more informative than a successful privileged Pod.
+
+---
+
+## 26. Concise Architecture Narrative
+
+The platform uses pinned container images as the execution artifact and
+Kubernetes as the desired-state control system. A disposable single-node kind
+cluster runs inside Docker for local reproducibility. Kubernetes control-plane
+components store and reconcile API objects; kubelet and containerd run Pods;
+kindnet supplies Pod networking; CoreDNS and ClusterIP Services provide stable
+application discovery; and Helm packages the complete application as a
+versioned release.
+
+SBI traffic can use Kubernetes Services and DNS, while N2, N3, N4, and N6
+require explicit endpoint and routing decisions because 5G protocols can
+advertise addresses or carry tunneled subscriber traffic. Phase 3 proved TCP,
+UDP, SCTP, TUN, minimum Linux capabilities, a bidirectional synthetic N6
+return path, packet visibility, and exact cleanup. Phase 4 will replace the
+synthetic protocol-port probes with Helm-managed Open5GS, MongoDB, and
+UERANSIM workloads and must prove real registration, PFCP, GTP-U, persistence,
+upgrade, rollback, and uninstall behavior.
+
+This narrative is short enough to state without losing the distinction
+between container execution, Kubernetes orchestration, Helm packaging, and 5G
+protocol validation.
+
+---
+
+## 27. Glossary
+
+| Term | Plain-language definition |
+| --- | --- |
+| API | A defined interface through which software submits and reads Kubernetes objects |
+| API server | The authenticated front door for Kubernetes state and operations |
+| Cluster | The control plane, nodes, networking, storage integration, and API state together |
+| CNI | Container Network Interface; the plugin contract used to configure Pod networking |
+| Container | An isolated process environment created from an image |
+| containerd | The container runtime used inside the kind node |
+| Controller | Software that repeatedly moves current state toward desired state |
+| CoreDNS | The cluster DNS service used to resolve Service names |
+| Desired state | The configuration declared in an object's `spec` |
+| Deployment | A controller for replaceable stateless Pods and their rollouts |
+| EndpointSlice | An API object listing network endpoints behind a Service |
+| etcd | The consistent key-value store containing Kubernetes API data |
+| Helm chart | A package of templates, default values, metadata, and dependencies |
+| Helm release | One installed instance of a chart |
+| Job | A controller for a task that should complete and stop |
+| kind | Kubernetes IN Docker; a tool that creates Kubernetes nodes as containers |
+| kube-apiserver | The process that exposes and validates the Kubernetes API |
+| kube-controller-manager | The process running core reconciliation controllers |
+| kube-proxy | The node component implementing Service forwarding in this cluster |
+| kube-scheduler | The control-plane component that assigns Pods to nodes |
+| kubeconfig | Client configuration containing cluster endpoint, trust, identity, and context |
+| kubelet | The node agent that ensures assigned Pod containers run |
+| kubectl | A command-line Kubernetes API client |
+| Label | Queryable key/value metadata used for organization and selection |
+| Namespace | A logical naming and policy scope for namespaced objects |
+| Node | A compute environment on which Pods are scheduled |
+| PersistentVolume | A Kubernetes representation of backing persistent storage |
+| PersistentVolumeClaim | A workload's request for persistent storage |
+| Pod | The smallest scheduled Kubernetes unit, containing one or more containers |
+| Probe | A repeated diagnostic used for startup, readiness, or liveness decisions |
+| RBAC | Role-Based Access Control; Kubernetes API authorization through roles and bindings |
+| Reconciliation | Repeated comparison and correction of desired versus current state |
+| ReplicaSet | The controller that maintains a specified count of matching Pods, normally under a Deployment |
+| Request | CPU or memory quantity used for scheduling and resource guarantees |
+| Resource limit | Enforced upper CPU or memory boundary for a container |
+| Secret | Kubernetes object for controlled sensitive-data delivery; base64 alone is not encryption |
+| Service | Stable virtual endpoint and discovery abstraction for selected Pods |
+| ServiceAccount | A non-human Kubernetes identity assigned to workloads |
+| StatefulSet | Controller for Pods needing stable identity or storage association |
+| StorageClass | Description of a storage provisioning class and policy |
+| TUN | A virtual network device that exchanges IP packets between userspace and the kernel |
+| `veth` | A paired virtual Ethernet interface used to connect network namespaces |
+
+---
+
+## 28. Readiness Checklist Before Phase 4
+
+A reader is prepared to follow Phase 4 when they can explain the following
+without treating the terms as interchangeable:
+
+- an image is the packaged filesystem; a container is a running process
+  environment; a Pod is the Kubernetes scheduling and network unit;
+- a Deployment or StatefulSet manages Pods; a Service discovers selected
+  ready Pods;
+- Kubernetes records desired state and controllers reconcile actual state;
+- a Pod IP is replaceable while a Service name is stable;
+- the node, Pod, Service, and UE session ranges are separate address domains;
+- a ConfigMap is non-secret configuration and base64 in a Secret is not
+  encryption;
+- a StatefulSet supplies identity while PVC/PV storage supplies persistence;
+- startup, readiness, and liveness probes answer different questions;
+- requests affect scheduling while limits constrain runtime consumption;
+- RBAC controls API access while Linux capabilities control kernel privileges;
+- Helm renders and submits Kubernetes objects but Kubernetes performs ongoing
+  reconciliation;
+- Phase 3 proved infrastructure primitives, not real NGAP, PFCP, or GTP-U
+  semantics; and
+- Phase 4 succeeds only after both Kubernetes lifecycle gates and real 5G
+  functional gates pass.
+
+---
+
+## 29. Technical Documentation Index
+
+After this foundation, use the following review order:
+
+1. [Project status](project-status.md) — completed gates, current boundary,
+   and claims that remain unproven.
+2. [Repository overview](../README.md) — verified deployment hierarchies,
+   address layers, and target architecture.
 3. [Phase 2 Docker Compose architecture](architecture/phase-02-compose-topology.md)
-   — component roles, interfaces, addressing, signalling sequence, packet
-   path, health dependencies, security boundaries, and lifecycle model.
+   — component roles, interfaces, addressing, signalling sequence, health
+   dependencies, security boundaries, and lifecycle model.
 4. [Image provenance](image-provenance.md) — immutable inputs, multi-stage
-   build design, identity semantics, runtime users, Linux capabilities, and
-   accepted local image outputs.
+   build design, identities, runtime users, and Linux capabilities.
 5. [Docker Engine installation runbook](runbooks/docker-engine-installation.md)
-   — pinned runtime installation, host impact, verification, and rollback
-   boundary.
+   — pinned runtime installation, host impact, verification, and rollback.
 6. [Compose baseline runbook](runbooks/compose-baseline.md) — exact build,
-   deployment, validation, diagnostics, persistence, recreation, and cleanup
-   procedures.
-7. [Phase 2 validation report](../reports/02_container_baseline.md) — acceptance
-   matrix, implementation incident chronology, measured results, and host
-   coexistence evidence.
-
-## Architecture Decisions
-
-[Architecture Decision Records](adr/README.md) document the context,
-alternatives, decision status, consequences, and reversal boundary for major
-platform choices. A proposed record is not an accepted production decision;
-its specified evidence gate must pass first.
-
-Current decisions cover:
-
-- accepted local Kubernetes distribution and network model;
-- container image strategy;
-- network and address model;
-- MongoDB persistence;
-- observability stack;
-- synthetic secret handling;
-- version pinning; and
-- Continuous Integration privileged-test boundaries.
-
-## Evidence Discipline
+   deployment, validation, diagnostics, persistence, and cleanup.
+7. [Phase 2 validation report](../reports/02_container_baseline.md) — accepted
+   functional and coexistence evidence.
+8. [Architecture Decision Records](adr/README.md) — decisions, alternatives,
+   evidence, consequences, and reversal boundaries.
 
 Raw logs, host snapshots, runtime state, kubeconfigs, Secrets, keys, and packet
 captures remain local and ignored by default. Public reports contain only
-synthetic, reviewed, concise evidence. Availability, security, scale,
-performance, and recovery claims are made only after their dedicated phase
-produces reproducible measurements.
+synthetic, reviewed evidence. Availability, security, scale, performance, and
+recovery claims require their own reproducible phase evidence.
+
+---
+
+## 30. Authoritative References
+
+- [Kubernetes concepts](https://kubernetes.io/docs/concepts/)
+- [Kubernetes components](https://kubernetes.io/docs/concepts/overview/components/)
+- [Kubernetes workloads](https://kubernetes.io/docs/concepts/workloads/)
+- [Kubernetes Services](https://kubernetes.io/docs/concepts/services-networking/service/)
+- [Kubernetes probes](https://kubernetes.io/docs/concepts/workloads/pods/probes/)
+- [Kubernetes persistent volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+- [Kubernetes security contexts](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
+- [Kubernetes ServiceAccounts](https://kubernetes.io/docs/concepts/security/service-accounts/)
+- [Kubernetes RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
+- [kind documentation](https://kind.sigs.k8s.io/docs/user/quick-start/)
+- [Helm introduction](https://helm.sh/docs/intro/introduction/)
+- [Helm chart template guide](https://helm.sh/docs/chart_template_guide/)
