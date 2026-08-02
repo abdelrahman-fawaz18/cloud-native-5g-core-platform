@@ -13,6 +13,20 @@ targets, and support a dry-run or read-only mode where practical.
   host snapshot and refuses to overwrite evidence.
 - `install-docker-engine.sh`: validates or installs the exact Phase 2 Docker
   package set from Docker's official Ubuntu repository.
+- `install-kubernetes-tools.sh`: validates or checksum-verifies and installs
+  only the pinned Phase 3 `kind` and `kubectl` binaries; it does not create a
+  cluster, service, package repository, or kubeconfig.
+- `kind-feasibility.sh`: performs collision and resource preflight, then
+  creates, inspects, or deletes only the named `cn5g` kind feasibility cluster
+  through a repository-local kubeconfig. Destructive cleanup requires an
+  explicit confirmation argument and never invokes a Docker prune operation.
+  It removes the residual `kind` bridge only after verifying that no cluster
+  or attached container remains and that the exact driver, scope, labels, and
+  IPv4/IPv6 address contract match the project-owned network.
+- `kind-probes.sh`: builds, verifies, and loads the project-owned Phase 3
+  protocol probe image; deploys and validates transport, TUN/capability, and
+  synthetic routed-N6 probes; and performs exact per-probe cleanup without a
+  registry, host port publication, or broad Docker cleanup.
 - `compose-lab.sh`: controls only the named `cn5g-compose` project, including
   build preflight, rendering, build, startup, health wait, status, logs,
   validation, scoped cleanup, and verification that persistent volumes are
@@ -23,3 +37,36 @@ targets, and support a dry-run or read-only mode where practical.
   registration, IPv4 PDU session, UPF tunnel, controlled HTTP path, ICMP path,
   N6 return route, and positive bidirectional packet-counter changes on the
   private UPF tunnel.
+
+## Kubernetes Feasibility Lifecycle
+
+The accepted Phase 3 gate is reproducible with the following scoped sequence:
+
+```bash
+sudo ./scripts/kind-feasibility.sh preflight
+sudo ./scripts/kind-feasibility.sh create
+
+sudo ./scripts/kind-probes.sh build-image
+sudo ./scripts/kind-probes.sh load-image
+
+sudo ./scripts/kind-probes.sh deploy-transport
+sudo ./scripts/kind-probes.sh validate-transport
+sudo ./scripts/kind-probes.sh cleanup-transport --confirm
+
+sudo ./scripts/kind-probes.sh deploy-tun
+sudo ./scripts/kind-probes.sh validate-tun
+sudo ./scripts/kind-probes.sh cleanup-tun --confirm
+
+sudo ./scripts/kind-probes.sh deploy-n6
+sudo ./scripts/kind-probes.sh validate-n6
+sudo ./scripts/kind-probes.sh cleanup-n6 --confirm
+
+sudo ./scripts/kind-feasibility.sh delete --confirm
+sudo ./scripts/kind-feasibility.sh verify-delete
+```
+
+The expected terminal gates are `transport_validation=pass`,
+`tun_validation=pass`, `n6_validation=pass`, and
+`scoped_cluster_cleanup=pass`. The N6 validation uses a synthetic
+IP-over-UDP/2152 relay to test Kubernetes networking mechanics; it is not a
+GTP-U protocol implementation.

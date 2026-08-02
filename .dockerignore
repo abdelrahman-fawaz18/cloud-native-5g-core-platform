@@ -13,3 +13,5 @@
 !containers/data-network/Dockerfile
 !containers/data-network/entrypoint.sh
 !containers/data-network/healthz
+!containers/feasibility-probe/Dockerfile
+!containers/feasibility-probe/probe.c

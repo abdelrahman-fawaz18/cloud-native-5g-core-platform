@@ -306,4 +306,5 @@ for every cache record and broad pruning is prohibited.
 Phase 2 passes. The Compose deployment is healthy and reproducible, the
 single-UE control and user planes work, persistence survives recreation,
 scoped destruction is verified, and no unrelated host network or service was
-damaged. Phase 3 has not started.
+damaged. This report records the Phase 2 exit state; the current project phase
+is tracked in [`docs/project-status.md`](../docs/project-status.md).

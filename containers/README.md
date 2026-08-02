@@ -16,6 +16,9 @@ layers.
   official `v3.2.8` source commit.
 - `data-network/` provides the controlled HTTP endpoint used to validate the
   N6 user-plane path.
+- `feasibility-probe/` provides the Phase 3-only transport, TUN, routing, and
+  packet-observation binary. It is not a 5G network function, and its synthetic
+  payloads do not constitute protocol-semantic validation.
 
 Remote source archives have SHA-256 checksums, base images use
 architecture-specific immutable digests, and `.dockerignore` uses a

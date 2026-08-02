@@ -1,0 +1,303 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: n6-router
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-router
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: n6-router
+  ports:
+    - name: tunnel
+      protocol: UDP
+      port: 2152
+      targetPort: 2152
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n6-data
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-data
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: n6-data
+  ports:
+    - name: endpoint
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: n6-router
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-router
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: relay
+      image: cn5g/feasibility-probe:0.1.0
+      imagePullPolicy: Never
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          cn5g-feasibility-probe tunnel-server cn5gupf0 10.60.0.1/24 2152 &
+          relay_pid=$!
+          trap 'kill "$relay_pid" 2>/dev/null || true' TERM INT EXIT
+          for attempt in $(seq 1 30); do
+            test -d /sys/class/net/cn5gupf0 && break
+            sleep 1
+          done
+          test -d /sys/class/net/cn5gupf0
+          ip link set dev cn5gupf0 mtu 1400
+          wait "$relay_pid"
+      ports:
+        - name: tunnel
+          containerPort: 2152
+          protocol: UDP
+      readinessProbe:
+        exec:
+          command:
+            - /bin/sh
+            - -ec
+            - >-
+              test "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 &&
+              test "$(cat /sys/class/net/cn5gupf0/mtu)" = 1400 &&
+              ip -4 address show dev cn5gupf0 |
+              grep -Fq '10.60.0.1/24'
+        initialDelaySeconds: 1
+        periodSeconds: 2
+        failureThreshold: 30
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        privileged: false
+        capabilities:
+          drop: ["ALL"]
+          add: ["NET_ADMIN"]
+      resources: &probe_resources
+        requests:
+          cpu: 5m
+          memory: 8Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+      volumeMounts:
+        - name: tun-device
+          mountPath: /dev/net/tun
+    - name: pod-observer
+      image: cn5g/feasibility-probe:0.1.0
+      imagePullPolicy: Never
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          cn5g-feasibility-probe capture any udp 2152 2
+          sleep infinity
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        privileged: false
+        capabilities:
+          drop: ["ALL"]
+          add: ["NET_RAW"]
+      resources: *probe_resources
+  volumes:
+    - name: tun-device
+      hostPath:
+        path: /dev/net/tun
+        type: CharDevice
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: n6-ue
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-ue
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: relay
+      image: cn5g/feasibility-probe:0.1.0
+      imagePullPolicy: Never
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          for attempt in $(seq 1 30); do
+            router_ip=$(getent ahostsv4 n6-router | awk 'NR == 1 {print $1}')
+            test -n "$router_ip" && break
+            sleep 1
+          done
+          test -n "${router_ip:-}"
+          cn5g-feasibility-probe tunnel-client cn5gue0 10.60.0.2/24 "$router_ip" 2152 &
+          relay_pid=$!
+          trap 'kill "$relay_pid" 2>/dev/null || true' TERM INT EXIT
+          for attempt in $(seq 1 30); do
+            test -d /sys/class/net/cn5gue0 && break
+            sleep 1
+          done
+          test -d /sys/class/net/cn5gue0
+          ip link set dev cn5gue0 mtu 1400
+          for attempt in $(seq 1 30); do
+            data_ip=$(getent ahostsv4 n6-data | awk 'NR == 1 {print $1}')
+            test -n "$data_ip" && break
+            sleep 1
+          done
+          test -n "${data_ip:-}"
+          ip route replace "$data_ip/32" dev cn5gue0
+          wait "$relay_pid"
+      readinessProbe:
+        exec:
+          command:
+            - /bin/sh
+            - -ec
+            - >-
+              test "$(cat /sys/class/net/cn5gue0/mtu)" = 1400 &&
+              data_ip=$(getent ahostsv4 n6-data | awk 'NR == 1 {print $1}') &&
+              ip -4 route show "$data_ip/32" |
+              grep -Fq 'dev cn5gue0'
+        initialDelaySeconds: 1
+        periodSeconds: 2
+        failureThreshold: 30
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        privileged: false
+        capabilities:
+          drop: ["ALL"]
+          add: ["NET_ADMIN"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 8Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+      volumeMounts:
+        - name: tun-device
+          mountPath: /dev/net/tun
+  volumes:
+    - name: tun-device
+      hostPath:
+        path: /dev/net/tun
+        type: CharDevice
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: n6-data
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-data
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: endpoint
+      image: cn5g/feasibility-probe:0.1.0
+      imagePullPolicy: Never
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          exec cn5g-feasibility-probe tcp-server 8080
+      ports:
+        - name: endpoint
+          containerPort: 8080
+          protocol: TCP
+      readinessProbe:
+        exec:
+          command:
+            - /bin/sh
+            - -ec
+            - >-
+              grep -Fq ':1F90 ' /proc/net/tcp /proc/net/tcp6
+        initialDelaySeconds: 1
+        periodSeconds: 2
+        failureThreshold: 30
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        privileged: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 8Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: n6-node-observer
+  namespace: cn5g-feasibility
+  labels:
+    app.kubernetes.io/name: n6-node-observer
+    app.kubernetes.io/part-of: cn5g-phase-03-n6
+spec:
+  automountServiceAccountToken: false
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: observer
+      image: cn5g/feasibility-probe:0.1.0
+      imagePullPolicy: Never
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          cn5g-feasibility-probe capture any udp 2152 2
+          sleep infinity
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        privileged: false
+        capabilities:
+          drop: ["ALL"]
+          add: ["NET_RAW"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 8Mi
+        limits:
+          cpu: 100m
+          memory: 32Mi
