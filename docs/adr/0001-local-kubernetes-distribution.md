@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted on 2026-08-02
 
 ## Context
 
@@ -16,17 +16,17 @@ rules, storage, and boot-time services.
 
 The host uses cgroup v2, has the required kernel primitives, and has sufficient
 initial resources. Phase 2 installed pinned Docker components and verified
-their coexistence with the host lab. Kubernetes tooling is not installed.
+their coexistence with the host lab.
 
 ## Decision
 
-Use `kind` 0.32.0 as the first **candidate**, with a named cluster `cn5g` and a
-digest-pinned Kubernetes 1.36.1 node image. This is not an accepted platform
-decision until Phase 3 proves SCTP, PFCP, GTP-U, TUN, minimum capabilities, N6
-return routing, packet visibility, and scoped cleanup.
+Use `kind` 0.32.0 as the local Kubernetes baseline, with a named cluster
+`cn5g`, loopback-only API access, and the digest-pinned Kubernetes 1.36.1 node
+image. The cluster is disposable and uses a repository-local kubeconfig.
 
-If kind fails a required primitive, preserve the evidence and evaluate k3s
-through a separate change-controlled procedure. Do not switch silently.
+k3s remains a documented contingency rather than an active fallback. A future
+change may invoke it only if real Open5GS/UERANSIM integration exposes a
+requirement that the accepted feasibility tests did not model.
 
 ## Alternatives Considered
 
@@ -46,22 +46,40 @@ through a separate change-controlled procedure. Do not switch silently.
 - [kind 0.32.0 release](https://github.com/kubernetes-sigs/kind/releases/tag/v0.32.0)
   publishes a Kubernetes 1.36.1 node image and requires digest pinning for
   reproducibility.
-- Phase 2 established integrity-checked Docker before/after snapshots and
-  verified complete cleanup of the Compose deployment. No Kubernetes cluster
-  state currently exists, so Phase 3 effects can be measured independently.
-- No 5G networking behavior has yet been tested inside kind; acceptance would
-  therefore be premature.
+- A single-node cluster reached Ready state with Kubernetes 1.36.1, containerd
+  2.3.1, kindnet, CoreDNS, kube-proxy, and the local-path provisioner.
+- Direct Pod-IP and ClusterIP Service tests passed TCP, UDP, SCTP/38412,
+  UDP/8805, and UDP/2152 without effective Linux capabilities.
+- `/dev/net/tun` access failed without `NET_ADMIN` and succeeded with only
+  `NET_ADMIN`; no test required privileged mode.
+- A routed synthetic N6 transaction crossed two TUN interfaces, an
+  IP-over-UDP/2152 tunnel, the Pod network, and an explicit kind-node return
+  route. Pod and node observers recorded the UDP/2152 outer packets.
+- Probe cleanup removed the exact return route and namespace resources.
+  Cluster cleanup removed the named node container, project kubeconfig, and
+  verified empty `kind` bridge.
+- A second same-runtime create/delete cycle reproduced readiness and cleanup.
+  Host snapshots before and after that cycle had identical network, service,
+  Docker-resource, and firewall-rule structure.
 
 ## Consequences
 
-The project gains a named, automatable local cluster that can be deleted
-without managing a permanent Kubernetes control-plane service. Networking is
-nested inside Docker, which may complicate tunnel endpoints, packet capture,
-Maximum Transmission Unit sizing, capabilities, and return routing.
+The project gains a named, automatable local cluster without a permanent
+Kubernetes control-plane service. Networking remains nested inside Docker:
+Pods use per-Pod node-side `veth` routes, Services add virtual addresses, and
+5G tunnels add another encapsulation layer. Phase 4 must therefore configure
+advertised N2/N3/N4 addresses deliberately and retain the verified Maximum
+Transmission Unit, capability, return-routing, and packet-observation checks.
+
+The Phase 3 probe established transport feasibility, not NGAP, PFCP, or GTP-U
+message semantics. The accepted distribution still requires a real
+single-UE Open5GS/UERANSIM validation before the Helm platform is accepted.
 
 ## Reversal Or Migration
 
-List clusters, delete only the exact `cn5g` cluster, and compare the host's
-interfaces, routes, firewall rules, services, and disk state to the baseline.
-If kind is rejected, record the failed tests here and create a k3s evaluation
-procedure before installation.
+List clusters, delete only `cn5g`, remove the `kind` bridge only after proving
+that no kind cluster or attached container remains and that its exact address
+contract matches, then remove the project kubeconfig. Compare interfaces,
+routes, firewall structure, services, and Docker state with a same-runtime
+baseline. If a future requirement invalidates kind, record the failed test and
+create a separate k3s evaluation before installing or enabling it.

@@ -9,19 +9,21 @@ configuration or evidence.
 
 1. [Project status](project-status.md) — completed gates, current boundary, and
    what has not yet been claimed.
-2. [Phase 2 Docker Compose architecture](architecture/phase-02-compose-topology.md)
+2. [Repository overview](../README.md) — verified Phase 2 and Phase 3
+   deployment hierarchies, network layers, packet paths, and limitations.
+3. [Phase 2 Docker Compose architecture](architecture/phase-02-compose-topology.md)
    — component roles, interfaces, addressing, signalling sequence, packet
    path, health dependencies, security boundaries, and lifecycle model.
-3. [Image provenance](image-provenance.md) — immutable inputs, multi-stage
+4. [Image provenance](image-provenance.md) — immutable inputs, multi-stage
    build design, identity semantics, runtime users, Linux capabilities, and
    accepted local image outputs.
-4. [Docker Engine installation runbook](runbooks/docker-engine-installation.md)
+5. [Docker Engine installation runbook](runbooks/docker-engine-installation.md)
    — pinned runtime installation, host impact, verification, and rollback
    boundary.
-5. [Compose baseline runbook](runbooks/compose-baseline.md) — exact build,
+6. [Compose baseline runbook](runbooks/compose-baseline.md) — exact build,
    deployment, validation, diagnostics, persistence, recreation, and cleanup
    procedures.
-6. [Phase 2 validation report](../reports/02_container_baseline.md) — acceptance
+7. [Phase 2 validation report](../reports/02_container_baseline.md) — acceptance
    matrix, implementation incident chronology, measured results, and host
    coexistence evidence.
 
@@ -34,7 +36,7 @@ its specified evidence gate must pass first.
 
 Current decisions cover:
 
-- candidate local Kubernetes distribution;
+- accepted local Kubernetes distribution and network model;
 - container image strategy;
 - network and address model;
 - MongoDB persistence;

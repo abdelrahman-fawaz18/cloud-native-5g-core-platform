@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted on 2026-08-02 for the local single-node baseline
 
 ## Context
 
@@ -19,10 +19,10 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   by default.
 - Keep Service-Based Interface (SBI) HTTP traffic on Kubernetes Services and
   cluster Domain Name System names.
-- During Phase 3, test N2, N3, and N4 first with directly observable Pod or
-  workload endpoints. Use a Kubernetes Service for SCTP, PFCP, or GTP-U only
-  when packet evidence proves that address translation preserves the required
-  protocol behavior.
+- Use direct Pod endpoints where a 5G protocol advertises a tunnel or
+  association address. ClusterIP Services and cluster DNS are accepted for
+  stable application discovery only when the advertised protocol endpoint
+  remains explicit.
 - Give `/dev/net/tun` and `NET_ADMIN` only to the exact UE or UPF workload that
   proves it needs them. Full privileged mode is a last-resort experiment, not
   a baseline default.
@@ -35,6 +35,10 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   workloads. Re-check every range before creation.
 - Test packet sizes and effective Maximum Transmission Unit across nested
   encapsulation before accepting the model.
+- Keep the Phase 3 N6 return route in the disposable kind-node namespace,
+  where the upstream data-network router logically belongs. Discover the
+  router Pod's node-side `veth` dynamically; Pod addresses and interface names
+  are not stable configuration inputs.
 
 ## Alternatives Considered
 
@@ -58,18 +62,42 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
 - The Compose reference proved N2 SCTP, N3 GTP-U, N4 PFCP, UE/UPF TUN devices,
   source-policy routing, controlled N6 forwarding, and complete bridge/network
   cleanup without host-network damage.
-- No kind packet-path test has run; the address and capability model remains
-  deliberately provisional.
+- kind assigned a distinct Pod address and node-side host route to every probe
+  Pod. No shared `cni0` bridge existed, so node return routing targeted the
+  router Pod's dynamically discovered `veth` interface.
+- Direct Pod-IP and ClusterIP Service paths passed TCP, UDP, SCTP/38412,
+  UDP/8805, and UDP/2152. This verifies transport reachability on the N2, N4,
+  and N3 prerequisite ports, not NGAP, PFCP, or GTP-U semantics.
+- The negative TUN Pod mounted `/dev/net/tun` but dropped all capabilities and
+  received `Operation not permitted`. The positive TUN Pod added only
+  `NET_ADMIN`, created `cn5gtun0`, assigned `10.63.0.1/30`, and remained
+  non-privileged.
+- The synthetic N6 model used `cn5gue0` (`10.60.0.2/24`) and `cn5gupf0`
+  (`10.60.0.1/24`) at MTU 1400. A TCP request and response crossed both TUN
+  devices and the UDP/2152 outer path; both UE TUN counters increased by five
+  packets.
+- A project-marked kind-node route sent `10.60.0.0/24` return traffic through
+  the router Pod. The data endpoint used its normal gateway and zero effective
+  capabilities rather than acting as its own router.
+- The router and UE used only `NET_ADMIN`; Pod and node observers used only
+  `NET_RAW`; no container used privileged mode. The sole host-network observer
+  shared the disposable kind node network namespace, not the Ubuntu host.
+- Exact cleanup removed the route, probe resources, cluster container,
+  kubeconfig, and empty kind bridge. Same-runtime snapshots confirmed identical
+  network, service, Docker-resource, and firewall-rule structure.
 
 ## Consequences
 
 This model minimizes host exposure and makes address ownership explicit. It
 requires careful configuration of advertised N2/N3/N4 endpoints, packet
-captures at host/node/Pod boundaries, return routing, and cleanup evidence.
+observation at node and Pod boundaries, return routing, and cleanup evidence.
+The outer Pod network and inner UE session network are separate address
+domains; a Kubernetes Service address must not silently become a GTP-U tunnel
+endpoint.
 
 ## Reversal Or Migration
 
-Phase 3 may revise individual interfaces to host networking, Multus, or an
-external UERANSIM process only after a narrow failed test and documented host
-impact. Remove only named project networks/routes and verify the predecessor
-lab after reversal.
+Phase 4 may revise an individual interface to host networking, Multus, or an
+external UERANSIM process only after a narrow failed real-protocol test and a
+documented host-impact review. Remove only named project resources and exact
+owned routes, then repeat the host coexistence checks after reversal.

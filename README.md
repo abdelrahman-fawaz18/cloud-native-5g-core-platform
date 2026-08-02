@@ -16,15 +16,16 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The repository boundary, host preflight, and Phase 2 container baseline are
-complete. Pinned images produce a healthy Compose deployment in which a
-synthetic UE registers, establishes an IPv4 session, and exchanges controlled
-traffic through the UPF. Persistence, recreation, scoped cleanup, and
-post-cleanup host safety were verified; see the [project
-status](docs/project-status.md), [container
-report](reports/02_container_baseline.md), and [Compose
-topology](docs/architecture/phase-02-compose-topology.md). The Kubernetes
-distribution remains proposed until Phase 3 networking tests produce evidence.
+The repository boundary, host preflight, container baseline, and Kubernetes
+networking feasibility gate are complete. Pinned images produce a healthy
+Compose deployment in which a synthetic UE registers, establishes an IPv4
+session, and exchanges controlled traffic through the UPF. A disposable,
+single-node kind cluster has independently passed Pod and Service transport,
+TUN-device, minimum-capability, routed N6, packet-visibility, and scoped
+cleanup tests. kind is therefore the accepted local Kubernetes baseline for
+Phase 4. See the [project status](docs/project-status.md), [container
+report](reports/02_container_baseline.md), and [architecture
+decisions](docs/adr/README.md).
 
 ## Verified Phase 2 Baseline
 
@@ -73,6 +74,66 @@ The full technical model is documented in [Phase 2 Docker Compose
 architecture](docs/architecture/phase-02-compose-topology.md). Reproduction,
 diagnostics, persistence testing, and cleanup are covered by the [Compose
 runbook](docs/runbooks/compose-baseline.md).
+
+## Verified Phase 3 Kubernetes Feasibility
+
+Phase 3 tested the networking primitives before attempting a full Kubernetes
+deployment of Open5GS and UERANSIM. This isolates cluster-network behavior from
+5G application configuration and startup behavior.
+
+### Deployment hierarchy
+
+```text
+Ubuntu host
+└── Docker Engine
+    └── kind node container: cn5g-control-plane (172.18.0.2)
+        ├── Kubernetes control plane and containerd
+        ├── kindnet Pod network (10.244.0.0/16)
+        │   ├── transport client and server Pods
+        │   ├── minimum-capability TUN Pods
+        │   └── synthetic UE, N6 router, and data endpoint Pods
+        └── Kubernetes Service network (10.96.0.0/16)
+```
+
+The kind node is a Docker container, but Kubernetes Pods run inside that node
+through its containerd runtime. Each Pod receives a distinct `10.244.0.0/16`
+address and a node-side virtual Ethernet (`veth`) route. ClusterIP Services
+provide stable virtual addresses and DNS names from `10.96.0.0/16`. The
+Kubernetes API is published only on a random loopback port and no workload
+port is exposed on the Ubuntu host.
+
+### Feasibility results
+
+| Question | Verified result |
+| --- | --- |
+| Ordinary Pod transport | Direct Pod-IP and ClusterIP Service paths passed for TCP and UDP |
+| N2 transport prerequisite | SCTP port `38412` passed through direct Pod and ClusterIP Service paths |
+| N4 transport prerequisite | UDP port `8805` passed through direct Pod and ClusterIP Service paths |
+| N3 transport prerequisite | UDP port `2152` passed through direct Pod and ClusterIP Service paths |
+| TUN access | Access failed without `NET_ADMIN` and succeeded with only `NET_ADMIN` plus `/dev/net/tun` |
+| N6 routing | A controlled TCP request and response crossed two TUN interfaces and a synthetic UDP/2152 tunnel |
+| Packet visibility | UDP/2152 outer packets were observed in both the router Pod and kind-node network contexts |
+| Privilege | No privileged container was used; ordinary transport and the data endpoint ran with zero effective capabilities |
+| Cleanup | Probe resources, the node route, cluster container, kubeconfig, and empty kind bridge were removed by exact ownership checks |
+
+The N6 feasibility path was:
+
+```text
+application in synthetic UE Pod
+  -> cn5gue0 (10.60.0.2/24, MTU 1400)
+  -> synthetic IP-over-UDP tunnel on port 2152
+  -> cn5gupf0 (10.60.0.1/24, MTU 1400) in router Pod
+  -> data endpoint Pod (TCP/8080)
+  -> data Pod default gateway (10.244.0.1)
+  -> exact kind-node return route for 10.60.0.0/24
+  -> router Pod -> tunnel -> synthetic UE Pod
+```
+
+The synthetic tunnel proves Kubernetes routing, TUN, capability, return-path,
+and packet-observation behavior. It is not an implementation of GTP-U and does
+not prove NGAP, PFCP, or GTP-U message semantics. Those protocols will be
+validated with the real Open5GS/UERANSIM workloads in the Helm-managed Phase 4
+platform.
 
 ## Target Capabilities
 
@@ -126,11 +187,10 @@ flowchart LR
     UE --> LOGS
 ```
 
-The final deployment topology is intentionally not frozen yet. A networking
-feasibility phase must first prove that the selected local Kubernetes approach
-handles Stream Control Transmission Protocol (SCTP), Packet Forwarding Control
-Protocol (PFCP), GPRS Tunnelling Protocol User Plane (GTP-U), TUN devices, and
-the Linux capabilities required by the User Plane Function (UPF) and UERANSIM.
+The target topology builds on the accepted kind networking baseline. Exact
+Open5GS Service types, advertised N2/N3/N4 endpoints, storage resources, and
+health probes remain Phase 4 implementation decisions and must pass real
+single-UE protocol validation before they become accepted runtime behavior.
 
 ## Repository Structure
 

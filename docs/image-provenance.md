@@ -1,10 +1,11 @@
-# Phase 2 Image Provenance
+# Container Image Provenance
 
 ## Scope
 
 The Compose baseline uses two locally built telecom images, one locally built
-test endpoint, and the reviewed MongoDB Docker Official Image. No unreviewed
-community telecom image is used.
+test endpoint, and the reviewed MongoDB Docker Official Image. Phase 3 adds a
+project-owned feasibility probe derived from the exact accepted UERANSIM
+runtime image. No unreviewed community telecom image is used.
 
 The host's installed Open5GS, UERANSIM, and MongoDB software is deliberately
 not reused. Container images must be rebuildable from declared inputs and must
@@ -120,6 +121,27 @@ the UPF and UE containers that create TUN interfaces.
 Read-only root filesystems prevent runtime mutation of image content.
 Configuration is bind-mounted read-only; writable transient state is confined
 to `tmpfs`; persistent state is confined to the two named MongoDB volumes.
+
+## Phase 3 Feasibility Probe
+
+`cn5g/feasibility-probe:0.1.0` compiles one small C probe in a separate
+digest-pinned Ubuntu build stage and copies only the stripped executable into
+the accepted Phase 2 UERANSIM runtime. Its accepted local identity is
+`sha256:19c9bc6ea22dde8acbfe14cae00e655603994be057fce4d1d50cea88c429a963`,
+its platform is Linux/AMD64, and its image-default user is numeric
+`65532:65532`.
+
+The binary implements deterministic TCP, UDP, and SCTP listeners/clients, TUN
+creation, a synthetic IP-over-UDP relay, and narrow packet observation. It is
+test infrastructure rather than a 5G Network Function. The transport tests
+prove reachability on ports used by N2, N3, and N4; they do not parse or claim
+NGAP, GTP-U, or PFCP semantics.
+
+Kubernetes security contexts override the default user only for the exact
+TUN and observation operations. TUN endpoints run with `NET_ADMIN`; packet
+observers run with `NET_RAW`; unprivileged transport Pods and the controlled
+data endpoint retain zero effective capabilities. No probe uses privileged
+mode, a host port, a Docker socket, or the Ubuntu host network namespace.
 
 ## Verified Local Build
 
