@@ -16,6 +16,20 @@ targets, and support a dry-run or read-only mode where practical.
 - `install-kubernetes-tools.sh`: validates or checksum-verifies and installs
   only the pinned Phase 3 `kind` and `kubectl` binaries; it does not create a
   cluster, service, package repository, or kubeconfig.
+- `install-helm.sh`: validates or checksum-verifies and installs only the
+  pinned Phase 4 Helm binary; it does not access or create a cluster, alter a
+  service, configure a package repository, or overwrite an unrecognized
+  executable.
+- `generate-subscriber-secret.sh`: renders random synthetic subscriber
+  authentication material from public placeholder templates into an ignored
+  mode-0700 directory containing only mode-0600 files. It validates consistency
+  without printing subscriber identifiers or authentication values and refuses
+  to overwrite existing material.
+- `helm-lab.sh`: verifies accepted local images and the file-backed Secret,
+  loads only those images into the named kind node, performs a server-side Helm
+  dry run, installs the namespace-scoped release with readiness and Job waits,
+  and reports scoped workload state. Cluster lifecycle remains delegated to
+  the accepted `kind-feasibility.sh` ownership boundary.
 - `kind-feasibility.sh`: performs collision and resource preflight, then
   creates, inspects, or deletes only the named `cn5g` kind feasibility cluster
   through a repository-local kubeconfig. Destructive cleanup requires an

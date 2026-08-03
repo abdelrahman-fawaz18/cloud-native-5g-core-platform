@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g.fullname" . }}-ueransim-config
+  labels:
+    {{- include "cn5g.labels" . | nindent 4 }}
+data:
+  gnb.yaml: |
+    mcc: '{{ .Values.global.plmn.mcc }}'
+    mnc: '{{ .Values.global.plmn.mnc }}'
+    nci: '0x000000010'
+    idLength: 32
+    tac: {{ .Values.global.plmn.tac }}
+    linkIp: __POD_IP__
+    ngapIp: __POD_IP__
+    gtpIp: __POD_IP__
+    amfConfigs:
+      - address: __AMF_IP__
+        port: 38412
+    slices:
+      - sst: {{ .Values.global.slice.sst }}
+    ignoreStreamIds: true

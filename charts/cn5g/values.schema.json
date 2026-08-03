@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CN5G Helm values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "images", "subscriberSecret", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rolloutToken", "uePool", "ueGateway", "ueMtu", "plmn", "slice", "dnn"],
+      "properties": {
+        "rolloutToken": {"type": "string", "minLength": 1, "maxLength": 63},
+        "uePool": {"const": "10.60.0.0/24"},
+        "ueGateway": {"const": "10.60.0.1"},
+        "ueMtu": {"const": 1400},
+        "plmn": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mcc", "mnc", "tac"],
+          "properties": {
+            "mcc": {"const": "999"},
+            "mnc": {"const": "70"},
+            "tac": {"const": 1}
+          }
+        },
+        "slice": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sst"],
+          "properties": {"sst": {"const": 1}}
+        },
+        "dnn": {"const": "internet"}
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["open5gs", "ueransim", "dataNetwork", "mongodb"],
+      "properties": {
+        "open5gs": {"$ref": "#/$defs/localImage"},
+        "ueransim": {"$ref": "#/$defs/localImage"},
+        "dataNetwork": {"$ref": "#/$defs/localImage"},
+        "mongodb": {"$ref": "#/$defs/registryImage"}
+      }
+    },
+    "subscriberSecret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecret", "ueConfigKey", "subscriberScriptKey", "imsiKey"],
+      "properties": {
+        "existingSecret": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "ueConfigKey": {"const": "ue.yaml"},
+        "subscriberScriptKey": {"const": "subscriber-init.js"},
+        "imsiKey": {"const": "imsi"}
+      }
+    },
+    "mongodb": {"$ref": "#/$defs/storageWorkload"},
+    "open5gs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resources", "upfResources"],
+      "properties": {
+        "resources": {"$ref": "#/$defs/resources"},
+        "upfResources": {"$ref": "#/$defs/resources"}
+      }
+    },
+    "ueransim": {"$ref": "#/$defs/workload"},
+    "dataNetwork": {"$ref": "#/$defs/workload"},
+    "subscriberJob": {"$ref": "#/$defs/workload"}
+  },
+  "$defs": {
+    "pullPolicy": {"type": "string", "enum": ["Never", "IfNotPresent", "Always"]},
+    "localImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy", "expectedImageID"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "pullPolicy": {"const": "Never"},
+        "expectedImageID": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "registryImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "pullPolicy": {"$ref": "#/$defs/pullPolicy"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {"$ref": "#/$defs/resourcePair"},
+        "limits": {"$ref": "#/$defs/resourcePair"}
+      }
+    },
+    "resourcePair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": {"type": ["string", "number"]},
+        "memory": {"type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$"}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resources"],
+      "properties": {"resources": {"$ref": "#/$defs/resources"}}
+    },
+    "storageWorkload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["storageClassName", "storageSize", "resources"],
+      "properties": {
+        "storageClassName": {"type": "string", "minLength": 1},
+        "storageSize": {"type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi)$"},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    }
+  }
+}

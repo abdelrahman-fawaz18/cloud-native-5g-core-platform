@@ -1,0 +1,14 @@
+apiVersion: v2
+name: cn5g
+description: Helm release for the Cloud-Native 5G Core single-UE platform
+type: application
+version: 0.1.0
+appVersion: "2.7.7"
+kubeVersion: ">=1.36.0-0 <1.37.0-0"
+home: https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform
+sources:
+  - https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform
+maintainers:
+  - name: abdelrahman-fawaz18
+annotations:
+  artifacthub.io/license: Apache-2.0

@@ -1,0 +1,76 @@
+{{- $root := . -}}
+{{- range $component := list "nrf" "scp" "amf" "ausf" "udm" "udr" "pcf" "nssf" "smf" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" $root "component" $component) }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" $root "component" $component) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" $root "component" $component) | nindent 4 }}
+  ports:
+    - {name: sbi, protocol: TCP, port: 7777, targetPort: sbi}
+    {{- if eq $component "amf" }}
+    - {name: n2-sctp, protocol: SCTP, port: 38412, targetPort: n2-sctp}
+    - {name: metrics, protocol: TCP, port: 9090, targetPort: metrics}
+    {{- else if or (eq $component "smf") (eq $component "pcf") }}
+    - {name: metrics, protocol: TCP, port: 9090, targetPort: metrics}
+    {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "upf") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "upf") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "upf") | nindent 4 }}
+  ports:
+    - {name: n4-pfcp, protocol: UDP, port: 8805, targetPort: n4-pfcp}
+    - {name: n3-gtpu, protocol: UDP, port: 2152, targetPort: n3-gtpu}
+    - {name: metrics, protocol: TCP, port: 9090, targetPort: metrics}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "mongodb") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "mongodb") | nindent 4 }}
+  ports:
+    - {name: mongodb, protocol: TCP, port: 27017, targetPort: mongodb}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "gnb") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "gnb") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 4 }}
+  ports:
+    - {name: radio, protocol: UDP, port: 4997, targetPort: radio}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "data-network") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "data-network") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 4 }}
+  ports:
+    - {name: http, protocol: TCP, port: 8080, targetPort: http}
