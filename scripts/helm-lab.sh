@@ -324,9 +324,14 @@ case "$action" in
     require_cluster
     verify_images
     stage_mongodb_load_reference
-    kind load docker-image --name "$KIND_CLUSTER_NAME" \
-      "$OPEN5GS_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE" \
-      "$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"
+    if verify_node_images >/dev/null 2>&1; then
+      printf 'node_image_import=skipped-already-present-and-accepted\n'
+    else
+      kind load docker-image --name "$KIND_CLUSTER_NAME" \
+        "$OPEN5GS_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE" \
+        "$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"
+      printf 'node_image_import=completed\n'
+    fi
     verify_node_images
     printf 'phase04_image_load=pass\n'
     ;;

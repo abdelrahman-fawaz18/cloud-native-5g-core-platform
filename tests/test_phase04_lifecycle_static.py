@@ -56,6 +56,11 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         )
         self.assertIn('runtime_image_id "$OPEN5GS_LOCAL_IMAGE"', self.script)
         self.assertIn('runtime_image_id "$MONGODB_IMAGE"', self.script)
+        self.assertIn(
+            "node_image_import=skipped-already-present-and-accepted",
+            self.script,
+        )
+        self.assertIn("node_image_import=completed", self.script)
         self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
         self.assertIn("mongodb_repository=${mongodb_load_reference%:*}", self.script)
         self.assertIn(
