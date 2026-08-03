@@ -45,13 +45,33 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("kind load docker-image", self.script)
         self.assertIn("crictl inspecti", self.script)
         self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
+        self.assertIn("mongodb_repository=${mongodb_load_reference%:*}", self.script)
+        self.assertIn(
+            'mongodb_expected_repo_digest="${mongodb_repository}@${MONGODB_IMAGE##*@}"',
+            self.script,
+        )
         self.assertIn("mongodb_repo_digests", self.script)
-        self.assertIn('mongodb_repo_digests != *"$MONGODB_IMAGE"*', self.script)
+        self.assertIn(
+            'mongodb_repo_digests != *"$mongodb_expected_repo_digest"*',
+            self.script,
+        )
         self.assertIn('docker image tag "$MONGODB_IMAGE"', self.script)
         self.assertIn('if [[ $tag_id != "$digest_id" ]]', self.script)
         self.assertIn("refusing to overwrite conflicting MongoDB tag", self.script)
         self.assertIn("stage_mongodb_load_reference", self.script)
         self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
+
+    def test_mongodb_repo_digest_normalization_removes_the_tag(self):
+        manifest = (ROOT / "versions" / "phase-02.env").read_text(encoding="utf-8")
+        match = re.search(r"^MONGODB_IMAGE='([^']+)'$", manifest, flags=re.M)
+        self.assertIsNotNone(match)
+        configured_reference = match.group(1)
+        tagged_reference, digest = configured_reference.rsplit("@", 1)
+        repository = tagged_reference.rsplit(":", 1)[0]
+        self.assertEqual(
+            f"{repository}@{digest}",
+            "mongo@sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5",
+        )
 
     def test_secret_is_file_backed_and_values_are_never_requested(self):
         self.assertIn("--from-file=ue.yaml=", self.script)

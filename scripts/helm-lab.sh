@@ -73,6 +73,8 @@ source "$phase03"
 source "$phase04"
 
 mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}
+mongodb_repository=${mongodb_load_reference%:*}
+mongodb_expected_repo_digest="${mongodb_repository}@${MONGODB_IMAGE##*@}"
 
 required_variables=(
   OPEN5GS_LOCAL_IMAGE OPEN5GS_LOCAL_IMAGE_ID
@@ -129,9 +131,10 @@ verify_images() {
   fi
   mongodb_repo_digests=$(docker image inspect --format \
     '{{range .RepoDigests}}{{println .}}{{end}}' "$MONGODB_IMAGE")
-  if [[ $mongodb_repo_digests != *"$MONGODB_IMAGE"* ]]; then
+  if [[ $mongodb_repo_digests != *"$mongodb_expected_repo_digest"* ]]; then
     printf 'error: local MongoDB tag does not carry the accepted RepoDigest\n' \
       >&2
+    printf 'expected_repo_digest=%s\n' "$mongodb_expected_repo_digest" >&2
     return 1
   fi
   mongodb_id=$(docker image inspect --format '{{.Id}}' "$MONGODB_IMAGE")
