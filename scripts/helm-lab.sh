@@ -341,7 +341,7 @@ recover_failed_install() {
     release_present=true
   else
     release_count=$(helm --kubeconfig "$kubeconfig" \
-      --namespace "$CN5G_KUBERNETES_NAMESPACE" list --all \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" list \
       --filter "^${CN5G_HELM_RELEASE_NAME}$" --output json | jq -er 'length')
     if [[ $release_count != "0" ]]; then
       printf 'error: release state is not safely recoverable\n' >&2
