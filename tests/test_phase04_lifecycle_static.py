@@ -44,6 +44,10 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('observed_id != "$expected_id"', self.script)
         self.assertIn("kind load docker-image", self.script)
         self.assertIn("crictl inspecti", self.script)
+        self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
+        self.assertIn("mongodb_repo_digests", self.script)
+        self.assertIn('mongodb_repo_digests != *"$MONGODB_IMAGE"*', self.script)
+        self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
 
     def test_secret_is_file_backed_and_values_are_never_requested(self):
         self.assertIn("--from-file=ue.yaml=", self.script)

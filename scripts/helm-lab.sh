@@ -72,6 +72,8 @@ source "$phase03"
 # shellcheck source=../versions/phase-04.env
 source "$phase04"
 
+mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}
+
 required_variables=(
   OPEN5GS_LOCAL_IMAGE OPEN5GS_LOCAL_IMAGE_ID
   UERANSIM_LOCAL_IMAGE UERANSIM_LOCAL_IMAGE_ID
@@ -116,19 +118,30 @@ verify_images() {
   verify_local_image "$UERANSIM_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE_ID"
   verify_local_image "$DATA_NETWORK_LOCAL_IMAGE" \
     "$DATA_NETWORK_LOCAL_IMAGE_ID"
-  if ! docker image inspect "$MONGODB_IMAGE" >/dev/null 2>&1; then
+  if [[ $mongodb_load_reference == "$MONGODB_IMAGE" ]]; then
+    printf 'error: MongoDB image contract is missing an immutable digest\n' >&2
+    return 1
+  fi
+  if ! docker image inspect "$mongodb_load_reference" >/dev/null 2>&1; then
     printf 'error: exact MongoDB image is absent: %s\n' "$MONGODB_IMAGE" >&2
     return 1
   fi
+  mongodb_repo_digests=$(docker image inspect --format \
+    '{{range .RepoDigests}}{{println .}}{{end}}' "$mongodb_load_reference")
+  if [[ $mongodb_repo_digests != *"$MONGODB_IMAGE"* ]]; then
+    printf 'error: local MongoDB tag does not carry the accepted RepoDigest\n' \
+      >&2
+    return 1
+  fi
   mongodb_platform=$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
-    "$MONGODB_IMAGE")
+    "$mongodb_load_reference")
   if [[ $mongodb_platform != "linux/amd64" ]]; then
     printf 'error: MongoDB image platform mismatch: %s\n' \
       "$mongodb_platform" >&2
     return 1
   fi
-  printf 'image=%s identity=digest-pinned platform=%s\n' \
-    "$MONGODB_IMAGE" "$mongodb_platform"
+  printf 'image=%s load_reference=%s identity=digest-pinned platform=%s\n' \
+    "$MONGODB_IMAGE" "$mongodb_load_reference" "$mongodb_platform"
   printf 'image_verification=pass\n'
 }
 
@@ -251,7 +264,7 @@ case "$action" in
     verify_images
     kind load docker-image --name "$KIND_CLUSTER_NAME" \
       "$OPEN5GS_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE" \
-      "$DATA_NETWORK_LOCAL_IMAGE" "$MONGODB_IMAGE"
+      "$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"
     verify_node_images
     printf 'phase04_image_load=pass\n'
     ;;
