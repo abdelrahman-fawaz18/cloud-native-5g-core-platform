@@ -47,6 +47,10 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
         self.assertIn("mongodb_repo_digests", self.script)
         self.assertIn('mongodb_repo_digests != *"$MONGODB_IMAGE"*', self.script)
+        self.assertIn('docker image tag "$MONGODB_IMAGE"', self.script)
+        self.assertIn('if [[ $tag_id != "$digest_id" ]]', self.script)
+        self.assertIn("refusing to overwrite conflicting MongoDB tag", self.script)
+        self.assertIn("stage_mongodb_load_reference", self.script)
         self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
 
     def test_secret_is_file_backed_and_values_are_never_requested(self):
