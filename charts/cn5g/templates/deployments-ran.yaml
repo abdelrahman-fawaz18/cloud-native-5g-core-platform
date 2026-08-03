@@ -31,11 +31,9 @@ spec:
           imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
-            - >-
+            - |-
               for attempt in $(seq 1 60); do
-                AMF_IP=$(getent ahostsv4
-                {{ include "cn5g.componentName" (dict "root" . "component" "amf") }}
-                | awk 'NR == 1 {print $1}');
+                AMF_IP=$(getent ahostsv4 {{ include "cn5g.componentName" (dict "root" . "component" "amf") }} | awk 'NR == 1 {print $1}')
                 test -n "$AMF_IP" && break;
                 sleep 2;
               done;
@@ -139,14 +137,15 @@ spec:
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
-            - >-
+            - |-
               IMSI=$(cat /secret/{{ .Values.subscriberSecret.imsiKey }});
               case "$IMSI" in (*[!0-9]*|'') exit 2;; esac;
               for attempt in $(seq 1 90); do
-                mongosh --quiet
-                "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs"
-                --eval "quit(db.subscribers.countDocuments({imsi:'${IMSI}'}) === 1 ? 0 : 1)"
-                && exit 0;
+                if mongosh --quiet \
+                  "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs" \
+                  --eval "quit(db.subscribers.countDocuments({imsi:'${IMSI}'}) === 1 ? 0 : 1)"; then
+                  exit 0;
+                fi
                 sleep 2;
               done;
               exit 1
@@ -167,11 +166,9 @@ spec:
           imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
-            - >-
+            - |-
               for attempt in $(seq 1 90); do
-                GNB_IP=$(getent ahostsv4
-                {{ include "cn5g.componentName" (dict "root" . "component" "gnb") }}
-                | awk 'NR == 1 {print $1}');
+                GNB_IP=$(getent ahostsv4 {{ include "cn5g.componentName" (dict "root" . "component" "gnb") }} | awk 'NR == 1 {print $1}')
                 test -n "$GNB_IP" && break;
                 sleep 2;
               done;

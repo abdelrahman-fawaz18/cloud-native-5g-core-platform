@@ -41,7 +41,7 @@ subscriberSecret:
   imsiKey: imsi
 
 mongodb:
-  storageClassName: local-path
+  storageClassName: standard
   storageSize: 2Gi
   resources:
     requests: {cpu: 50m, memory: 192Mi}

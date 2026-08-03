@@ -24,12 +24,13 @@ spec:
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
-            - >-
+            - |-
               for attempt in $(seq 1 60); do
-                mongosh --quiet
-                "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/admin"
-                --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'
-                && exit 0;
+                if mongosh --quiet \
+                  "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/admin" \
+                  --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then
+                  exit 0;
+                fi
                 sleep 2;
               done;
               exit 1

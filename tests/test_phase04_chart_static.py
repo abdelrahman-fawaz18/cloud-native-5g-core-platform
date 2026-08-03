@@ -202,8 +202,48 @@ class Phase04ChartStaticTests(unittest.TestCase):
         claims = statefulset["spec"]["volumeClaimTemplates"]
         self.assertEqual(len(claims), 1)
         self.assertEqual(claims[0]["metadata"]["name"], "mongodb-data")
-        self.assertEqual(claims[0]["spec"]["storageClassName"], "local-path")
+        self.assertEqual(claims[0]["spec"]["storageClassName"], "standard")
         self.assertEqual(claims[0]["spec"]["accessModes"], ["ReadWriteOnce"])
+
+    def test_rendered_shell_commands_pass_posix_shell_syntax(self):
+        checked = 0
+        for obj in self.objects:
+            if obj["kind"] not in ("Deployment", "StatefulSet", "Job"):
+                continue
+            pod_spec = obj["spec"].get("template", {}).get("spec", {})
+            containers = pod_spec.get("initContainers", []) + pod_spec.get(
+                "containers", []
+            )
+            for container in containers:
+                if container.get("command") != ["/bin/sh", "-ec"]:
+                    continue
+                for argument in container.get("args", []):
+                    result = subprocess.run(
+                        ["/bin/sh", "-n", "-c", argument],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(
+                        result.returncode,
+                        0,
+                        f"{obj['kind']}/{obj['metadata']['name']} "
+                        f"container {container['name']}: {result.stderr}",
+                    )
+                    checked += 1
+        self.assertGreaterEqual(checked, 6)
+
+    def test_upf_avoids_forbidden_pod_sysctl_and_checks_forwarding(self):
+        upf = next(
+            obj
+            for obj in self.objects_of_kind("Deployment")
+            if obj["metadata"]["name"] == "cn5g-upf"
+        )
+        pod_spec = upf["spec"]["template"]["spec"]
+        self.assertNotIn("sysctls", pod_spec["securityContext"])
+        container = pod_spec["containers"][0]
+        self.assertIn("/proc/sys/net/ipv4/ip_forward", container["args"][0])
+        self.assertIn("exec open5gs-entrypoint upf", container["args"][0])
 
     def test_long_running_containers_have_distinct_three_stage_probes(self):
         checked = 0

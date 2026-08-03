@@ -13,11 +13,15 @@ Actions:
   prepare-secret  Create or verify the exact namespace and file-backed Secret.
   install         Server-dry-run and install the cn5g release, waiting for Jobs
                   and long-running workload readiness.
+  recover-failed-install --confirm
+                  Remove only a failed release and its verified unbound PVC;
+                  preserve the namespace and subscriber Secret for retry.
   status          Show only the release and namespace-scoped workload state.
 
 Cluster creation and deletion remain owned by kind-feasibility.sh. This helper
 does not print Secret values, use the default kubeconfig, publish host ports,
-alter host routes, delete persistent data, or invoke a Docker prune operation.
+alter host routes, delete bound persistent data, or invoke a Docker prune
+operation.
 EOF
 }
 
@@ -27,13 +31,18 @@ if [[ $action == "-h" || $action == "--help" ]]; then
   exit 0
 fi
 case "$action" in
-  preflight|load-images|prepare-secret|install|status) ;;
+  preflight|load-images|prepare-secret|install|recover-failed-install|status) ;;
   *)
     printf 'error: unknown action: %s\n' "${action:-<empty>}" >&2
     usage >&2
     exit 2
     ;;
 esac
+confirmation=${2:-}
+if [[ $action == "recover-failed-install" && $confirmation != "--confirm" ]]; then
+  printf 'error: recover-failed-install requires --confirm\n' >&2
+  exit 2
+fi
 
 if (( EUID != 0 )) || [[ -z ${SUDO_UID:-} || -z ${SUDO_GID:-} ]]; then
   printf 'error: run this lifecycle through sudo from the normal account\n' >&2
@@ -315,6 +324,73 @@ show_status() {
     -o wide
 }
 
+recover_failed_install() {
+  local release_status pvc_name pvc_json pvc_phase pvc_volume pvc_class
+  local pvc_instance pvc_component remaining
+  pvc_name=mongodb-data-cn5g-mongodb-0
+  release_status=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json | jq -er '.info.status')
+  if [[ $release_status != "failed" ]]; then
+    printf 'error: recovery only accepts a failed release; observed=%s\n' \
+      "$release_status" >&2
+    return 1
+  fi
+  pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
+    --output json)
+  pvc_phase=$(jq -r '.status.phase // ""' <<<"$pvc_json")
+  pvc_volume=$(jq -r '.spec.volumeName // ""' <<<"$pvc_json")
+  pvc_class=$(jq -r '.spec.storageClassName // ""' <<<"$pvc_json")
+  pvc_instance=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/instance"] // ""' <<<"$pvc_json")
+  pvc_component=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/component"] // ""' <<<"$pvc_json")
+  if [[ $pvc_phase != "Pending" || -n $pvc_volume || \
+        $pvc_class != "local-path" || $pvc_instance != "cn5g" || \
+        $pvc_component != "mongodb" ]]; then
+    printf 'error: refusing to remove PVC outside the failed unbound contract\n' \
+      >&2
+    printf 'phase=%s volume=%s class=%s instance=%s component=%s\n' \
+      "$pvc_phase" "${pvc_volume:-<none>}" "$pvc_class" \
+      "$pvc_instance" "$pvc_component" >&2
+    return 1
+  fi
+  printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
+  printf 'unbound_pvc=%s state=verified-pending-without-volume\n' "$pvc_name"
+  helm uninstall "$CN5G_HELM_RELEASE_NAME" \
+    --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --wait --timeout=3m
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" delete pvc "$pvc_name" \
+    --wait=true --timeout=60s
+  if helm --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      status "$CN5G_HELM_RELEASE_NAME" >/dev/null 2>&1; then
+    printf 'error: failed Helm release still exists after recovery\n' >&2
+    return 1
+  fi
+  if kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      get pvc "$pvc_name" >/dev/null 2>&1; then
+    printf 'error: unbound PVC still exists after recovery\n' >&2
+    return 1
+  fi
+  remaining=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    get all,configmaps,serviceaccounts \
+    --selector app.kubernetes.io/instance=cn5g --output name)
+  if [[ -n $remaining ]]; then
+    printf 'error: release-owned resources remain after recovery\n%s\n' \
+      "$remaining" >&2
+    return 1
+  fi
+  verify_namespace
+  verify_secret
+  printf 'failed_install_recovery=pass\n'
+}
+
 case "$action" in
   preflight)
     "$script_dir/kind-feasibility.sh" preflight
@@ -403,6 +479,12 @@ case "$action" in
       --wait=watcher --wait-for-jobs --timeout=8m
     show_status
     printf 'phase04_install=pass\n'
+    ;;
+  recover-failed-install)
+    require_cluster
+    verify_namespace
+    verify_secret
+    recover_failed_install
     ;;
   status)
     show_status

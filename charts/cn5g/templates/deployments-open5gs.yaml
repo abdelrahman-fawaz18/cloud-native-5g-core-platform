@@ -30,10 +30,6 @@ spec:
         seccompProfile: {type: RuntimeDefault}
         fsGroup: 65532
         fsGroupChangePolicy: OnRootMismatch
-        {{- if eq $component "upf" }}
-        sysctls:
-          - {name: net.ipv4.ip_forward, value: "1"}
-        {{- end }}
       initContainers:
         - name: render-config
           image: {{ include "cn5g.image" $root.Values.images.open5gs }}
@@ -65,7 +61,15 @@ spec:
         - name: {{ $component }}
           image: {{ include "cn5g.image" $root.Values.images.open5gs }}
           imagePullPolicy: {{ $root.Values.images.open5gs.pullPolicy }}
+          {{- if eq $component "upf" }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - >-
+              test "$(cat /proc/sys/net/ipv4/ip_forward)" = 1;
+              exec open5gs-entrypoint upf
+          {{- else }}
           args: [{{ $component | quote }}]
+          {{- end }}
           env:
             - name: POD_IP
               valueFrom: {fieldRef: {fieldPath: status.podIP}}

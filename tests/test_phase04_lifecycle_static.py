@@ -147,6 +147,20 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("--timeout=8m", self.script)
         self.assertIn("phase04_install=pass", self.script)
 
+    def test_failed_install_recovery_is_confirmed_and_unbound_only(self):
+        self.assertIn(
+            'action == "recover-failed-install" && $confirmation != "--confirm"',
+            self.script,
+        )
+        self.assertIn('release_status != "failed"', self.script)
+        self.assertIn('pvc_phase != "Pending"', self.script)
+        self.assertIn("-n $pvc_volume", self.script)
+        self.assertIn('pvc_class != "local-path"', self.script)
+        self.assertIn('pvc_instance != "cn5g"', self.script)
+        self.assertIn('pvc_component != "mongodb"', self.script)
+        self.assertIn('delete pvc "$pvc_name"', self.script)
+        self.assertIn("failed_install_recovery=pass", self.script)
+
     def test_preflight_reuses_accepted_cluster_safety_and_static_gates(self):
         self.assertIn('kind-feasibility.sh" preflight', self.script)
         self.assertIn('install-helm.sh" --check', self.script)
