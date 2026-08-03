@@ -325,46 +325,70 @@ show_status() {
 }
 
 recover_failed_install() {
-  local release_status pvc_name pvc_json pvc_phase pvc_volume pvc_class
-  local pvc_instance pvc_component remaining
+  local release_json release_status release_count release_present=false
+  local pvc_name pvc_json pvc_phase pvc_volume pvc_class pvc_present=false
+  local pvc_instance pvc_component remaining attempt
   pvc_name=mongodb-data-cn5g-mongodb-0
-  release_status=$(helm --kubeconfig "$kubeconfig" \
-    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    status "$CN5G_HELM_RELEASE_NAME" --output json | jq -er '.info.status')
-  if [[ $release_status != "failed" ]]; then
-    printf 'error: recovery only accepts a failed release; observed=%s\n' \
-      "$release_status" >&2
-    return 1
+  if release_json=$(helm --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      status "$CN5G_HELM_RELEASE_NAME" --output json 2>/dev/null); then
+    release_status=$(jq -er '.info.status' <<<"$release_json")
+    if [[ $release_status != "failed" ]]; then
+      printf 'error: recovery only accepts a failed release; observed=%s\n' \
+        "$release_status" >&2
+      return 1
+    fi
+    release_present=true
+  else
+    release_count=$(helm --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" list --all \
+      --filter "^${CN5G_HELM_RELEASE_NAME}$" --output json | jq -er 'length')
+    if [[ $release_count != "0" ]]; then
+      printf 'error: release state is not safely recoverable\n' >&2
+      return 1
+    fi
   fi
   pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
-    --output json)
-  pvc_phase=$(jq -r '.status.phase // ""' <<<"$pvc_json")
-  pvc_volume=$(jq -r '.spec.volumeName // ""' <<<"$pvc_json")
-  pvc_class=$(jq -r '.spec.storageClassName // ""' <<<"$pvc_json")
-  pvc_instance=$(jq -r \
-    '.metadata.labels["app.kubernetes.io/instance"] // ""' <<<"$pvc_json")
-  pvc_component=$(jq -r \
-    '.metadata.labels["app.kubernetes.io/component"] // ""' <<<"$pvc_json")
-  if [[ $pvc_phase != "Pending" || -n $pvc_volume || \
-        $pvc_class != "local-path" || $pvc_instance != "cn5g" || \
-        $pvc_component != "mongodb" ]]; then
-    printf 'error: refusing to remove PVC outside the failed unbound contract\n' \
-      >&2
-    printf 'phase=%s volume=%s class=%s instance=%s component=%s\n' \
-      "$pvc_phase" "${pvc_volume:-<none>}" "$pvc_class" \
-      "$pvc_instance" "$pvc_component" >&2
-    return 1
+    --ignore-not-found --output json)
+  if [[ -n $pvc_json ]]; then
+    pvc_present=true
+    pvc_phase=$(jq -r '.status.phase // ""' <<<"$pvc_json")
+    pvc_volume=$(jq -r '.spec.volumeName // ""' <<<"$pvc_json")
+    pvc_class=$(jq -r '.spec.storageClassName // ""' <<<"$pvc_json")
+    pvc_instance=$(jq -r \
+      '.metadata.labels["app.kubernetes.io/instance"] // ""' <<<"$pvc_json")
+    pvc_component=$(jq -r \
+      '.metadata.labels["app.kubernetes.io/component"] // ""' <<<"$pvc_json")
+    if [[ $pvc_phase != "Pending" || -n $pvc_volume || \
+          $pvc_class != "local-path" || $pvc_instance != "cn5g" || \
+          $pvc_component != "mongodb" ]]; then
+      printf 'error: refusing to remove PVC outside the failed unbound contract\n' \
+        >&2
+      printf 'phase=%s volume=%s class=%s instance=%s component=%s\n' \
+        "$pvc_phase" "${pvc_volume:-<none>}" "$pvc_class" \
+        "$pvc_instance" "$pvc_component" >&2
+      return 1
+    fi
   fi
-  printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
-  printf 'unbound_pvc=%s state=verified-pending-without-volume\n' "$pvc_name"
-  helm uninstall "$CN5G_HELM_RELEASE_NAME" \
-    --kubeconfig "$kubeconfig" \
-    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    --wait --timeout=3m
-  kubectl --kubeconfig "$kubeconfig" \
-    --namespace "$CN5G_KUBERNETES_NAMESPACE" delete pvc "$pvc_name" \
-    --wait=true --timeout=60s
+  if [[ $release_present == true ]]; then
+    printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
+    helm uninstall "$CN5G_HELM_RELEASE_NAME" \
+      --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      --wait --timeout=3m
+  else
+    printf 'failed_release=%s state=already-absent\n' \
+      "$CN5G_HELM_RELEASE_NAME"
+  fi
+  if [[ $pvc_present == true ]]; then
+    printf 'unbound_pvc=%s state=verified-pending-without-volume\n' "$pvc_name"
+    kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" delete pvc "$pvc_name" \
+      --wait=true --timeout=60s
+  else
+    printf 'unbound_pvc=%s state=already-absent\n' "$pvc_name"
+  fi
   if helm --kubeconfig "$kubeconfig" \
       --namespace "$CN5G_KUBERNETES_NAMESPACE" \
       status "$CN5G_HELM_RELEASE_NAME" >/dev/null 2>&1; then
@@ -377,10 +401,14 @@ recover_failed_install() {
     printf 'error: unbound PVC still exists after recovery\n' >&2
     return 1
   fi
-  remaining=$(kubectl --kubeconfig "$kubeconfig" \
-    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    get all,configmaps,serviceaccounts \
-    --selector app.kubernetes.io/instance=cn5g --output name)
+  for attempt in $(seq 1 60); do
+    remaining=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      get all,configmaps,serviceaccounts \
+      --selector app.kubernetes.io/instance=cn5g --output name)
+    [[ -z $remaining ]] && break
+    sleep 2
+  done
   if [[ -n $remaining ]]; then
     printf 'error: release-owned resources remain after recovery\n%s\n' \
       "$remaining" >&2

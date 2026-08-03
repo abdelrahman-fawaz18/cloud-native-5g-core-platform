@@ -159,6 +159,9 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('pvc_instance != "cn5g"', self.script)
         self.assertIn('pvc_component != "mongodb"', self.script)
         self.assertIn('delete pvc "$pvc_name"', self.script)
+        self.assertIn("--ignore-not-found --output json", self.script)
+        self.assertIn("state=already-absent", self.script)
+        self.assertIn("for attempt in $(seq 1 60)", self.script)
         self.assertIn("failed_install_recovery=pass", self.script)
 
     def test_preflight_reuses_accepted_cluster_safety_and_static_gates(self):
