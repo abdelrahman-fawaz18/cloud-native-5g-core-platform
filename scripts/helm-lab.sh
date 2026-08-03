@@ -47,7 +47,7 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
   exit 3
 fi
 
-for required_command in docker kind kubectl helm jq sha256sum; do
+for required_command in docker kind kubectl helm jq sha256sum tar; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     printf 'error: required command is unavailable: %s\n' \
       "$required_command" >&2
@@ -208,21 +208,35 @@ require_cluster() {
 verify_node_images() {
   local open5gs_runtime_id ueransim_runtime_id data_network_runtime_id
   local mongodb_runtime_id
-  open5gs_runtime_id=$(runtime_image_id "$OPEN5GS_LOCAL_IMAGE")
-  ueransim_runtime_id=$(runtime_image_id "$UERANSIM_LOCAL_IMAGE")
-  data_network_runtime_id=$(runtime_image_id "$DATA_NETWORK_LOCAL_IMAGE")
-  mongodb_runtime_id=$(runtime_image_id "$MONGODB_IMAGE")
-  verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$open5gs_runtime_id"
-  verify_node_image "$UERANSIM_LOCAL_IMAGE" "$ueransim_runtime_id"
+  open5gs_runtime_id=$(runtime_config_id "$OPEN5GS_LOCAL_IMAGE")
+  ueransim_runtime_id=$(runtime_config_id "$UERANSIM_LOCAL_IMAGE")
+  data_network_runtime_id=$(runtime_config_id "$DATA_NETWORK_LOCAL_IMAGE")
+  mongodb_runtime_id=$(runtime_config_id "$mongodb_load_reference")
+  verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$open5gs_runtime_id" || return 1
+  verify_node_image "$UERANSIM_LOCAL_IMAGE" "$ueransim_runtime_id" || return 1
   verify_node_image "$DATA_NETWORK_LOCAL_IMAGE" \
-    "$data_network_runtime_id"
-  verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id"
+    "$data_network_runtime_id" || return 1
+  verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id" || return 1
   printf 'node_runtime_image_verification=pass\n'
 }
 
-runtime_image_id() {
-  local image=$1
-  docker image inspect --platform linux/amd64 --format '{{.Id}}' "$image"
+runtime_config_id() {
+  local image=$1 config_path config_name
+  config_path=$(docker image save "$image" | tar -xOf - manifest.json | \
+    jq -er '
+      [.[] | select(((.RepoTags // []) | length) > 0)] |
+      if length == 1 then .[0].Config
+      else error("expected exactly one tagged image manifest")
+      end
+    ')
+  config_name=${config_path##*/}
+  config_name=${config_name%.json}
+  if [[ ! $config_name =~ ^[0-9a-f]{64}$ ]]; then
+    printf 'error: invalid runtime configuration identity for %s\n' \
+      "$image" >&2
+    return 1
+  fi
+  printf 'sha256:%s\n' "$config_name"
 }
 
 verify_node_image() {
@@ -324,15 +338,16 @@ case "$action" in
     require_cluster
     verify_images
     stage_mongodb_load_reference
-    if verify_node_images >/dev/null 2>&1; then
+    if node_verification=$(verify_node_images 2>/dev/null); then
       printf 'node_image_import=skipped-already-present-and-accepted\n'
+      printf '%s\n' "$node_verification"
     else
       kind load docker-image --name "$KIND_CLUSTER_NAME" \
         "$OPEN5GS_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE" \
         "$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"
       printf 'node_image_import=completed\n'
+      verify_node_images
     fi
-    verify_node_images
     printf 'phase04_image_load=pass\n'
     ;;
   prepare-secret)

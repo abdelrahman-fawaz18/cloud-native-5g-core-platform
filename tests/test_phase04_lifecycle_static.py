@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 import subprocess
 import unittest
@@ -37,7 +38,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertNotIn("$HOME", self.body)
         self.assertNotIn("~/.kube", self.body)
         self.assertIn(
-            "for required_command in docker kind kubectl helm jq sha256sum",
+            "for required_command in docker kind kubectl helm jq sha256sum tar",
             self.script,
         )
 
@@ -50,12 +51,18 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("crictl inspecti", self.script)
         self.assertIn("jq -er '.status.id'", self.script)
         self.assertIn('observed_id != "$expected_id"', self.script)
+        self.assertIn('docker image save "$image"', self.script)
+        self.assertIn("tar -xOf - manifest.json", self.script)
+        self.assertIn(".RepoTags // []", self.script)
+        self.assertIn(".[0].Config", self.script)
+        self.assertIn('runtime_config_id "$OPEN5GS_LOCAL_IMAGE"', self.script)
         self.assertIn(
-            "docker image inspect --platform linux/amd64 --format '{{.Id}}'",
+            'runtime_config_id "$mongodb_load_reference"', self.script
+        )
+        self.assertIn(
+            'verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$open5gs_runtime_id" || return 1',
             self.script,
         )
-        self.assertIn('runtime_image_id "$OPEN5GS_LOCAL_IMAGE"', self.script)
-        self.assertIn('runtime_image_id "$MONGODB_IMAGE"', self.script)
         self.assertIn(
             "node_image_import=skipped-already-present-and-accepted",
             self.script,
@@ -77,7 +84,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("refusing to overwrite conflicting MongoDB tag", self.script)
         self.assertIn("stage_mongodb_load_reference", self.script)
         self.assertIn(
-            'verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id"',
+            'verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id" || return 1',
             self.script,
         )
         self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
@@ -93,6 +100,34 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
             f"{repository}@{digest}",
             "mongo@sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5",
         )
+
+    def test_archive_parser_selects_tagged_runtime_config_not_attestation(self):
+        runtime_config = "e" * 64
+        archive_manifest = [
+            {
+                "Config": f"blobs/sha256/{runtime_config}",
+                "RepoTags": ["cn5g/open5gs:2.7.7"],
+            },
+            {
+                "Config": f"blobs/sha256/{'a' * 64}",
+                "RepoTags": None,
+            },
+        ]
+        jq_filter = """
+          [.[] | select(((.RepoTags // []) | length) > 0)] |
+          if length == 1 then .[0].Config
+          else error("expected exactly one tagged image manifest")
+          end
+        """
+        result = subprocess.run(
+            ["jq", "-er", jq_filter],
+            input=json.dumps(archive_manifest),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), f"blobs/sha256/{runtime_config}")
 
     def test_secret_is_file_backed_and_values_are_never_requested(self):
         self.assertIn("--from-file=ue.yaml=", self.script)
