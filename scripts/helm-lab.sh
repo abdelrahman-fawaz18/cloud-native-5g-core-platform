@@ -13,6 +13,9 @@ Actions:
   prepare-secret  Create or verify the exact namespace and file-backed Secret.
   install         Server-dry-run and install the cn5g release, waiting for Jobs
                   and long-running workload readiness.
+  repair-failed-release
+                  Upgrade a failed release with the corrected chart while
+                  proving that its bound MongoDB PVC identity is preserved.
   recover-failed-install --confirm
                   Remove only a failed release and its verified unbound PVC;
                   preserve the namespace and subscriber Secret for retry.
@@ -31,7 +34,8 @@ if [[ $action == "-h" || $action == "--help" ]]; then
   exit 0
 fi
 case "$action" in
-  preflight|load-images|prepare-secret|install|recover-failed-install|status) ;;
+  preflight|load-images|prepare-secret|install|repair-failed-release) ;;
+  recover-failed-install|status) ;;
   *)
     printf 'error: unknown action: %s\n' "${action:-<empty>}" >&2
     usage >&2
@@ -419,6 +423,67 @@ recover_failed_install() {
   printf 'failed_install_recovery=pass\n'
 }
 
+repair_failed_release() {
+  local release_json release_status pvc_name pvc_json pvc_phase pvc_volume
+  local pvc_class pvc_instance pvc_component pvc_uid repaired_pvc_json
+  local repaired_pvc_uid repaired_pvc_volume
+  pvc_name=mongodb-data-cn5g-mongodb-0
+  release_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  release_status=$(jq -er '.info.status' <<<"$release_json")
+  if [[ $release_status != "failed" ]]; then
+    printf 'error: repair requires a failed release; observed=%s\n' \
+      "$release_status" >&2
+    return 1
+  fi
+  pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
+    --output json)
+  pvc_phase=$(jq -r '.status.phase // ""' <<<"$pvc_json")
+  pvc_volume=$(jq -r '.spec.volumeName // ""' <<<"$pvc_json")
+  pvc_class=$(jq -r '.spec.storageClassName // ""' <<<"$pvc_json")
+  pvc_instance=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/instance"] // ""' <<<"$pvc_json")
+  pvc_component=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/component"] // ""' <<<"$pvc_json")
+  pvc_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+  if [[ $pvc_phase != "Bound" || -z $pvc_volume || \
+        $pvc_class != "standard" || $pvc_instance != "cn5g" || \
+        $pvc_component != "mongodb" ]]; then
+    printf 'error: failed release PVC is outside the bound repair contract\n' \
+      >&2
+    printf 'phase=%s volume=%s class=%s instance=%s component=%s\n' \
+      "$pvc_phase" "${pvc_volume:-<none>}" "$pvc_class" \
+      "$pvc_instance" "$pvc_component" >&2
+    return 1
+  fi
+  printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
+  printf 'mongodb_pvc=%s state=bound-and-preserved\n' "$pvc_name"
+  helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
+    --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --dry-run=server --hide-secret >/dev/null
+  printf 'server_side_upgrade_dry_run=pass\n'
+  helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
+    --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --wait=watcher --wait-for-jobs --timeout=8m
+  repaired_pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
+    --output json)
+  repaired_pvc_uid=$(jq -er '.metadata.uid' <<<"$repaired_pvc_json")
+  repaired_pvc_volume=$(jq -er '.spec.volumeName' <<<"$repaired_pvc_json")
+  if [[ $repaired_pvc_uid != "$pvc_uid" || \
+        $repaired_pvc_volume != "$pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed during repair\n' >&2
+    return 1
+  fi
+  printf 'mongodb_pvc_identity=preserved\n'
+  show_status
+  printf 'phase04_failed_release_repair=pass\n'
+}
+
 case "$action" in
   preflight)
     "$script_dir/kind-feasibility.sh" preflight
@@ -507,6 +572,13 @@ case "$action" in
       --wait=watcher --wait-for-jobs --timeout=8m
     show_status
     printf 'phase04_install=pass\n'
+    ;;
+  repair-failed-release)
+    require_cluster
+    verify_images
+    verify_node_images
+    verify_secret
+    repair_failed_release
     ;;
   recover-failed-install)
     require_cluster

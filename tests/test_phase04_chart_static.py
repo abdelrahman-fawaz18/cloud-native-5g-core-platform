@@ -205,6 +205,34 @@ class Phase04ChartStaticTests(unittest.TestCase):
         self.assertEqual(claims[0]["spec"]["storageClassName"], "standard")
         self.assertEqual(claims[0]["spec"]["accessModes"], ["ReadWriteOnce"])
 
+    def test_mongodb_liveness_checks_database_health_without_signaling_pid_one(self):
+        statefulset = self.objects_of_kind("StatefulSet")[0]
+        mongodb = statefulset["spec"]["template"]["spec"]["containers"][0]
+        command = mongodb["livenessProbe"]["exec"]["command"]
+        self.assertIn("mongosh", command[-1])
+        self.assertIn("adminCommand({ping:1})", command[-1])
+        self.assertNotIn("kill -0 1", command[-1])
+
+    def test_ueransim_renderers_use_single_contiguous_sed_commands(self):
+        deployments = {
+            obj["metadata"]["name"]: obj
+            for obj in self.objects_of_kind("Deployment")
+        }
+        for name in ("cn5g-gnb", "cn5g-ue"):
+            script = deployments[name]["spec"]["template"]["spec"][
+                "initContainers"
+            ][-1]["args"][0]
+            lines = script.splitlines()
+            continued_arguments = [
+                index
+                for index, line in enumerate(lines)
+                if line.lstrip().startswith(("-e ", "/config-source/", "/secret/"))
+            ]
+            self.assertTrue(continued_arguments)
+            for index in continued_arguments:
+                self.assertGreater(index, 0)
+                self.assertTrue(lines[index - 1].rstrip().endswith("\\"))
+
     def test_rendered_shell_commands_pass_posix_shell_syntax(self):
         checked = 0
         for obj in self.objects:

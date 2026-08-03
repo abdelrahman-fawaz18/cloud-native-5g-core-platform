@@ -38,9 +38,10 @@ spec:
                 sleep 2;
               done;
               test -n "${AMF_IP:-}";
-              sed -e "s/__POD_IP__/${POD_IP}/g"
-              -e "s/__AMF_IP__/${AMF_IP}/g"
-              /config-source/gnb.yaml > /etc/ueransim/gnb.yaml;
+              sed \
+                -e "s/__POD_IP__/${POD_IP}/g" \
+                -e "s/__AMF_IP__/${AMF_IP}/g" \
+                /config-source/gnb.yaml > /etc/ueransim/gnb.yaml;
               test -s /etc/ueransim/gnb.yaml
           env:
             - name: POD_IP
@@ -173,9 +174,9 @@ spec:
                 sleep 2;
               done;
               test -n "${GNB_IP:-}";
-              sed "s/__GNB_IP__/${GNB_IP}/g"
-              /secret/{{ .Values.subscriberSecret.ueConfigKey }}
-              > /etc/ueransim/ue.yaml;
+              sed "s/__GNB_IP__/${GNB_IP}/g" \
+                /secret/{{ .Values.subscriberSecret.ueConfigKey }} \
+                > /etc/ueransim/ue.yaml;
               test -s /etc/ueransim/ue.yaml
           securityContext:
             runAsNonRoot: true

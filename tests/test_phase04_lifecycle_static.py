@@ -165,6 +165,16 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("for attempt in $(seq 1 60)", self.script)
         self.assertIn("failed_install_recovery=pass", self.script)
 
+    def test_failed_release_repair_preserves_bound_mongodb_storage(self):
+        self.assertIn("repair-failed-release", self.script)
+        self.assertIn('release_status != "failed"', self.script)
+        self.assertIn('pvc_phase != "Bound"', self.script)
+        self.assertIn('pvc_class != "standard"', self.script)
+        self.assertIn('repaired_pvc_uid != "$pvc_uid"', self.script)
+        self.assertIn('repaired_pvc_volume != "$pvc_volume"', self.script)
+        self.assertIn("server_side_upgrade_dry_run=pass", self.script)
+        self.assertIn("phase04_failed_release_repair=pass", self.script)
+
     def test_preflight_reuses_accepted_cluster_safety_and_static_gates(self):
         self.assertIn('kind-feasibility.sh" preflight', self.script)
         self.assertIn('install-helm.sh" --check', self.script)
