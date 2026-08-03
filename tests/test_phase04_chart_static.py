@@ -114,6 +114,10 @@ class Phase04ChartStaticTests(unittest.TestCase):
             self.assertRegex(image["expectedImageID"], r"^sha256:[0-9a-f]{64}$")
         mongodb = values["images"]["mongodb"]
         self.assertRegex(mongodb["digest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(mongodb["pullPolicy"], "Never")
+        self.assertEqual(mongodb["expectedImageID"], mongodb["digest"])
+        self.assertIn("image: mongo:8.0.28-noble", self.rendered)
+        self.assertNotIn("image: mongo:8.0.28-noble@", self.rendered)
         self.assertNotIn(":latest", self.rendered)
 
     def test_secret_values_are_not_rendered_or_managed_by_chart(self):

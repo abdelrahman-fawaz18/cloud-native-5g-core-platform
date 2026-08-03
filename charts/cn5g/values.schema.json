@@ -85,12 +85,13 @@
     "registryImage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "required": ["repository", "tag", "digest", "pullPolicy", "expectedImageID"],
       "properties": {
         "repository": {"type": "string", "minLength": 1},
         "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
         "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "pullPolicy": {"$ref": "#/$defs/pullPolicy"}
+        "pullPolicy": {"const": "Never"},
+        "expectedImageID": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       }
     },
     "resources": {

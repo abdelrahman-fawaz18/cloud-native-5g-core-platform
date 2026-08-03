@@ -26,7 +26,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: mongodb
-          image: {{ include "cn5g.image" .Values.images.mongodb }}
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           ports:
             - {name: mongodb, containerPort: 27017, protocol: TCP}

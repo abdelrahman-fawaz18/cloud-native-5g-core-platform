@@ -36,6 +36,10 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('--namespace "$CN5G_KUBERNETES_NAMESPACE"', self.script)
         self.assertNotIn("$HOME", self.body)
         self.assertNotIn("~/.kube", self.body)
+        self.assertIn(
+            "for required_command in docker kind kubectl helm jq sha256sum",
+            self.script,
+        )
 
     def test_image_load_requires_accepted_local_identities(self):
         self.assertIn("OPEN5GS_LOCAL_IMAGE_ID", self.script)
@@ -44,6 +48,8 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('observed_id != "$expected_id"', self.script)
         self.assertIn("kind load docker-image", self.script)
         self.assertIn("crictl inspecti", self.script)
+        self.assertIn("jq -er '.status.id'", self.script)
+        self.assertIn('observed_id != "$expected_id"', self.script)
         self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
         self.assertIn("mongodb_repository=${mongodb_load_reference%:*}", self.script)
         self.assertIn(
@@ -59,6 +65,10 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('if [[ $tag_id != "$digest_id" ]]', self.script)
         self.assertIn("refusing to overwrite conflicting MongoDB tag", self.script)
         self.assertIn("stage_mongodb_load_reference", self.script)
+        self.assertIn(
+            'verify_node_image "$mongodb_load_reference" "$mongodb_expected_id"',
+            self.script,
+        )
         self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
 
     def test_mongodb_repo_digest_normalization_removes_the_tag(self):

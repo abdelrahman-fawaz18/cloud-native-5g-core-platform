@@ -31,7 +31,8 @@ images:
     repository: mongo
     tag: 8.0.28-noble
     digest: sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
+    expectedImageID: sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
 
 subscriberSecret:
   existingSecret: cn5g-subscriber

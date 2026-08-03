@@ -135,7 +135,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: wait-for-subscriber
-          image: {{ include "cn5g.image" .Values.images.mongodb }}
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:

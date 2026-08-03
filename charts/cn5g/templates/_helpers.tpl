@@ -37,6 +37,10 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 {{- end }}
 
+{{- define "cn5g.kindLoadedImage" -}}
+{{- printf "%s:%s" .repository .tag -}}
+{{- end }}
+
 {{- define "cn5g.serviceAccountName" -}}
 {{- printf "%s-workload" (include "cn5g.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end }}

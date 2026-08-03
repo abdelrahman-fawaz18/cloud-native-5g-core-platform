@@ -9,9 +9,13 @@ templates subscriber authentication material; `subscriberSecret.existingSecret`
 must name a Secret created from the ignored files produced by
 `scripts/generate-subscriber-secret.sh`.
 
-Project-built images use `imagePullPolicy: Never` and must be loaded into the
-named kind node only after their local identities match the Phase 2 manifest.
-MongoDB uses an immutable registry digest.
+Every workload uses `imagePullPolicy: Never` and must be loaded into the named
+kind node only after its local identity matches the Phase 2 manifest. MongoDB's
+upstream `tag@digest` is verified before its fixed-version tag is imported;
+the imported containerd image ID is then compared with that accepted digest.
+This two-sided gate is required because kind's Docker-image import preserves
+the tag and content identity but does not preserve the upstream RepoDigest
+alias. Kubernetes therefore cannot pull an unreviewed replacement at runtime.
 
 Open5GS, UERANSIM, and the data endpoint use Deployments. MongoDB uses a
 StatefulSet and a dynamically provisioned data PersistentVolumeClaim (PVC).

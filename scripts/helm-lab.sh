@@ -47,6 +47,14 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
   exit 3
 fi
 
+for required_command in docker kind kubectl helm jq sha256sum; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    printf 'error: required command is unavailable: %s\n' \
+      "$required_command" >&2
+    exit 4
+  fi
+done
+
 phase02="$project_root/versions/phase-02.env"
 phase03="$project_root/versions/phase-03.env"
 phase04="$project_root/versions/phase-04.env"
@@ -198,15 +206,28 @@ require_cluster() {
 }
 
 verify_node_images() {
-  docker exec cn5g-control-plane crictl inspecti \
-    "$OPEN5GS_LOCAL_IMAGE" >/dev/null
-  docker exec cn5g-control-plane crictl inspecti \
-    "$UERANSIM_LOCAL_IMAGE" >/dev/null
-  docker exec cn5g-control-plane crictl inspecti \
-    "$DATA_NETWORK_LOCAL_IMAGE" >/dev/null
-  docker exec cn5g-control-plane crictl inspecti \
-    "$MONGODB_IMAGE" >/dev/null
+  local mongodb_expected_id
+  mongodb_expected_id=$(docker image inspect --format '{{.Id}}' "$MONGODB_IMAGE")
+  verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$OPEN5GS_LOCAL_IMAGE_ID"
+  verify_node_image "$UERANSIM_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE_ID"
+  verify_node_image "$DATA_NETWORK_LOCAL_IMAGE" \
+    "$DATA_NETWORK_LOCAL_IMAGE_ID"
+  verify_node_image "$mongodb_load_reference" "$mongodb_expected_id"
   printf 'node_runtime_image_verification=pass\n'
+}
+
+verify_node_image() {
+  local image=$1 expected_id=$2 observed_id
+  observed_id=$(docker exec cn5g-control-plane crictl inspecti "$image" | \
+    jq -er '.status.id')
+  if [[ $observed_id != "$expected_id" ]]; then
+    printf 'error: node runtime image identity mismatch: %s\n' "$image" >&2
+    printf 'observed_id=%s\nexpected_id=%s\n' \
+      "$observed_id" "$expected_id" >&2
+    return 1
+  fi
+  printf 'node_image=%s image_id=%s identity=accepted\n' \
+    "$image" "$observed_id"
 }
 
 verify_namespace() {

@@ -20,7 +20,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: wait-for-mongodb
-          image: {{ include "cn5g.image" .Values.images.mongodb }}
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
@@ -46,7 +46,7 @@ spec:
             - {name: tmp, mountPath: /tmp}
       containers:
         - name: subscriber-init
-          image: {{ include "cn5g.image" .Values.images.mongodb }}
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
           command: ["mongosh"]
           args:
