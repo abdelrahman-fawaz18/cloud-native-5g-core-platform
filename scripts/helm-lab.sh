@@ -206,14 +206,23 @@ require_cluster() {
 }
 
 verify_node_images() {
-  local mongodb_expected_id
-  mongodb_expected_id=$(docker image inspect --format '{{.Id}}' "$MONGODB_IMAGE")
-  verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$OPEN5GS_LOCAL_IMAGE_ID"
-  verify_node_image "$UERANSIM_LOCAL_IMAGE" "$UERANSIM_LOCAL_IMAGE_ID"
+  local open5gs_runtime_id ueransim_runtime_id data_network_runtime_id
+  local mongodb_runtime_id
+  open5gs_runtime_id=$(runtime_image_id "$OPEN5GS_LOCAL_IMAGE")
+  ueransim_runtime_id=$(runtime_image_id "$UERANSIM_LOCAL_IMAGE")
+  data_network_runtime_id=$(runtime_image_id "$DATA_NETWORK_LOCAL_IMAGE")
+  mongodb_runtime_id=$(runtime_image_id "$MONGODB_IMAGE")
+  verify_node_image "$OPEN5GS_LOCAL_IMAGE" "$open5gs_runtime_id"
+  verify_node_image "$UERANSIM_LOCAL_IMAGE" "$ueransim_runtime_id"
   verify_node_image "$DATA_NETWORK_LOCAL_IMAGE" \
-    "$DATA_NETWORK_LOCAL_IMAGE_ID"
-  verify_node_image "$mongodb_load_reference" "$mongodb_expected_id"
+    "$data_network_runtime_id"
+  verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id"
   printf 'node_runtime_image_verification=pass\n'
+}
+
+runtime_image_id() {
+  local image=$1
+  docker image inspect --platform linux/amd64 --format '{{.Id}}' "$image"
 }
 
 verify_node_image() {

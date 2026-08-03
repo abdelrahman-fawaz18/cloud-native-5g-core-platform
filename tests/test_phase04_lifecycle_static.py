@@ -50,6 +50,12 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("crictl inspecti", self.script)
         self.assertIn("jq -er '.status.id'", self.script)
         self.assertIn('observed_id != "$expected_id"', self.script)
+        self.assertIn(
+            "docker image inspect --platform linux/amd64 --format '{{.Id}}'",
+            self.script,
+        )
+        self.assertIn('runtime_image_id "$OPEN5GS_LOCAL_IMAGE"', self.script)
+        self.assertIn('runtime_image_id "$MONGODB_IMAGE"', self.script)
         self.assertIn("mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}", self.script)
         self.assertIn("mongodb_repository=${mongodb_load_reference%:*}", self.script)
         self.assertIn(
@@ -66,7 +72,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("refusing to overwrite conflicting MongoDB tag", self.script)
         self.assertIn("stage_mongodb_load_reference", self.script)
         self.assertIn(
-            'verify_node_image "$mongodb_load_reference" "$mongodb_expected_id"',
+            'verify_node_image "$mongodb_load_reference" "$mongodb_runtime_id"',
             self.script,
         )
         self.assertIn('"$DATA_NETWORK_LOCAL_IMAGE" "$mongodb_load_reference"', self.script)
