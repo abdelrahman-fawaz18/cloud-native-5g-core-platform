@@ -9,9 +9,7 @@ metadata:
     {{- include "cn5g.componentLabels" (dict "root" $root "component" $component) | nindent 4 }}
 spec:
   replicas: 1
-  {{- if eq $component "upf" }}
   strategy: {type: Recreate}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "cn5g.selectorLabels" (dict "root" $root "component" $component) | nindent 6 }}

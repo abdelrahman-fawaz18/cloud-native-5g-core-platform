@@ -14,8 +14,9 @@ Actions:
   install         Server-dry-run and install the cn5g release, waiting for Jobs
                   and long-running workload readiness.
   repair-failed-release
-                  Upgrade a failed release with the corrected chart while
-                  proving that its bound MongoDB PVC identity is preserved.
+                  Repair a failed or incomplete release in dependency order,
+                  clear stale service-discovery state, and prove that its
+                  bound MongoDB PVC identity is preserved.
   recover-failed-install --confirm
                   Remove only a failed release and its verified unbound PVC;
                   preserve the namespace and subscriber Secret for retry.
@@ -328,6 +329,174 @@ show_status() {
     -o wide
 }
 
+verify_owned_deployment() {
+  local component=$1 deployment_name deployment_json
+  local observed_instance observed_component observed_manager
+  deployment_name="${CN5G_HELM_RELEASE_NAME}-${component}"
+  deployment_json=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    get deployment "$deployment_name" --output json)
+  observed_instance=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/instance"] // ""' \
+    <<<"$deployment_json")
+  observed_component=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/component"] // ""' \
+    <<<"$deployment_json")
+  observed_manager=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/managed-by"] // ""' \
+    <<<"$deployment_json")
+  if [[ $observed_instance != "$CN5G_HELM_RELEASE_NAME" || \
+        $observed_component != "$component" || \
+        $observed_manager != "Helm" ]]; then
+    printf 'error: deployment ownership contract failed: %s\n' \
+      "$deployment_name" >&2
+    return 1
+  fi
+}
+
+wait_for_deployment() {
+  local component=$1
+  verify_owned_deployment "$component"
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    rollout status "deployment/${CN5G_HELM_RELEASE_NAME}-${component}" \
+    --timeout=120s
+  printf 'deployment=%s readiness=pass\n' "$component"
+}
+
+restart_project_deployment() {
+  local component=$1 selector
+  selector="app.kubernetes.io/component=${component},app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}"
+  verify_owned_deployment "$component"
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" delete pod \
+    --selector "$selector" \
+    --wait=true --timeout=90s
+  wait_for_deployment "$component"
+  printf 'deployment=%s cache_reset=pass\n' "$component"
+}
+
+wait_for_subscriber_job() {
+  local revision=$1 job_name job_json complete failed attempt
+  job_name="${CN5G_HELM_RELEASE_NAME}-subscriber-init-r${revision}"
+  for attempt in $(seq 1 90); do
+    job_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      get job "$job_name" --output json 2>/dev/null || true)
+    if [[ -n $job_json ]]; then
+      complete=$(jq -r \
+        '[.status.conditions[]? | select(.type == "Complete" and .status == "True")] | length' \
+        <<<"$job_json")
+      failed=$(jq -r \
+        '[.status.conditions[]? | select(.type == "Failed" and .status == "True")] | length' \
+        <<<"$job_json")
+      if [[ $failed != "0" ]]; then
+        printf 'error: subscriber initialization Job failed: %s\n' \
+          "$job_name" >&2
+        return 1
+      fi
+      if [[ $complete == "1" ]]; then
+        printf 'subscriber_job=%s completion=pass\n' "$job_name"
+        return
+      fi
+    fi
+    sleep 2
+  done
+  printf 'error: subscriber initialization Job timed out: %s\n' \
+    "$job_name" >&2
+  return 1
+}
+
+verify_runtime_sbi_advertisements() {
+  local component expected
+  for component in nrf scp amf ausf udm udr pcf nssf smf; do
+    expected="advertise: ${CN5G_HELM_RELEASE_NAME}-${component}."
+    expected+="${CN5G_KUBERNETES_NAMESPACE}.svc.cluster.local"
+    if ! kubectl --kubeconfig "$kubeconfig" \
+        --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+        exec "deployment/${CN5G_HELM_RELEASE_NAME}-${component}" \
+        --container "$component" -- grep -Fq "$expected" \
+        "/etc/open5gs/${component}.yaml"; then
+      printf 'error: stable SBI advertisement is absent: %s\n' \
+        "$component" >&2
+      return 1
+    fi
+  done
+  printf 'stable_sbi_advertisements=pass\n'
+}
+
+get_nrf_collection() {
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    exec "deployment/${CN5G_HELM_RELEASE_NAME}-nrf" --container nrf -- \
+    curl --http2-prior-knowledge --fail --silent --show-error \
+    "http://${CN5G_HELM_RELEASE_NAME}-nrf:7777/nnrf-nfm/v1/nf-instances"
+}
+
+wait_for_nrf_profiles() {
+  local collection count attempt
+  for attempt in $(seq 1 45); do
+    collection=$(get_nrf_collection 2>/dev/null || true)
+    count=$(jq -r '._links.totalItemCount // 0' <<<"${collection:-{}}")
+    if [[ $count == "9" ]]; then
+      printf '%s\n' "$collection"
+      return
+    fi
+    sleep 2
+  done
+  printf 'error: NRF did not converge to nine registered SBI profiles\n' >&2
+  return 1
+}
+
+verify_nrf_profiles() {
+  local collection profile_url profile_json nf_type expected_fqdn
+  local observed_fqdn stale_address
+  local -a profile_urls
+  collection=$(wait_for_nrf_profiles)
+  mapfile -t profile_urls < <(jq -er '._links.item[].href' <<<"$collection")
+  if [[ ${#profile_urls[@]} -ne 9 ]]; then
+    printf 'error: NRF profile URL count is unexpected\n' >&2
+    return 1
+  fi
+  for profile_url in "${profile_urls[@]}"; do
+    profile_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      exec "deployment/${CN5G_HELM_RELEASE_NAME}-nrf" --container nrf -- \
+      curl --http2-prior-knowledge --fail --silent --show-error \
+      "$profile_url")
+    nf_type=$(jq -er '.nfType' <<<"$profile_json")
+    expected_fqdn="${CN5G_HELM_RELEASE_NAME}-${nf_type,,}."
+    expected_fqdn+="${CN5G_KUBERNETES_NAMESPACE}.svc.cluster.local"
+    observed_fqdn=$(jq -r '.fqdn // ""' <<<"$profile_json")
+    stale_address=$(jq -r \
+      '[.ipv4Addresses[]?, .nfServiceList[]?.ipEndPoints[]?.ipv4Address] | map(select(startswith("10.244."))) | length' \
+      <<<"$profile_json")
+    if [[ $observed_fqdn != "$expected_fqdn" || $stale_address != "0" ]]; then
+      printf 'error: NRF profile uses an unstable endpoint: %s\n' \
+        "$nf_type" >&2
+      printf 'observed_fqdn=%s expected_fqdn=%s pod_addresses=%s\n' \
+        "${observed_fqdn:-<none>}" "$expected_fqdn" "$stale_address" >&2
+      return 1
+    fi
+  done
+  printf 'nrf_stable_service_profiles=pass count=9\n'
+}
+
+verify_ue_protocol_state() {
+  local ue_logs
+  ue_logs=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    logs "deployment/${CN5G_HELM_RELEASE_NAME}-ue" --container ue \
+    --tail=200)
+  if [[ $ue_logs != *"Initial Registration is successful"* || \
+        $ue_logs != *"PDU Session establishment is successful"* || \
+        $ue_logs != *"TUN interface[uesimtun0"* ]]; then
+    printf 'error: UE protocol milestones are incomplete after repair\n' >&2
+    return 1
+  fi
+  printf 'ue_registration=pass\npdu_session=pass\nue_tun=pass\n'
+}
+
 recover_failed_install() {
   local release_json release_status release_count release_present=false
   local pvc_name pvc_json pvc_phase pvc_volume pvc_class pvc_present=false
@@ -427,17 +596,35 @@ repair_failed_release() {
   local release_json release_status release_version next_revision rollout_token
   local pvc_name pvc_json pvc_phase pvc_volume
   local pvc_class pvc_instance pvc_component pvc_uid repaired_pvc_json
-  local repaired_pvc_uid repaired_pvc_volume
+  local repaired_pvc_uid repaired_pvc_volume ue_available component
   pvc_name=mongodb-data-cn5g-mongodb-0
   release_json=$(helm --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
     status "$CN5G_HELM_RELEASE_NAME" --output json)
   release_status=$(jq -er '.info.status' <<<"$release_json")
-  if [[ $release_status != "failed" ]]; then
-    printf 'error: repair requires a failed release; observed=%s\n' \
-      "$release_status" >&2
-    return 1
-  fi
+  case "$release_status" in
+    failed)
+      printf 'failed_release=%s status=verified\n' \
+        "$CN5G_HELM_RELEASE_NAME"
+      ;;
+    deployed)
+      ue_available=$(kubectl --kubeconfig "$kubeconfig" \
+        --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+        get deployment "${CN5G_HELM_RELEASE_NAME}-ue" \
+        --output json | jq -r '.status.availableReplicas // 0')
+      if [[ $ue_available != "0" ]]; then
+        printf 'error: release is already deployed and UE is available\n' >&2
+        return 1
+      fi
+      printf 'incomplete_release=%s status=deployed-ue-unavailable\n' \
+        "$CN5G_HELM_RELEASE_NAME"
+      ;;
+    *)
+      printf 'error: repair requires a failed or incomplete release; observed=%s\n' \
+        "$release_status" >&2
+      return 1
+      ;;
+  esac
   release_version=$(jq -er \
     '.version | select(type == "number" and . >= 1)' <<<"$release_json")
   next_revision=$((release_version + 1))
@@ -463,7 +650,6 @@ repair_failed_release() {
       "$pvc_instance" "$pvc_component" >&2
     return 1
   fi
-  printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
   printf 'mongodb_pvc=%s state=bound-and-preserved\n' "$pvc_name"
   printf 'repair_rollout_token=%s\n' "$rollout_token"
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
@@ -475,8 +661,32 @@ repair_failed_release() {
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
     --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    --reuse-values --set-string global.ranRolloutToken="$rollout_token" \
-    --wait=watcher --wait-for-jobs --timeout=8m
+    --reuse-values --set-string global.ranRolloutToken="$rollout_token"
+  printf 'helm_upgrade_submission=pass\n'
+
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    rollout status "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" \
+    --timeout=120s
+  printf 'mongodb_statefulset_readiness=pass\n'
+  wait_for_subscriber_job "$next_revision"
+  for component in nrf udr udm ausf pcf nssf smf scp amf upf data-network; do
+    wait_for_deployment "$component"
+  done
+  verify_runtime_sbi_advertisements
+
+  restart_project_deployment nrf
+  wait_for_nrf_profiles >/dev/null
+  for component in udr udm ausf pcf nssf smf; do
+    restart_project_deployment "$component"
+  done
+  restart_project_deployment scp
+  restart_project_deployment amf
+  verify_nrf_profiles
+  restart_project_deployment gnb
+  restart_project_deployment ue
+  verify_ue_protocol_state
+
   repaired_pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
     --output json)
@@ -488,6 +698,16 @@ repair_failed_release() {
     return 1
   fi
   printf 'mongodb_pvc_identity=preserved\n'
+  release_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  release_status=$(jq -er '.info.status' <<<"$release_json")
+  if [[ $release_status != "deployed" ]]; then
+    printf 'error: repaired Helm release is not deployed: %s\n' \
+      "$release_status" >&2
+    return 1
+  fi
+  printf 'helm_release_status=deployed\n'
   show_status
   printf 'phase04_failed_release_repair=pass\n'
 }

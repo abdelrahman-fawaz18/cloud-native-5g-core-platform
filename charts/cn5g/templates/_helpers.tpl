@@ -10,6 +10,10 @@ cn5g
 {{- printf "%s-%s" (include "cn5g.fullname" .root) .component | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
+{{- define "cn5g.componentFqdn" -}}
+{{- printf "%s.%s.svc.cluster.local" (include "cn5g.componentName" .) .root.Release.Namespace -}}
+{{- end }}
+
 {{- define "cn5g.labels" -}}
 app.kubernetes.io/name: {{ include "cn5g.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}

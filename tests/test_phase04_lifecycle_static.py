@@ -166,6 +166,8 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn("failed_install_recovery=pass", self.script)
 
     def test_failed_release_repair_preserves_bound_mongodb_storage(self):
+        repair_body = self.script.split("repair_failed_release() {", 1)[1]
+        repair_body = repair_body.split("\n}\n\ncase", 1)[0]
         self.assertIn("repair-failed-release", self.script)
         self.assertIn('release_status != "failed"', self.script)
         self.assertIn('pvc_phase != "Bound"', self.script)
@@ -181,6 +183,18 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
             2,
         )
         self.assertIn("server_side_upgrade_dry_run=pass", self.script)
+        self.assertIn("helm_upgrade_submission=pass", self.script)
+        self.assertNotIn("--wait=watcher", repair_body)
+        self.assertIn('deployed-ue-unavailable', repair_body)
+        self.assertIn("stable_sbi_advertisements=pass", self.script)
+        self.assertIn("nrf_stable_service_profiles=pass", self.script)
+        self.assertIn("restart_project_deployment nrf", self.script)
+        self.assertIn("restart_project_deployment scp", self.script)
+        self.assertIn("restart_project_deployment amf", self.script)
+        self.assertIn("restart_project_deployment gnb", self.script)
+        self.assertIn("restart_project_deployment ue", self.script)
+        self.assertIn("verify_ue_protocol_state", self.script)
+        self.assertIn("helm_release_status=deployed", self.script)
         self.assertIn("phase04_failed_release_repair=pass", self.script)
 
     def test_preflight_reuses_accepted_cluster_safety_and_static_gates(self):

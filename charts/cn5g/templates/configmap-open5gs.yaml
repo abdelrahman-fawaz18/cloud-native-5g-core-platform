@@ -13,14 +13,18 @@ data:
         - plmn_id: {mcc: {{ .Values.global.plmn.mcc }}, mnc: {{ .Values.global.plmn.mnc }}}
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "nrf") }}
   scp.yaml: |
     logger: {level: info}
     global: {max: {ue: 32}}
     scp:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "scp") }}
         client:
           nrf:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "nrf") }}:7777
@@ -30,7 +34,9 @@ data:
     amf:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "amf") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -62,7 +68,9 @@ data:
     ausf:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "ausf") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -75,7 +83,9 @@ data:
         - {id: 2, scheme: 2, key: /opt/open5gs/etc/open5gs/hnet/secp256r1-2.key}
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "udm") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -86,7 +96,9 @@ data:
     udr:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "udr") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -98,7 +110,9 @@ data:
     pcf:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "pcf") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -111,7 +125,9 @@ data:
     nssf:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "nssf") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
@@ -124,7 +140,9 @@ data:
     smf:
       sbi:
         server:
-          - {address: __POD_IP__, port: 7777}
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "smf") }}
         client:
           scp:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777

@@ -93,6 +93,19 @@ class Phase04ChartStaticTests(unittest.TestCase):
             },
         )
 
+    def test_single_replica_open5gs_components_use_recreate_strategy(self):
+        expected = {
+            "nrf", "scp", "amf", "ausf", "udm", "udr", "pcf",
+            "nssf", "smf", "upf",
+        }
+        observed = {
+            deployment["metadata"]["labels"]["app.kubernetes.io/component"]
+            for deployment in self.objects_of_kind("Deployment")
+            if deployment.get("spec", {}).get("strategy", {}).get("type")
+            == "Recreate"
+        }
+        self.assertTrue(expected.issubset(observed))
+
     def test_schema_rejects_invalid_operational_values(self):
         invalid_sets = (
             ("--set-string", "subscriberSecret.existingSecret="),
@@ -206,6 +219,23 @@ class Phase04ChartStaticTests(unittest.TestCase):
         expected_uri = "db_uri: mongodb://cn5g-mongodb:27017/open5gs"
         for component in ("udm.yaml", "udr.yaml", "pcf.yaml"):
             self.assertIn(expected_uri, open5gs_config[component], component)
+
+    def test_sbi_network_functions_advertise_stable_service_fqdns(self):
+        open5gs_config = next(
+            obj
+            for obj in self.objects_of_kind("ConfigMap")
+            if obj["metadata"]["name"] == "cn5g-open5gs-config"
+        )["data"]
+        for component in (
+            "nrf", "scp", "amf", "ausf", "udm", "udr", "pcf", "nssf", "smf"
+        ):
+            config = open5gs_config[f"{component}.yaml"]
+            self.assertIn("address: __POD_IP__", config, component)
+            self.assertIn(
+                f"advertise: cn5g-{component}.cn5g.svc.cluster.local",
+                config,
+                component,
+            )
 
     def test_mongodb_has_one_persistent_data_claim(self):
         statefulset = self.objects_of_kind("StatefulSet")[0]
