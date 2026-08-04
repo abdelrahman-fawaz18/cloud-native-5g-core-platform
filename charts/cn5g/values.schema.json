@@ -8,9 +8,10 @@
     "global": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rolloutToken", "uePool", "ueGateway", "ueMtu", "plmn", "slice", "dnn"],
+      "required": ["rolloutToken", "ranRolloutToken", "uePool", "ueGateway", "ueMtu", "plmn", "slice", "dnn"],
       "properties": {
         "rolloutToken": {"type": "string", "minLength": 1, "maxLength": 63},
+        "ranRolloutToken": {"type": "string", "minLength": 1, "maxLength": 63},
         "uePool": {"const": "10.60.0.0/24"},
         "ueGateway": {"const": "10.60.0.1"},
         "ueMtu": {"const": 1400},

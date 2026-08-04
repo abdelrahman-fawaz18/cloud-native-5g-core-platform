@@ -243,6 +243,25 @@ class Phase04ChartStaticTests(unittest.TestCase):
                 self.assertGreater(index, 0)
                 self.assertTrue(lines[index - 1].rstrip().endswith("\\"))
 
+    def test_ran_rollout_is_scoped_and_gnb_detects_a_lost_amf_association(self):
+        deployments = {
+            obj["metadata"]["name"]: obj
+            for obj in self.objects_of_kind("Deployment")
+        }
+        for name in ("cn5g-gnb", "cn5g-ue"):
+            annotations = deployments[name]["spec"]["template"]["metadata"][
+                "annotations"
+            ]
+            self.assertEqual(annotations["cn5g.io/rollout-token"], "baseline")
+        gnb = deployments["cn5g-gnb"]["spec"]["template"]["spec"][
+            "containers"
+        ][0]
+        for probe_name in ("readinessProbe", "livenessProbe"):
+            command = gnb[probe_name]["exec"]["command"][-1]
+            self.assertIn("NG Setup procedure is successful", command)
+            self.assertIn("Association terminated for AMF", command)
+            self.assertIn("tail -n 1", command)
+
     def test_rendered_shell_commands_pass_posix_shell_syntax(self):
         checked = 0
         for obj in self.objects:

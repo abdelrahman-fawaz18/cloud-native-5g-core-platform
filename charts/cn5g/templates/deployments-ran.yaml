@@ -15,7 +15,7 @@ spec:
       labels:
         {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 8 }}
       annotations:
-        cn5g.io/rollout-token: {{ .Values.global.rolloutToken | quote }}
+        cn5g.io/rollout-token: {{ .Values.global.ranRolloutToken | quote }}
         checksum/ueransim-config: {{ include (print .Template.BasePath "/configmap-ueransim.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
@@ -80,13 +80,29 @@ spec:
             failureThreshold: 30
           readinessProbe:
             exec:
-              command: ["ueransim-healthcheck", "gnb"]
+              command:
+                - /bin/sh
+                - -ec
+                - >-
+                  last_event=$(grep -h -E
+                  'NG Setup procedure is successful|Association terminated for AMF'
+                  /opt/ueransim/logs/* 2>/dev/null | tail -n 1);
+                  printf '%s\n' "$last_event" |
+                  grep -Fq 'NG Setup procedure is successful'
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 24
           livenessProbe:
             exec:
-              command: ["/bin/sh", "-ec", "kill -0 1"]
+              command:
+                - /bin/sh
+                - -ec
+                - >-
+                  last_event=$(grep -h -E
+                  'NG Setup procedure is successful|Association terminated for AMF'
+                  /opt/ueransim/logs/* 2>/dev/null | tail -n 1);
+                  printf '%s\n' "$last_event" |
+                  grep -Fq 'NG Setup procedure is successful'
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
@@ -123,7 +139,7 @@ spec:
       labels:
         {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 8 }}
       annotations:
-        cn5g.io/rollout-token: {{ .Values.global.rolloutToken | quote }}
+        cn5g.io/rollout-token: {{ .Values.global.ranRolloutToken | quote }}
     spec:
       serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
       automountServiceAccountToken: false

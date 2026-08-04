@@ -176,7 +176,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('rollout_token="repair-r${next_revision}"', self.script)
         self.assertEqual(
             self.script.count(
-                '--reuse-values --set-string global.rolloutToken="$rollout_token"'
+                '--reuse-values --set-string global.ranRolloutToken="$rollout_token"'
             ),
             2,
         )

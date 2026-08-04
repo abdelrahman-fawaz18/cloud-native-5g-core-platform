@@ -469,13 +469,13 @@ repair_failed_release() {
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
     --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    --reuse-values --set-string global.rolloutToken="$rollout_token" \
+    --reuse-values --set-string global.ranRolloutToken="$rollout_token" \
     --dry-run=server --hide-secret >/dev/null
   printf 'server_side_upgrade_dry_run=pass\n'
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
     --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
-    --reuse-values --set-string global.rolloutToken="$rollout_token" \
+    --reuse-values --set-string global.ranRolloutToken="$rollout_token" \
     --wait=watcher --wait-for-jobs --timeout=8m
   repaired_pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \

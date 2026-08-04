@@ -1,5 +1,6 @@
 global:
   rolloutToken: baseline
+  ranRolloutToken: baseline
   uePool: 10.60.0.0/24
   ueGateway: 10.60.0.1
   ueMtu: 1400
