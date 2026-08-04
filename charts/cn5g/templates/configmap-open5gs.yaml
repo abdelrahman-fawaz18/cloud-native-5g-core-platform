@@ -92,6 +92,7 @@ data:
             - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
     db_uri: mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
   pcf.yaml: |
+    db_uri: mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
     logger: {level: info}
     global: {max: {ue: 32}}
     pcf:

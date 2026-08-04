@@ -197,6 +197,16 @@ class Phase04ChartStaticTests(unittest.TestCase):
         self.assertNotIn("172.28.0.", config_text)
         self.assertNotIn("10.62.0.", config_text)
 
+    def test_database_consumers_reference_the_mongodb_service(self):
+        open5gs_config = next(
+            obj
+            for obj in self.objects_of_kind("ConfigMap")
+            if obj["metadata"]["name"] == "cn5g-open5gs-config"
+        )["data"]
+        expected_uri = "db_uri: mongodb://cn5g-mongodb:27017/open5gs"
+        for component in ("udm.yaml", "udr.yaml", "pcf.yaml"):
+            self.assertIn(expected_uri, open5gs_config[component], component)
+
     def test_mongodb_has_one_persistent_data_claim(self):
         statefulset = self.objects_of_kind("StatefulSet")[0]
         claims = statefulset["spec"]["volumeClaimTemplates"]
