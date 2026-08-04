@@ -172,6 +172,14 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('pvc_class != "standard"', self.script)
         self.assertIn('repaired_pvc_uid != "$pvc_uid"', self.script)
         self.assertIn('repaired_pvc_volume != "$pvc_volume"', self.script)
+        self.assertIn('next_revision=$((release_version + 1))', self.script)
+        self.assertIn('rollout_token="repair-r${next_revision}"', self.script)
+        self.assertEqual(
+            self.script.count(
+                '--reuse-values --set-string global.rolloutToken="$rollout_token"'
+            ),
+            2,
+        )
         self.assertIn("server_side_upgrade_dry_run=pass", self.script)
         self.assertIn("phase04_failed_release_repair=pass", self.script)
 

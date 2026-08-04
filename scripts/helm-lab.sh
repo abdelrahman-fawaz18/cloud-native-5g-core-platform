@@ -424,7 +424,8 @@ recover_failed_install() {
 }
 
 repair_failed_release() {
-  local release_json release_status pvc_name pvc_json pvc_phase pvc_volume
+  local release_json release_status release_version next_revision rollout_token
+  local pvc_name pvc_json pvc_phase pvc_volume
   local pvc_class pvc_instance pvc_component pvc_uid repaired_pvc_json
   local repaired_pvc_uid repaired_pvc_volume
   pvc_name=mongodb-data-cn5g-mongodb-0
@@ -437,6 +438,10 @@ repair_failed_release() {
       "$release_status" >&2
     return 1
   fi
+  release_version=$(jq -er \
+    '.version | select(type == "number" and . >= 1)' <<<"$release_json")
+  next_revision=$((release_version + 1))
+  rollout_token="repair-r${next_revision}"
   pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
     --output json)
@@ -460,14 +465,17 @@ repair_failed_release() {
   fi
   printf 'failed_release=%s status=verified\n' "$CN5G_HELM_RELEASE_NAME"
   printf 'mongodb_pvc=%s state=bound-and-preserved\n' "$pvc_name"
+  printf 'repair_rollout_token=%s\n' "$rollout_token"
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
     --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --reuse-values --set-string global.rolloutToken="$rollout_token" \
     --dry-run=server --hide-secret >/dev/null
   printf 'server_side_upgrade_dry_run=pass\n'
   helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
     --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --reuse-values --set-string global.rolloutToken="$rollout_token" \
     --wait=watcher --wait-for-jobs --timeout=8m
   repaired_pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
