@@ -29,6 +29,32 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_nrf_profile_count_parser_returns_one_strict_value(self):
+        function = re.search(
+            r"^nrf_collection_count\(\) \{\n.*?^\}",
+            self.script,
+            flags=re.M | re.S,
+        )
+        self.assertIsNotNone(function)
+        harness = function.group(0) + '\nnrf_collection_count "$1"\n'
+        cases = (
+            ('{"_links":{"totalItemCount":9}}', "9\n"),
+            ('{"_links":{}}', "0\n"),
+            ('{"_links":{"totalItemCount":"9"}}', "0\n"),
+            ('{"_links":{"totalItemCount":9}}}', "0\n"),
+            ("", "0\n"),
+        )
+        for payload, expected in cases:
+            with self.subTest(payload=payload):
+                result = subprocess.run(
+                    ["bash", "-c", harness, "nrf-count-test", payload],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+
     def test_lifecycle_uses_repository_kubeconfig_and_exact_identity(self):
         self.assertIn("artifacts/kubernetes/cn5g.kubeconfig", self.script)
         self.assertIn('CN5G_HELM_RELEASE_NAME != "cn5g"', self.script)
@@ -37,10 +63,8 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('--namespace "$CN5G_KUBERNETES_NAMESPACE"', self.script)
         self.assertNotIn("$HOME", self.body)
         self.assertNotIn("~/.kube", self.body)
-        self.assertIn(
-            "for required_command in docker kind kubectl helm jq sha256sum tar",
-            self.script,
-        )
+        for command in ("docker", "kind", "kubectl", "helm", "jq", "sha256sum", "tar"):
+            self.assertIn(command, self.script)
 
     def test_image_load_requires_accepted_local_identities(self):
         self.assertIn("OPEN5GS_LOCAL_IMAGE_ID", self.script)
@@ -149,7 +173,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
 
     def test_failed_install_recovery_is_confirmed_and_unbound_only(self):
         self.assertIn(
-            'action == "recover-failed-install" && $confirmation != "--confirm"',
+            'action == "recover-failed-install" || $action == "uninstall"',
             self.script,
         )
         self.assertIn('release_status != "failed"', self.script)
@@ -188,12 +212,38 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
         self.assertIn('deployed-ue-unavailable', repair_body)
         self.assertIn("stable_sbi_advertisements=pass", self.script)
         self.assertIn("nrf_stable_service_profiles=pass", self.script)
+        self.assertIn("nrf_collection_count", self.script)
+        self.assertIn('count=$(nrf_collection_count "${collection:-}")', self.script)
+        self.assertNotIn('${collection:-{}}', self.script)
+        self.assertIn("ensure_service_discovery_convergence", self.script)
+        self.assertIn("nrf_profile_count=%s state=incomplete", self.script)
+        self.assertIn("service_discovery_recovery=pass", self.script)
         self.assertIn("restart_project_deployment nrf", self.script)
         self.assertIn("restart_project_deployment scp", self.script)
         self.assertIn("restart_project_deployment amf", self.script)
         self.assertIn("restart_project_deployment gnb", self.script)
         self.assertIn("restart_project_deployment ue", self.script)
         self.assertIn("verify_ue_protocol_state", self.script)
+        self.assertIn("reconcile_5g_session_chain", self.script)
+        self.assertIn("wait_for_upf_protocol_state", self.script)
+        self.assertIn("session_chain_reconciliation=pass", self.script)
+        self.assertIn("UPF state is keyed to the current SMF PFCP peer", self.script)
+        session_chain = re.search(
+            r"reconcile_5g_session_chain\(\) \{(.*?)\n\}",
+            self.script,
+            flags=re.S,
+        ).group(1)
+        ordered_steps = (
+            "restart_project_deployment upf",
+            "restart_project_deployment smf",
+            "verify_nrf_profiles",
+            "restart_project_deployment gnb",
+            "restart_project_deployment ue",
+            "verify_ue_protocol_state",
+            "wait_for_upf_protocol_state",
+        )
+        positions = [session_chain.index(step) for step in ordered_steps]
+        self.assertEqual(positions, sorted(positions))
         self.assertIn("helm_release_status=deployed", self.script)
         self.assertIn("phase04_failed_release_repair=pass", self.script)
 
@@ -212,7 +262,7 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
             "docker volume prune",
             "iptables",
             "nft ",
-            "ip route add",
+            "sudo ip route",
             "ip route replace",
             "systemctl stop",
             "systemctl disable",
@@ -220,6 +270,84 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
             "privileged: true",
         ):
             self.assertNotIn(forbidden, self.body)
+
+    def test_phase04_lifecycle_actions_are_scoped_and_stateful(self):
+        for action in (
+            "validate", "observe-resources", "test-persistence", "upgrade", "rollback",
+            "uninstall", "verify-reinstall",
+        ):
+            self.assertIn(action, self.script)
+        self.assertIn("artifacts/kubernetes/phase-04-upgrade.state", self.script)
+        self.assertIn("artifacts/kubernetes/phase-04-uninstall.state", self.script)
+        self.assertIn("CN5G_N6_RETURN_PROTOCOL", self.script)
+        self.assertIn("CN5G_N6_RETURN_METRIC", self.script)
+        self.assertIn('docker exec "$node_container" ip -4 route add', self.script)
+        self.assertIn('docker exec "$node_container" ip -4 route del', self.script)
+        self.assertIn("refusing to replace an unrecognized kind-node route", self.script)
+        self.assertIn("refusing to remove an unrecognized kind-node route", self.script)
+        self.assertNotIn("ip netns", self.script)
+
+    def test_resource_observation_is_read_only_and_compares_contracts(self):
+        self.assertIn("component_cgroup_sample", self.script)
+        self.assertIn("component_resource_contract", self.script)
+        self.assertIn("observe_runtime_resources", self.script)
+        self.assertIn("/sys/fs/cgroup/cpu.stat", self.script)
+        self.assertIn("/sys/fs/cgroup/memory.current", self.script)
+        self.assertIn("/sys/fs/cgroup/memory.peak", self.script)
+        self.assertIn("resource_observation_window_seconds=10", self.script)
+        self.assertIn("cpu_average_millicores", self.script)
+        self.assertIn("request_cpu=", self.script)
+        self.assertIn("limit_memory=", self.script)
+        self.assertIn(
+            "resource_observation=pass scope=single-ue-steady-state",
+            self.script,
+        )
+
+    def test_persistence_upgrade_rollback_and_uninstall_have_identity_gates(self):
+        self.assertIn("cn5g_phase04_evidence", self.script)
+        self.assertIn("mongodb_pod_recreation_persistence=pass", self.script)
+        self.assertIn("phase04_upgrade=pass", self.script)
+        self.assertIn("phase04_rollback=pass", self.script)
+        self.assertIn("phase04_uninstall=pass", self.script)
+        self.assertIn("helm_reinstall_persistence=pass", self.script)
+        self.assertIn('helm rollback "$CN5G_HELM_RELEASE_NAME"', self.script)
+        self.assertIn('helm uninstall "$CN5G_HELM_RELEASE_NAME"', self.script)
+        self.assertIn("mongodb_pvc_identity=preserved", self.script)
+        self.assertIn("mongodb_pvc=retained-bound", self.script)
+        self.assertIn("subscriber_secret=retained-project-owned", self.script)
+        self.assertIn("remove_completed_historical_subscriber_jobs", self.script)
+        self.assertIn("historical_subscriber_jobs_removed=", self.script)
+        self.assertIn("completed Helm ownership contract", self.script)
+        self.assertIn('meta.helm.sh/release-name', self.script)
+        self.assertIn('meta.helm.sh/release-namespace', self.script)
+        self.assertIn("scoped_uninstall_resume=pre-release-removal", self.script)
+        self.assertIn("scoped_uninstall_resume=post-release-removal", self.script)
+        self.assertIn("saved uninstall state does not match retained resources", self.script)
+        self.assertIn('converge_deployed_release "$installed_revision"', self.script)
+        self.assertIn("controlled_upgrade_resume=failed-revision-", self.script)
+        self.assertIn("controlled_upgrade_resume=pre-apply-retry", self.script)
+        self.assertIn("controlled_upgrade_resume=post-apply-validation", self.script)
+        self.assertIn("replace_lifecycle_state", self.script)
+        self.assertIn("migrate_recreate_strategies", self.script)
+        self.assertIn('"op":"remove","path":"/spec/strategy/rollingUpdate"', self.script)
+        self.assertIn('"op":"replace","path":"/spec/strategy/type","value":"Recreate"', self.script)
+        self.assertIn("strategy_migration=rolling-update-to-recreate", self.script)
+        self.assertIn("deployment_strategy_migration=pass", self.script)
+        self.assertIn('--dry-run=server --output json', self.script)
+        self.assertIn("server-side strategy migration preview failed", self.script)
+        self.assertIn("migrate_rolling_update_strategies", self.script)
+        self.assertIn("rollback_strategy_migration=pass", self.script)
+        self.assertIn("rollback_strategy=recreate-to-rolling-update", self.script)
+        self.assertIn("server-side rollback strategy preview failed", self.script)
+        self.assertIn("server_side_rollback_dry_run=pass", self.script)
+        self.assertIn("--dry-run=server >/dev/null", self.script)
+        self.assertIn("expected_rollback_revision", self.script)
+        self.assertIn("controlled_rollback_resume=pre-apply", self.script)
+        self.assertIn(
+            "controlled_rollback_resume=post-apply-validation", self.script
+        )
+        self.assertIn("controlled_rollback_resume=failed-revision-", self.script)
+        self.assertIn('converge_deployed_release "$baseline_revision"', self.script)
 
     def test_public_script_does_not_embed_local_identity(self):
         self.assertNotIn("/home/", self.script)

@@ -9,7 +9,11 @@ metadata:
     {{- include "cn5g.componentLabels" (dict "root" $root "component" $component) | nindent 4 }}
 spec:
   replicas: 1
-  strategy: {type: Recreate}
+  strategy:
+    type: Recreate
+    # Explicit null removes a RollingUpdate subfield retained by server-side
+    # apply when an existing Deployment migrates to Recreate.
+    rollingUpdate: null
   selector:
     matchLabels:
       {{- include "cn5g.selectorLabels" (dict "root" $root "component" $component) | nindent 6 }}

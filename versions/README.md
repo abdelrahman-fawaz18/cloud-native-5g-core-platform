@@ -22,5 +22,5 @@ Current manifests:
 - `phase-03.env`: accepted kind, Kubernetes, kubectl, node-image, ownership,
   cluster-network, probe-image, and cleanup inputs for the Kubernetes
   feasibility baseline.
-- `phase-04.env`: candidate Helm artifact identity and project-owned release,
-  namespace, and chart-version contract for the single-UE platform.
+- `phase-04.env`: accepted Helm artifact identity and project-owned release,
+  namespace, chart-version, and N6 route contract for the single-UE platform.

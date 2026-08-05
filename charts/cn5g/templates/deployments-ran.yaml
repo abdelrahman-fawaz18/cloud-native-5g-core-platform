@@ -6,7 +6,9 @@ metadata:
     {{- include "cn5g.componentLabels" (dict "root" . "component" "gnb") | nindent 4 }}
 spec:
   replicas: 1
-  strategy: {type: Recreate}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 6 }}
@@ -130,7 +132,9 @@ metadata:
     {{- include "cn5g.componentLabels" (dict "root" . "component" "ue") | nindent 4 }}
 spec:
   replicas: 1
-  strategy: {type: Recreate}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 6 }}

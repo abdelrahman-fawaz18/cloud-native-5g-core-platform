@@ -33,7 +33,7 @@ class Phase04ToolingStaticTests(unittest.TestCase):
     def test_helm_inputs_are_exact_and_integrity_checked(self):
         self.assertEqual(self.manifest["HELM_VERSION"], "4.2.0")
         self.assertEqual(self.manifest["HELM_GIT_COMMIT"], "0646808")
-        self.assertEqual(self.manifest["PHASE_04_STATUS"], "candidate")
+        self.assertEqual(self.manifest["PHASE_04_STATUS"], "accepted")
         for key in (
             "HELM_LINUX_AMD64_ARCHIVE_SHA256",
             "HELM_LINUX_AMD64_BINARY_SHA256",

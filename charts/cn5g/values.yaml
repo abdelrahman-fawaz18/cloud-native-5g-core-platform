@@ -45,12 +45,12 @@ mongodb:
   storageClassName: standard
   storageSize: 2Gi
   resources:
-    requests: {cpu: 50m, memory: 192Mi}
+    requests: {cpu: 200m, memory: 256Mi}
     limits: {cpu: 500m, memory: 768Mi}
 
 open5gs:
   resources:
-    requests: {cpu: 10m, memory: 32Mi}
+    requests: {cpu: 25m, memory: 64Mi}
     limits: {cpu: 250m, memory: 256Mi}
   upfResources:
     requests: {cpu: 20m, memory: 64Mi}
@@ -63,7 +63,7 @@ ueransim:
 
 dataNetwork:
   resources:
-    requests: {cpu: 5m, memory: 8Mi}
+    requests: {cpu: 10m, memory: 16Mi}
     limits: {cpu: 100m, memory: 64Mi}
 
 subscriberJob:

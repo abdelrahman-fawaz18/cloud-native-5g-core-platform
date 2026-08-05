@@ -16,16 +16,15 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The repository boundary, host preflight, container baseline, and Kubernetes
-networking feasibility gate are complete. Pinned images produce a healthy
-Compose deployment in which a synthetic UE registers, establishes an IPv4
-session, and exchanges controlled traffic through the UPF. A disposable,
-single-node kind cluster has independently passed Pod and Service transport,
-TUN-device, minimum-capability, routed N6, packet-visibility, and scoped
-cleanup tests. kind is therefore the accepted local Kubernetes baseline for
-Phase 4. See the [project status](docs/project-status.md), [container
-report](reports/02_container_baseline.md), and [architecture
-decisions](docs/adr/README.md).
+The repository boundary, host preflight, container baseline, Kubernetes
+networking feasibility gate, and Helm-managed single-UE platform are complete.
+The accepted release runs Open5GS, MongoDB, UERANSIM, and a controlled data
+endpoint in a disposable single-node kind cluster. It has passed real N2
+SCTP/NGAP, 5G-AKA, NAS security, registration, PDU-session, N4 PFCP, N3 GTP-U,
+bidirectional N6 traffic, persistence, upgrade, rollback, uninstall/reinstall,
+least-privilege, and resource-observation gates. See the [project
+status](docs/project-status.md), [container report](reports/02_container_baseline.md),
+and [architecture decisions](docs/adr/README.md).
 
 ## Verified Phase 2 Baseline
 
@@ -129,11 +128,56 @@ application in synthetic UE Pod
   -> router Pod -> tunnel -> synthetic UE Pod
 ```
 
-The synthetic tunnel proves Kubernetes routing, TUN, capability, return-path,
-and packet-observation behavior. It is not an implementation of GTP-U and does
-not prove NGAP, PFCP, or GTP-U message semantics. Those protocols will be
-validated with the real Open5GS/UERANSIM workloads in the Helm-managed Phase 4
-platform.
+The synthetic tunnel proved Kubernetes routing, TUN, capability, return-path,
+and packet-observation behavior. It was not an implementation of GTP-U; Phase
+4 subsequently proved the real NGAP, PFCP, and GTP-U semantics with the
+Helm-managed Open5GS/UERANSIM platform.
+
+## Verified Phase 4 Helm Platform
+
+Phase 4 packages the single-UE topology as the `cn5g` Helm release in the
+`cn5g` namespace. Kubernetes manages thirteen Deployments, one MongoDB
+StatefulSet with a 2 GiB PersistentVolumeClaim, one revision-scoped subscriber
+Job, thirteen internal Services, non-secret ConfigMaps, and a workload
+ServiceAccount with no Kubernetes API permissions. Synthetic subscriber
+material is generated into ignored, permission-restricted files and supplied
+through a pre-created Secret; Helm never renders or stores those values in the
+repository.
+
+```text
+Helm release: cn5g
+├── stable SBI Services/DNS ──> NRF, SCP, AMF, AUSF, UDM, UDR, PCF, NSSF, SMF
+├── N2 SCTP/38412 ────────────> gNB <-> AMF
+├── N4 UDP/8805 ──────────────> SMF <-> UPF
+├── N3 GTP-U UDP/2152 ────────> gNB <-> UPF
+├── UE session network ───────> uesimtun0 10.60.0.2 <-> ogstun 10.60.0.1
+├── exact kind-node route ────> 10.60.0.0/24 via the current UPF Pod
+├── N6 data path ─────────────> UPF <-> controlled data-network Pod
+└── persistent state ─────────> MongoDB StatefulSet -> retained PVC/PV
+```
+
+Pod addresses and node-side `veth` names change after replacement. SBI
+consumers therefore use stable Service DNS names, while runtime configuration
+advertises stable SBI names and explicit Pod-local transport addresses where
+the 5G protocols require them. The N6 return route is ownership-marked and
+reconciled inside the disposable kind node, never in the Ubuntu host network
+namespace.
+
+The lifecycle helper performs image-identity checks, server-side dry runs,
+ordered readiness, stable NRF-profile validation, deterministic session-chain
+reconciliation, full protocol validation, and identity-gated cleanup. A
+controlled upgrade reached revision 10, rollback created revision 11 from the
+accepted revision-7 configuration, and a subsequent uninstall/reinstall
+restarted release history at revision 1 while preserving the exact MongoDB
+claim and its synthetic evidence marker.
+
+Resource requests are based on two ten-second cgroup v2 observations of the
+validated single-UE steady state. The accepted requests are 200 mCPU/256 MiB
+for MongoDB, 25 mCPU/64 MiB for the shared Open5GS control-plane profile,
+20 mCPU/64 MiB for UPF, 10 mCPU/16 MiB for the data endpoint, and
+25 mCPU/96 MiB for each UERANSIM workload. Limits retain startup and transient
+headroom. These figures are a local single-UE scheduling baseline, not a
+production-capacity result.
 
 ## Target Capabilities
 
@@ -187,10 +231,9 @@ flowchart LR
     UE --> LOGS
 ```
 
-The target topology builds on the accepted kind networking baseline. Exact
-Open5GS Service types, advertised N2/N3/N4 endpoints, storage resources, and
-health probes remain Phase 4 implementation decisions and must pass real
-single-UE protocol validation before they become accepted runtime behavior.
+The target topology builds on the accepted kind and Helm single-UE baseline.
+Phase 5 extends this verified object and network model with concurrent
+synthetic UEs and differentiated DNN or slice behavior.
 
 ## Repository Structure
 
@@ -230,6 +273,9 @@ machine-readable measurements, and concise reports.
 - [Docker Engine installation runbook](docs/runbooks/docker-engine-installation.md)
 - [Compose build, operation, validation, and cleanup runbook](docs/runbooks/compose-baseline.md)
 - [Phase 2 validation and host-safety report](reports/02_container_baseline.md)
+- [Phase 4 single-UE Kubernetes validation summary](reports/README.md#phase-4-single-ue-kubernetes-validation-summary)
+- [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
+- [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)
 
 ## Authoritative References

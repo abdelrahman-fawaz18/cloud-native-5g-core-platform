@@ -51,6 +51,9 @@ class Phase04ChartStaticTests(unittest.TestCase):
             raise AssertionError(second.stderr)
         cls.rendered = first.stdout
         cls.second_render = second.stdout
+        cls.values = yaml.safe_load(
+            (CHART / "values.yaml").read_text(encoding="utf-8")
+        )
         cls.objects = [
             document
             for document in yaml.safe_load_all(cls.rendered)
@@ -105,6 +108,10 @@ class Phase04ChartStaticTests(unittest.TestCase):
             == "Recreate"
         }
         self.assertTrue(expected.issubset(observed))
+        for deployment in self.objects_of_kind("Deployment"):
+            strategy = deployment.get("spec", {}).get("strategy", {})
+            if strategy.get("type") == "Recreate":
+                self.assertIsNone(strategy.get("rollingUpdate"))
 
     def test_schema_rejects_invalid_operational_values(self):
         invalid_sets = (
@@ -163,6 +170,20 @@ class Phase04ChartStaticTests(unittest.TestCase):
                     self.assertFalse(context.get("privileged", False))
                     self.assertIn("requests", container["resources"])
                     self.assertIn("limits", container["resources"])
+
+    def test_resource_requests_match_phase04_observation(self):
+        self.assertEqual(
+            self.values["mongodb"]["resources"]["requests"],
+            {"cpu": "200m", "memory": "256Mi"},
+        )
+        self.assertEqual(
+            self.values["open5gs"]["resources"]["requests"],
+            {"cpu": "25m", "memory": "64Mi"},
+        )
+        self.assertEqual(
+            self.values["dataNetwork"]["resources"]["requests"],
+            {"cpu": "10m", "memory": "16Mi"},
+        )
 
     def test_network_capabilities_are_limited_to_upf_and_ue(self):
         observed: dict[str, set[str]] = {}

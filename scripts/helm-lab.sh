@@ -13,6 +13,25 @@ Actions:
   prepare-secret  Create or verify the exact namespace and file-backed Secret.
   install         Server-dry-run and install the cn5g release, waiting for Jobs
                   and long-running workload readiness.
+  validate        Reconcile the exact kind-node N6 return route and prove the
+                  single-UE signalling and bidirectional user plane.
+  observe-resources
+                  Sample per-container cgroup CPU and memory usage and print
+                  it beside the declared Kubernetes requests and limits.
+  test-persistence
+                  Recreate the MongoDB Pod and prove its PVC and a temporary
+                  synthetic marker survive with unchanged identities.
+  upgrade         Apply one controlled rollout-token revision, preserve the
+                  MongoDB PVC, converge the release, and revalidate it.
+  rollback        Roll back the controlled upgrade, preserve the MongoDB PVC,
+                  converge the release, and revalidate it.
+  uninstall --confirm
+                  Mark persistence, remove the exact N6 route and Helm release,
+                  retain the bound PVC, namespace, and subscriber Secret, and
+                  verify scoped removal.
+  verify-reinstall
+                  After a fresh install, prove the uninstall marker and exact
+                  PVC survived, then remove the temporary evidence collection.
   repair-failed-release
                   Repair a failed or incomplete release in dependency order,
                   clear stale service-discovery state, and prove that its
@@ -35,8 +54,10 @@ if [[ $action == "-h" || $action == "--help" ]]; then
   exit 0
 fi
 case "$action" in
-  preflight|load-images|prepare-secret|install|repair-failed-release) ;;
-  recover-failed-install|status) ;;
+  preflight|load-images|prepare-secret|install|validate|observe-resources|\
+  test-persistence|\
+  upgrade|rollback|verify-reinstall|repair-failed-release) ;;
+  recover-failed-install|uninstall|status) ;;
   *)
     printf 'error: unknown action: %s\n' "${action:-<empty>}" >&2
     usage >&2
@@ -44,8 +65,9 @@ case "$action" in
     ;;
 esac
 confirmation=${2:-}
-if [[ $action == "recover-failed-install" && $confirmation != "--confirm" ]]; then
-  printf 'error: recover-failed-install requires --confirm\n' >&2
+if [[ ( $action == "recover-failed-install" || $action == "uninstall" ) && \
+      $confirmation != "--confirm" ]]; then
+  printf 'error: %s requires --confirm\n' "$action" >&2
   exit 2
 fi
 
@@ -61,7 +83,8 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
   exit 3
 fi
 
-for required_command in docker kind kubectl helm jq sha256sum tar; do
+for required_command in awk base64 chmod cmp date docker helm install jq kind \
+  kubectl sha256sum tar; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     printf 'error: required command is unavailable: %s\n' \
       "$required_command" >&2
@@ -76,10 +99,14 @@ chart="$project_root/charts/cn5g"
 kubeconfig="$project_root/artifacts/kubernetes/cn5g.kubeconfig"
 secret_dir="$project_root/artifacts/secrets/phase-04"
 secret_name=cn5g-subscriber
+upgrade_state="$project_root/artifacts/kubernetes/phase-04-upgrade.state"
+uninstall_state="$project_root/artifacts/kubernetes/phase-04-uninstall.state"
+validator="$script_dir/validate-kubernetes.sh"
 
 for required_file in "$phase02" "$phase03" "$phase04" \
   "$chart/Chart.yaml" "$chart/values.yaml" \
-  "$script_dir/install-helm.sh" "$script_dir/generate-subscriber-secret.sh"; do
+  "$script_dir/install-helm.sh" "$script_dir/generate-subscriber-secret.sh" \
+  "$validator"; do
   if [[ ! -r $required_file ]]; then
     printf 'error: required file is missing or unreadable: %s\n' \
       "$required_file" >&2
@@ -93,6 +120,7 @@ source "$phase02"
 source "$phase03"
 # shellcheck source=../versions/phase-04.env
 source "$phase04"
+node_container="${KIND_CLUSTER_NAME}-control-plane"
 
 mongodb_load_reference=${MONGODB_IMAGE%@sha256:*}
 mongodb_repository=${mongodb_load_reference%:*}
@@ -104,6 +132,7 @@ required_variables=(
   DATA_NETWORK_LOCAL_IMAGE DATA_NETWORK_LOCAL_IMAGE_ID
   MONGODB_IMAGE KIND_CLUSTER_NAME KIND_CONTEXT_NAME
   CN5G_HELM_RELEASE_NAME CN5G_KUBERNETES_NAMESPACE
+  CN5G_N6_RETURN_SUBNET CN5G_N6_RETURN_PROTOCOL CN5G_N6_RETURN_METRIC
 )
 for variable_name in "${required_variables[@]}"; do
   if [[ -z ${!variable_name:-} ]]; then
@@ -114,7 +143,10 @@ for variable_name in "${required_variables[@]}"; do
 done
 if [[ $KIND_CLUSTER_NAME != "cn5g" || \
       $CN5G_HELM_RELEASE_NAME != "cn5g" || \
-      $CN5G_KUBERNETES_NAMESPACE != "cn5g" ]]; then
+      $CN5G_KUBERNETES_NAMESPACE != "cn5g" || \
+      $CN5G_N6_RETURN_SUBNET != "10.60.0.0/24" || \
+      $CN5G_N6_RETURN_PROTOCOL != "186" || \
+      $CN5G_N6_RETURN_METRIC != "46060" ]]; then
   printf 'error: cluster, release, or namespace ownership contract changed\n' >&2
   exit 5
 fi
@@ -433,11 +465,25 @@ get_nrf_collection() {
     "http://${CN5G_HELM_RELEASE_NAME}-nrf:7777/nnrf-nfm/v1/nf-instances"
 }
 
+nrf_collection_count() {
+  local collection=$1 count
+  if count=$(jq -er '
+      ._links.totalItemCount // 0 |
+      if type == "number" and . >= 0 and floor == . then tostring
+      else error("invalid NRF profile count")
+      end
+    ' <<<"$collection" 2>/dev/null); then
+    printf '%s\n' "$count"
+  else
+    printf '0\n'
+  fi
+}
+
 wait_for_nrf_profiles() {
   local collection count attempt
   for attempt in $(seq 1 45); do
     collection=$(get_nrf_collection 2>/dev/null || true)
-    count=$(jq -r '._links.totalItemCount // 0' <<<"${collection:-{}}")
+    count=$(nrf_collection_count "${collection:-}")
     if [[ $count == "9" ]]; then
       printf '%s\n' "$collection"
       return
@@ -482,6 +528,31 @@ verify_nrf_profiles() {
   printf 'nrf_stable_service_profiles=pass count=9\n'
 }
 
+nrf_profile_count_once() {
+  local collection
+  collection=$(get_nrf_collection 2>/dev/null || true)
+  nrf_collection_count "${collection:-}"
+}
+
+ensure_service_discovery_convergence() {
+  local count component
+  count=$(nrf_profile_count_once)
+  if [[ $count == "9" ]]; then
+    verify_nrf_profiles
+    printf 'service_discovery_recovery=not-required\n'
+    return
+  fi
+  printf 'nrf_profile_count=%s state=incomplete\n' "$count"
+  restart_project_deployment nrf
+  for component in udr udm ausf pcf nssf smf; do
+    restart_project_deployment "$component"
+  done
+  restart_project_deployment scp
+  restart_project_deployment amf
+  verify_nrf_profiles
+  printf 'service_discovery_recovery=pass\n'
+}
+
 verify_ue_protocol_state() {
   local ue_logs
   ue_logs=$(kubectl --kubeconfig "$kubeconfig" \
@@ -495,6 +566,989 @@ verify_ue_protocol_state() {
     return 1
   fi
   printf 'ue_registration=pass\npdu_session=pass\nue_tun=pass\n'
+}
+
+wait_for_upf_protocol_state() {
+  local upf_logs attempt
+  for attempt in $(seq 1 45); do
+    upf_logs=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      logs "deployment/${CN5G_HELM_RELEASE_NAME}-upf" --container upf \
+      --tail=300 2>/dev/null || true)
+    if [[ $upf_logs == *"PFCP associated"* && \
+          $upf_logs == *"[Added] Number of UPF-Sessions is now 1"* && \
+          $upf_logs == *"gtp_connect()"* ]]; then
+      printf 'pfcp_association=pass\npfcp_session=pass\ngtpu_session=pass\n'
+      return
+    fi
+    sleep 2
+  done
+  printf 'error: UPF did not establish the expected PFCP/GTP-U session\n' >&2
+  return 1
+}
+
+reconcile_5g_session_chain() {
+  # UPF state is keyed to the current SMF PFCP peer. Start a fresh UPF first,
+  # then a fresh SMF so the association is learned before the RAN and UE
+  # establish a new PDU session.
+  restart_project_deployment upf
+  restart_project_deployment smf
+  verify_nrf_profiles
+  restart_project_deployment gnb
+  restart_project_deployment ue
+  verify_ue_protocol_state
+  wait_for_upf_protocol_state
+  printf 'session_chain_reconciliation=pass\n'
+}
+
+require_deployed_release() {
+  local release_json release_status
+  release_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  release_status=$(jq -er '.info.status' <<<"$release_json")
+  if [[ $release_status != "deployed" ]]; then
+    printf 'error: Helm release is not deployed: %s\n' \
+      "$release_status" >&2
+    return 1
+  fi
+}
+
+bound_pvc_json() {
+  local pvc_name pvc_json phase volume storage_class instance component
+  pvc_name=mongodb-data-cn5g-mongodb-0
+  pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
+    --output json)
+  phase=$(jq -r '.status.phase // ""' <<<"$pvc_json")
+  volume=$(jq -r '.spec.volumeName // ""' <<<"$pvc_json")
+  storage_class=$(jq -r '.spec.storageClassName // ""' <<<"$pvc_json")
+  instance=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/instance"] // ""' <<<"$pvc_json")
+  component=$(jq -r \
+    '.metadata.labels["app.kubernetes.io/component"] // ""' <<<"$pvc_json")
+  if [[ $phase != "Bound" || -z $volume || \
+        $storage_class != "standard" || $instance != "cn5g" || \
+        $component != "mongodb" ]]; then
+    printf 'error: MongoDB PVC is outside the bound project contract\n' >&2
+    printf 'phase=%s volume=%s class=%s instance=%s component=%s\n' \
+      "$phase" "${volume:-<none>}" "$storage_class" \
+      "$instance" "$component" >&2
+    return 1
+  fi
+  printf '%s\n' "$pvc_json"
+}
+
+component_pod_ip() {
+  local component=$1
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod \
+    --selector "app.kubernetes.io/component=${component},app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}" \
+    --output json | jq -er '
+      [.items[] | select(.status.phase == "Running") | .status.podIP] |
+      if length == 1 then .[0]
+      else error("expected exactly one running component Pod")
+      end
+    '
+}
+
+pod_node_interface() {
+  local pod_ip=$1 pod_route interface
+  pod_route=$(docker exec "$node_container" ip -4 route show "$pod_ip/32")
+  interface=$(awk '{for (field = 1; field <= NF; field++) {
+    if ($field == "dev") {print $(field + 1); exit}}}' <<<"$pod_route")
+  if [[ -z $interface || \
+        $pod_route != "$pod_ip dev $interface scope host"* ]]; then
+    printf 'error: could not identify Pod node-side interface\n' >&2
+    printf 'observed_pod_route=%s\n' "${pod_route:-<absent>}" >&2
+    return 1
+  fi
+  printf '%s\n' "$interface"
+}
+
+recognized_n6_route() {
+  local route=$1
+  [[ $route == "$CN5G_N6_RETURN_SUBNET via 10.244."* && \
+     $route == *" dev veth"* && \
+     $route == *" proto $CN5G_N6_RETURN_PROTOCOL "* && \
+     $route == *" metric $CN5G_N6_RETURN_METRIC "* && \
+     $route == *" onlink"* ]]
+}
+
+reconcile_n6_return_route() {
+  local upf_ip upf_interface existing expected_prefix
+  verify_owned_deployment upf
+  wait_for_deployment upf
+  upf_ip=$(component_pod_ip upf)
+  upf_interface=$(pod_node_interface "$upf_ip")
+  existing=$(docker exec "$node_container" \
+    ip -N -4 route show "$CN5G_N6_RETURN_SUBNET")
+  expected_prefix="$CN5G_N6_RETURN_SUBNET via $upf_ip dev $upf_interface"
+  if [[ -n $existing ]] && ! recognized_n6_route "$existing"; then
+    printf 'error: refusing to replace an unrecognized kind-node route\n' >&2
+    printf 'observed_node_return_route=%s\n' "$existing" >&2
+    return 1
+  fi
+  if [[ $existing == "$expected_prefix "* ]]; then
+    printf 'kind_node_return_route=%s state=already-current\n' "$existing"
+    return
+  fi
+  if [[ -n $existing ]]; then
+    docker exec "$node_container" ip -4 route del \
+      "$CN5G_N6_RETURN_SUBNET" proto "$CN5G_N6_RETURN_PROTOCOL" \
+      metric "$CN5G_N6_RETURN_METRIC"
+    printf 'kind_node_return_route=removed-stale-project-route\n'
+  fi
+  docker exec "$node_container" ip -4 route add \
+    "$CN5G_N6_RETURN_SUBNET" via "$upf_ip" dev "$upf_interface" onlink \
+    proto "$CN5G_N6_RETURN_PROTOCOL" metric "$CN5G_N6_RETURN_METRIC"
+  existing=$(docker exec "$node_container" \
+    ip -N -4 route show "$CN5G_N6_RETURN_SUBNET")
+  if [[ $existing != "$expected_prefix "* ]] || \
+      ! recognized_n6_route "$existing"; then
+    printf 'error: N6 return route did not converge\n' >&2
+    printf 'observed_node_return_route=%s\n' \
+      "${existing:-<absent>}" >&2
+    return 1
+  fi
+  printf 'kind_node_return_route=%s state=reconciled\n' "$existing"
+}
+
+remove_n6_return_route() {
+  local existing
+  existing=$(docker exec "$node_container" \
+    ip -N -4 route show "$CN5G_N6_RETURN_SUBNET")
+  if [[ -z $existing ]]; then
+    printf 'kind_node_return_route=absent\n'
+    return
+  fi
+  if ! recognized_n6_route "$existing"; then
+    printf 'error: refusing to remove an unrecognized kind-node route\n' >&2
+    printf 'observed_node_return_route=%s\n' "$existing" >&2
+    return 1
+  fi
+  docker exec "$node_container" ip -4 route del \
+    "$CN5G_N6_RETURN_SUBNET" proto "$CN5G_N6_RETURN_PROTOCOL" \
+    metric "$CN5G_N6_RETURN_METRIC"
+  printf 'kind_node_return_route=removed\n'
+}
+
+wait_for_current_subscriber_job() {
+  local jobs complete failed attempt
+  for attempt in $(seq 1 90); do
+    jobs=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get jobs \
+      --selector "app.kubernetes.io/component=subscriber-init,app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}" \
+      --output json)
+    failed=$(jq -r '[.items[] | select(
+      [.status.conditions[]? | select(.type == "Failed" and .status == "True")] |
+      length > 0)] | length' <<<"$jobs")
+    complete=$(jq -r '[.items[] | select(.status.succeeded == 1)] | length' \
+      <<<"$jobs")
+    if [[ $failed != "0" ]]; then
+      printf 'error: a release-owned subscriber Job failed\n' >&2
+      return 1
+    fi
+    if (( complete >= 1 )); then
+      printf 'subscriber_job_completion=pass\n'
+      return
+    fi
+    sleep 2
+  done
+  printf 'error: no release-owned subscriber Job completed\n' >&2
+  return 1
+}
+
+converge_deployed_release() {
+  local subscriber_job_revision=${1:-} component
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" rollout status \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --timeout=180s
+  printf 'mongodb_statefulset_readiness=pass\n'
+  if [[ -n $subscriber_job_revision ]]; then
+    wait_for_subscriber_job "$subscriber_job_revision"
+  else
+    wait_for_current_subscriber_job
+  fi
+  for component in nrf udr udm ausf pcf nssf smf scp amf upf data-network gnb ue; do
+    wait_for_deployment "$component"
+  done
+  verify_runtime_sbi_advertisements
+  ensure_service_discovery_convergence
+  reconcile_5g_session_chain
+  reconcile_n6_return_route
+  require_deployed_release
+  printf 'helm_release_convergence=pass\n'
+}
+
+run_kubernetes_validation() {
+  require_deployed_release
+  verify_runtime_sbi_advertisements
+  verify_nrf_profiles
+  reconcile_n6_return_route
+  "$validator"
+}
+
+component_cgroup_sample() {
+  local component=$1 workload
+  if [[ $component == "mongodb" ]]; then
+    workload="statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb"
+  else
+    workload="deployment/${CN5G_HELM_RELEASE_NAME}-${component}"
+  fi
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" exec "$workload" \
+    --container "$component" -- sh -ec '
+      cpu=$(awk '\''/^usage_usec / {print $2}'\'' /sys/fs/cgroup/cpu.stat)
+      memory=$(cat /sys/fs/cgroup/memory.current)
+      if test -r /sys/fs/cgroup/memory.peak; then
+        peak=$(cat /sys/fs/cgroup/memory.peak)
+      else
+        peak=$memory
+      fi
+      printf "%s %s %s\n" "$cpu" "$memory" "$peak"
+    '
+}
+
+component_resource_contract() {
+  local component=$1 workload
+  if [[ $component == "mongodb" ]]; then
+    workload="statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb"
+  else
+    workload="deployment/${CN5G_HELM_RELEASE_NAME}-${component}"
+  fi
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get "$workload" \
+    --output json | jq -er --arg container "$component" '
+      .spec.template.spec.containers[] |
+      select(.name == $container) |
+      [
+        (.resources.requests.cpu // "<none>"),
+        (.resources.requests.memory // "<none>"),
+        (.resources.limits.cpu // "<none>"),
+        (.resources.limits.memory // "<none>")
+      ] | join("|")
+    '
+}
+
+observe_runtime_resources() {
+  local component sample cpu memory peak now delta_cpu delta_time
+  local cpu_millicores memory_mib peak_mib contract
+  local request_cpu request_memory limit_cpu limit_memory
+  local -a components=(
+    mongodb nrf scp amf ausf udm udr pcf nssf smf upf data-network gnb ue
+  )
+  local -A cpu_before time_before
+  require_deployed_release
+  for component in "${components[@]}"; do
+    sample=$(component_cgroup_sample "$component")
+    read -r cpu _ _ <<<"$sample"
+    if [[ ! $cpu =~ ^[0-9]+$ ]]; then
+      printf 'error: invalid initial CPU sample for %s\n' "$component" >&2
+      return 1
+    fi
+    cpu_before[$component]=$cpu
+    time_before[$component]=$(date +%s%N)
+  done
+  printf 'resource_observation_window_seconds=10\n'
+  sleep 10
+  for component in "${components[@]}"; do
+    sample=$(component_cgroup_sample "$component")
+    now=$(date +%s%N)
+    read -r cpu memory peak <<<"$sample"
+    if [[ ! $cpu =~ ^[0-9]+$ || ! $memory =~ ^[0-9]+$ || \
+          ! $peak =~ ^[0-9]+$ ]]; then
+      printf 'error: invalid cgroup sample for %s\n' "$component" >&2
+      return 1
+    fi
+    delta_cpu=$((cpu - cpu_before[$component]))
+    delta_time=$((now - time_before[$component]))
+    if (( delta_cpu < 0 || delta_time <= 0 )); then
+      printf 'error: non-monotonic resource sample for %s\n' "$component" >&2
+      return 1
+    fi
+    cpu_millicores=$(((delta_cpu * 1000000 + delta_time - 1) / delta_time))
+    memory_mib=$(((memory + 1048575) / 1048576))
+    peak_mib=$(((peak + 1048575) / 1048576))
+    contract=$(component_resource_contract "$component")
+    IFS='|' read -r request_cpu request_memory limit_cpu limit_memory \
+      <<<"$contract"
+    printf '%s\n' \
+      "component=$component cpu_average_millicores=$cpu_millicores memory_current_mib=$memory_mib memory_peak_mib=$peak_mib request_cpu=$request_cpu request_memory=$request_memory limit_cpu=$limit_cpu limit_memory=$limit_memory"
+  done
+  printf 'resource_observation=pass scope=single-ue-steady-state\n'
+}
+
+mongodb_evidence_collection_absent() {
+  local exists
+  exists=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" exec \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --container mongodb -- \
+    mongosh --quiet open5gs --eval \
+    'db.getCollectionNames().includes("cn5g_phase04_evidence")')
+  if [[ $exists != "false" ]]; then
+    printf 'error: persistence evidence collection already exists\n' >&2
+    return 1
+  fi
+}
+
+create_mongodb_evidence_marker() {
+  mongodb_evidence_collection_absent
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" exec \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --container mongodb -- \
+    mongosh --quiet open5gs --eval '
+      db.cn5g_phase04_evidence.insertOne({
+        _id: "phase04-persistence-marker",
+        value: "synthetic-persistence-evidence"
+      });
+    ' >/dev/null
+  printf 'persistence_marker=prepared\n'
+}
+
+verify_and_remove_mongodb_evidence_marker() {
+  local marker_count
+  marker_count=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" exec \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --container mongodb -- \
+    mongosh --quiet open5gs --eval '
+      db.cn5g_phase04_evidence.countDocuments({
+        _id: "phase04-persistence-marker",
+        value: "synthetic-persistence-evidence"
+      })
+    ')
+  if [[ $marker_count != "1" ]]; then
+    printf 'error: synthetic persistence marker did not survive\n' >&2
+    return 1
+  fi
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" exec \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --container mongodb -- \
+    mongosh --quiet open5gs --eval \
+    'db.cn5g_phase04_evidence.drop()' >/dev/null
+  printf 'persistence_marker=survived\n'
+  printf 'persistence_evidence_collection=removed\n'
+}
+
+test_mongodb_persistence() {
+  local pvc_json pvc_uid pvc_volume repaired_pvc_json
+  local mongodb_pod pod_uid recreated_pod_uid attempt
+  pvc_json=$(bound_pvc_json)
+  pvc_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+  pvc_volume=$(jq -er '.spec.volumeName' <<<"$pvc_json")
+  mongodb_pod=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod \
+    --selector "app.kubernetes.io/component=mongodb,app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}" \
+    --output json | jq -er \
+    'if .items | length == 1 then .items[0].metadata.name else error("expected one MongoDB Pod") end')
+  pod_uid=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod "$mongodb_pod" \
+    --output jsonpath='{.metadata.uid}')
+  create_mongodb_evidence_marker
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" delete pod "$mongodb_pod" \
+    --wait=true --timeout=120s
+  for attempt in $(seq 1 60); do
+    if kubectl --kubeconfig "$kubeconfig" \
+        --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod "$mongodb_pod" \
+        >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+  if ! kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod "$mongodb_pod" \
+      >/dev/null 2>&1; then
+    printf 'error: replacement MongoDB Pod was not created\n' >&2
+    return 1
+  fi
+  kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" rollout status \
+    "statefulset/${CN5G_HELM_RELEASE_NAME}-mongodb" --timeout=180s
+  recreated_pod_uid=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get pod "$mongodb_pod" \
+    --output jsonpath='{.metadata.uid}')
+  if [[ -z $recreated_pod_uid || $recreated_pod_uid == "$pod_uid" ]]; then
+    printf 'error: MongoDB Pod identity did not change during recreation\n' >&2
+    return 1
+  fi
+  repaired_pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$repaired_pvc_json") != "$pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$repaired_pvc_json") != "$pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed during Pod recreation\n' >&2
+    return 1
+  fi
+  verify_and_remove_mongodb_evidence_marker
+  printf 'mongodb_pod_identity=changed\n'
+  printf 'mongodb_pvc_identity=preserved\n'
+  printf 'mongodb_pod_recreation_persistence=pass\n'
+}
+
+write_lifecycle_state() {
+  local path=$1
+  shift
+  if [[ -e $path || -L $path ]]; then
+    printf 'error: lifecycle state already exists: %s\n' "$path" >&2
+    return 1
+  fi
+  install -d -m 0700 "$(dirname -- "$path")"
+  umask 077
+  printf '%s\n' "$@" > "$path"
+  chmod 0600 "$path"
+}
+
+replace_lifecycle_state() {
+  local path=$1
+  shift
+  if [[ ! -f $path || -L $path ]]; then
+    printf 'error: lifecycle state is absent or unsafe: %s\n' "$path" >&2
+    return 1
+  fi
+  umask 077
+  printf '%s\n' "$@" > "$path"
+  chmod 0600 "$path"
+}
+
+migrate_recreate_strategies() {
+  local component deployment_json strategy_type rolling_update preview_json
+  local migrated_json
+  local strategy_patch
+  strategy_patch='[
+    {"op":"remove","path":"/spec/strategy/rollingUpdate"},
+    {"op":"replace","path":"/spec/strategy/type","value":"Recreate"}
+  ]'
+  for component in nrf scp amf ausf udm udr pcf nssf smf; do
+    verify_owned_deployment "$component"
+    deployment_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --output json)
+    strategy_type=$(jq -r '.spec.strategy.type // ""' <<<"$deployment_json")
+    rolling_update=$(jq -r \
+      'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+      <<<"$deployment_json")
+    if [[ $strategy_type == "Recreate" && $rolling_update == "absent" ]]; then
+      printf 'deployment=%s strategy_migration=already-current\n' \
+        "$component"
+      continue
+    fi
+    if [[ $strategy_type != "RollingUpdate" || \
+          $rolling_update != "present" ]]; then
+      printf 'error: deployment strategy is outside the migratable contract: %s\n' \
+        "$component" >&2
+      printf 'strategy_type=%s rolling_update=%s\n' \
+        "$strategy_type" "$rolling_update" >&2
+      return 1
+    fi
+    preview_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" patch deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --type=json \
+      --patch "$strategy_patch" --dry-run=server --output json)
+    if [[ $(jq -r '.spec.strategy.type // ""' <<<"$preview_json") != \
+            "Recreate" || \
+          $(jq -r \
+            'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+            <<<"$preview_json") != "absent" ]]; then
+      printf 'error: server-side strategy migration preview failed: %s\n' \
+        "$component" >&2
+      return 1
+    fi
+    kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" patch deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --type=json \
+      --patch "$strategy_patch" >/dev/null
+    migrated_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --output json)
+    if [[ $(jq -r '.spec.strategy.type // ""' <<<"$migrated_json") != \
+            "Recreate" || \
+          $(jq -r \
+            'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+            <<<"$migrated_json") != "absent" ]]; then
+      printf 'error: deployment strategy migration did not converge: %s\n' \
+        "$component" >&2
+      return 1
+    fi
+    printf 'deployment=%s strategy_migration=rolling-update-to-recreate\n' \
+      "$component"
+  done
+  printf 'deployment_strategy_migration=pass\n'
+}
+
+migrate_rolling_update_strategies() {
+  local component deployment_json strategy_type rolling_update preview_json
+  local migrated_json
+  local strategy_patch
+  strategy_patch='[
+    {"op":"replace","path":"/spec/strategy/type","value":"RollingUpdate"}
+  ]'
+  for component in nrf scp amf ausf udm udr pcf nssf smf; do
+    verify_owned_deployment "$component"
+    deployment_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --output json)
+    strategy_type=$(jq -r '.spec.strategy.type // ""' <<<"$deployment_json")
+    rolling_update=$(jq -r \
+      'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+      <<<"$deployment_json")
+    if [[ $strategy_type == "RollingUpdate" && \
+          $rolling_update == "present" ]]; then
+      printf 'deployment=%s rollback_strategy=already-current\n' "$component"
+      continue
+    fi
+    if [[ $strategy_type != "Recreate" || $rolling_update != "absent" ]]; then
+      printf 'error: deployment strategy is outside the rollback contract: %s\n' \
+        "$component" >&2
+      printf 'strategy_type=%s rolling_update=%s\n' \
+        "$strategy_type" "$rolling_update" >&2
+      return 1
+    fi
+    preview_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" patch deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --type=json \
+      --patch "$strategy_patch" --dry-run=server --output json)
+    if [[ $(jq -r '.spec.strategy.type // ""' <<<"$preview_json") != \
+            "RollingUpdate" || \
+          $(jq -r \
+            'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+            <<<"$preview_json") != "present" ]]; then
+      printf 'error: server-side rollback strategy preview failed: %s\n' \
+        "$component" >&2
+      return 1
+    fi
+    kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" patch deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --type=json \
+      --patch "$strategy_patch" >/dev/null
+    migrated_json=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" get deployment \
+      "${CN5G_HELM_RELEASE_NAME}-${component}" --output json)
+    if [[ $(jq -r '.spec.strategy.type // ""' <<<"$migrated_json") != \
+            "RollingUpdate" || \
+          $(jq -r \
+            'if .spec.strategy.rollingUpdate == null then "absent" else "present" end' \
+            <<<"$migrated_json") != "present" ]]; then
+      printf 'error: rollback strategy migration did not converge: %s\n' \
+        "$component" >&2
+      return 1
+    fi
+    printf 'deployment=%s rollback_strategy=recreate-to-rolling-update\n' \
+      "$component"
+  done
+  printf 'rollback_strategy_migration=pass\n'
+}
+
+read_lifecycle_state() {
+  local path=$1 key=$2 value
+  if [[ ! -f $path || -L $path || ! -r $path ]]; then
+    printf 'error: lifecycle state is absent or unsafe: %s\n' "$path" >&2
+    return 1
+  fi
+  value=$(awk -F= -v key="$key" '$1 == key {print substr($0, length(key) + 2)}' \
+    "$path")
+  if [[ -z $value ]]; then
+    printf 'error: lifecycle state key is absent: %s\n' "$key" >&2
+    return 1
+  fi
+  printf '%s\n' "$value"
+}
+
+controlled_upgrade() {
+  local release_json release_status current_revision baseline_revision
+  local expected_revision rollout_token state_release state_namespace
+  local state_pvc_uid state_pvc_volume pvc_json pvc_uid pvc_volume
+  local upgraded_json upgraded_revision
+  release_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  release_status=$(jq -er '.info.status' <<<"$release_json")
+  current_revision=$(jq -er '.version' <<<"$release_json")
+  pvc_json=$(bound_pvc_json)
+  pvc_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+  pvc_volume=$(jq -er '.spec.volumeName' <<<"$pvc_json")
+  if [[ -e $upgrade_state || -L $upgrade_state ]]; then
+    state_release=$(read_lifecycle_state "$upgrade_state" release)
+    state_namespace=$(read_lifecycle_state "$upgrade_state" namespace)
+    baseline_revision=$(read_lifecycle_state \
+      "$upgrade_state" baseline_revision)
+    expected_revision=$(read_lifecycle_state \
+      "$upgrade_state" expected_upgrade_revision)
+    state_pvc_uid=$(read_lifecycle_state "$upgrade_state" pvc_uid)
+    state_pvc_volume=$(read_lifecycle_state "$upgrade_state" pvc_volume)
+    if [[ $state_release != "$CN5G_HELM_RELEASE_NAME" || \
+          $state_namespace != "$CN5G_KUBERNETES_NAMESPACE" || \
+          ! $baseline_revision =~ ^[1-9][0-9]*$ || \
+          ! $expected_revision =~ ^[1-9][0-9]*$ || \
+          $pvc_uid != "$state_pvc_uid" || \
+          $pvc_volume != "$state_pvc_volume" ]]; then
+      printf 'error: saved upgrade state does not match the live release\n' >&2
+      return 1
+    fi
+    case "$release_status" in
+      failed)
+        if (( current_revision < expected_revision )); then
+          printf 'error: failed revision precedes the saved upgrade attempt\n' \
+            >&2
+          return 1
+        fi
+        expected_revision=$((current_revision + 1))
+        replace_lifecycle_state "$upgrade_state" \
+          "release=$CN5G_HELM_RELEASE_NAME" \
+          "namespace=$CN5G_KUBERNETES_NAMESPACE" \
+          "baseline_revision=$baseline_revision" \
+          "expected_upgrade_revision=$expected_revision" \
+          "pvc_uid=$pvc_uid" \
+          "pvc_volume=$pvc_volume"
+        printf 'controlled_upgrade_resume=failed-revision-%s\n' \
+          "$current_revision"
+        ;;
+      deployed)
+        if [[ $current_revision == "$baseline_revision" ]]; then
+          printf 'controlled_upgrade_resume=pre-apply-retry\n'
+        elif [[ $current_revision == "$expected_revision" ]]; then
+          printf 'controlled_upgrade_resume=post-apply-validation\n'
+          converge_deployed_release "$expected_revision"
+          run_kubernetes_validation
+          printf 'helm_upgrade_revision=%s\n' "$current_revision"
+          printf 'mongodb_pvc_identity=preserved\n'
+          printf 'phase04_upgrade=pass\n'
+          return
+        else
+          printf 'error: deployed revision does not match saved upgrade state\n' \
+            >&2
+          return 1
+        fi
+        ;;
+      *)
+        printf 'error: upgrade cannot resume from release status: %s\n' \
+          "$release_status" >&2
+        return 1
+        ;;
+    esac
+  else
+    if [[ $release_status != "deployed" ]]; then
+      printf 'error: controlled upgrade requires a deployed release; observed=%s\n' \
+        "$release_status" >&2
+      return 1
+    fi
+    baseline_revision=$current_revision
+    expected_revision=$((baseline_revision + 1))
+    write_lifecycle_state "$upgrade_state" \
+      "release=$CN5G_HELM_RELEASE_NAME" \
+      "namespace=$CN5G_KUBERNETES_NAMESPACE" \
+      "baseline_revision=$baseline_revision" \
+      "expected_upgrade_revision=$expected_revision" \
+      "pvc_uid=$pvc_uid" \
+      "pvc_volume=$pvc_volume"
+  fi
+  rollout_token="upgrade-r${expected_revision}"
+  migrate_recreate_strategies
+  helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
+    --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --reuse-values \
+    --set-string global.rolloutToken="$rollout_token" \
+    --set-string global.ranRolloutToken="$rollout_token" \
+    --dry-run=server --hide-secret >/dev/null
+  printf 'server_side_upgrade_dry_run=pass\n'
+  helm upgrade "$CN5G_HELM_RELEASE_NAME" "$chart" \
+    --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    --reuse-values \
+    --set-string global.rolloutToken="$rollout_token" \
+    --set-string global.ranRolloutToken="$rollout_token"
+  printf 'helm_upgrade_submission=pass\n'
+  converge_deployed_release "$expected_revision"
+  upgraded_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  upgraded_revision=$(jq -er '.version' <<<"$upgraded_json")
+  if [[ $upgraded_revision != "$expected_revision" ]]; then
+    printf 'error: controlled upgrade revision is unexpected: %s\n' \
+      "$upgraded_revision" >&2
+    return 1
+  fi
+  pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$pvc_json") != "$pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$pvc_json") != "$pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed during upgrade\n' >&2
+    return 1
+  fi
+  run_kubernetes_validation
+  printf 'helm_upgrade_revision=%s\n' "$upgraded_revision"
+  printf 'mongodb_pvc_identity=preserved\n'
+  printf 'phase04_upgrade=pass\n'
+}
+
+controlled_rollback() {
+  local state_release state_namespace baseline_revision expected_upgrade
+  local expected_pvc_uid expected_pvc_volume current_json current_revision
+  local release_status expected_rollback rollback_json rollback_revision pvc_json
+  local resume_post_apply=false
+  state_release=$(read_lifecycle_state "$upgrade_state" release)
+  state_namespace=$(read_lifecycle_state "$upgrade_state" namespace)
+  baseline_revision=$(read_lifecycle_state "$upgrade_state" baseline_revision)
+  expected_upgrade=$(read_lifecycle_state \
+    "$upgrade_state" expected_upgrade_revision)
+  expected_pvc_uid=$(read_lifecycle_state "$upgrade_state" pvc_uid)
+  expected_pvc_volume=$(read_lifecycle_state "$upgrade_state" pvc_volume)
+  if [[ $state_release != "$CN5G_HELM_RELEASE_NAME" || \
+        $state_namespace != "$CN5G_KUBERNETES_NAMESPACE" || \
+        ! $baseline_revision =~ ^[1-9][0-9]*$ || \
+        ! $expected_upgrade =~ ^[1-9][0-9]*$ ]]; then
+    printf 'error: upgrade state does not match the release contract\n' >&2
+    return 1
+  fi
+  current_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  current_revision=$(jq -er '.version' <<<"$current_json")
+  release_status=$(jq -er '.info.status' <<<"$current_json")
+  expected_rollback=$(awk -F= \
+    '$1 == "expected_rollback_revision" {print $2}' "$upgrade_state")
+  if [[ -z $expected_rollback ]]; then
+    if [[ $release_status != "deployed" || \
+          $current_revision != "$expected_upgrade" ]]; then
+      printf 'error: rollback must start from the controlled upgrade revision\n' \
+        >&2
+      printf 'status=%s revision=%s expected=%s\n' \
+        "$release_status" "$current_revision" "$expected_upgrade" >&2
+      return 1
+    fi
+    expected_rollback=$((current_revision + 1))
+    replace_lifecycle_state "$upgrade_state" \
+      "release=$CN5G_HELM_RELEASE_NAME" \
+      "namespace=$CN5G_KUBERNETES_NAMESPACE" \
+      "baseline_revision=$baseline_revision" \
+      "expected_upgrade_revision=$expected_upgrade" \
+      "expected_rollback_revision=$expected_rollback" \
+      "pvc_uid=$expected_pvc_uid" \
+      "pvc_volume=$expected_pvc_volume"
+  elif [[ ! $expected_rollback =~ ^[1-9][0-9]*$ ]]; then
+    printf 'error: saved rollback revision is invalid\n' >&2
+    return 1
+  fi
+  case "$release_status:$current_revision" in
+    "deployed:$expected_upgrade")
+      printf 'controlled_rollback_resume=pre-apply\n'
+      ;;
+    "deployed:$expected_rollback")
+      printf 'controlled_rollback_resume=post-apply-validation\n'
+      resume_post_apply=true
+      ;;
+    "failed:$expected_rollback")
+      expected_rollback=$((current_revision + 1))
+      replace_lifecycle_state "$upgrade_state" \
+        "release=$CN5G_HELM_RELEASE_NAME" \
+        "namespace=$CN5G_KUBERNETES_NAMESPACE" \
+        "baseline_revision=$baseline_revision" \
+        "expected_upgrade_revision=$expected_upgrade" \
+        "expected_rollback_revision=$expected_rollback" \
+        "pvc_uid=$expected_pvc_uid" \
+        "pvc_volume=$expected_pvc_volume"
+      printf 'controlled_rollback_resume=failed-revision-%s\n' \
+        "$current_revision"
+      ;;
+    *)
+      printf 'error: release state is outside the controlled rollback contract\n' \
+        >&2
+      printf 'status=%s revision=%s upgrade=%s rollback=%s\n' \
+        "$release_status" "$current_revision" "$expected_upgrade" \
+        "$expected_rollback" >&2
+      return 1
+      ;;
+  esac
+  pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$pvc_json") != "$expected_pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$pvc_json") != "$expected_pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed before rollback\n' >&2
+    return 1
+  fi
+  if [[ $resume_post_apply == false ]]; then
+    migrate_rolling_update_strategies
+    helm rollback "$CN5G_HELM_RELEASE_NAME" "$baseline_revision" \
+      --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" --dry-run=server >/dev/null
+    printf 'server_side_rollback_dry_run=pass\n'
+    helm rollback "$CN5G_HELM_RELEASE_NAME" "$baseline_revision" \
+      --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE"
+    printf 'helm_rollback_submission=pass\n'
+  fi
+  converge_deployed_release "$baseline_revision"
+  rollback_json=$(helm --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+    status "$CN5G_HELM_RELEASE_NAME" --output json)
+  rollback_revision=$(jq -er '.version' <<<"$rollback_json")
+  if [[ $rollback_revision != "$expected_rollback" ]]; then
+    printf 'error: rollback result revision is unexpected: %s\n' \
+      "$rollback_revision" >&2
+    return 1
+  fi
+  pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$pvc_json") != "$expected_pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$pvc_json") != "$expected_pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed during rollback\n' >&2
+    return 1
+  fi
+  run_kubernetes_validation
+  rm -f -- "$upgrade_state"
+  printf 'helm_rollback_target_revision=%s\n' "$baseline_revision"
+  printf 'helm_rollback_result_revision=%s\n' "$rollback_revision"
+  printf 'mongodb_pvc_identity=preserved\n'
+  printf 'phase04_rollback=pass\n'
+}
+
+remove_completed_historical_subscriber_jobs() {
+  local jobs unexpected job_name removed=0
+  jobs=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace "$CN5G_KUBERNETES_NAMESPACE" get jobs \
+    --selector "app.kubernetes.io/component=subscriber-init,app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}" \
+    --output json)
+  unexpected=$(jq -r --arg release "$CN5G_HELM_RELEASE_NAME" \
+    --arg namespace "$CN5G_KUBERNETES_NAMESPACE" '
+      .items[] | select(
+        (.metadata.name | test("^" + $release + "-subscriber-init-r[1-9][0-9]*$") | not) or
+        .metadata.labels["app.kubernetes.io/managed-by"] != "Helm" or
+        .metadata.annotations["meta.helm.sh/release-name"] != $release or
+        .metadata.annotations["meta.helm.sh/release-namespace"] != $namespace or
+        ([.status.conditions[]? |
+          select(.type == "Complete" and .status == "True")] | length) != 1 or
+        ([.status.conditions[]? |
+          select(.type == "Failed" and .status == "True")] | length) != 0
+      ) | .metadata.name
+    ' <<<"$jobs")
+  if [[ -n $unexpected ]]; then
+    printf 'error: refusing to remove subscriber Jobs outside the completed Helm ownership contract:\n%s\n' \
+      "$unexpected" >&2
+    return 1
+  fi
+  while IFS= read -r job_name; do
+    [[ -z $job_name ]] && continue
+    kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" delete job "$job_name" \
+      --wait=true --timeout=90s
+    removed=$((removed + 1))
+  done < <(jq -r '.items[].metadata.name' <<<"$jobs")
+  printf 'historical_subscriber_jobs_removed=%s\n' "$removed"
+}
+
+scoped_uninstall() {
+  local release_json release_revision pvc_json pvc_uid pvc_volume
+  local state_release state_namespace state_revision state_pvc_uid
+  local state_pvc_volume remaining attempt retained_pvc_json
+  local release_present=false
+  verify_secret
+  if [[ -e $uninstall_state || -L $uninstall_state ]]; then
+    state_release=$(read_lifecycle_state "$uninstall_state" release)
+    state_namespace=$(read_lifecycle_state "$uninstall_state" namespace)
+    state_revision=$(read_lifecycle_state \
+      "$uninstall_state" uninstalled_revision)
+    state_pvc_uid=$(read_lifecycle_state "$uninstall_state" pvc_uid)
+    state_pvc_volume=$(read_lifecycle_state "$uninstall_state" pvc_volume)
+    pvc_json=$(bound_pvc_json)
+    pvc_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+    pvc_volume=$(jq -er '.spec.volumeName' <<<"$pvc_json")
+    if [[ $state_release != "$CN5G_HELM_RELEASE_NAME" || \
+          $state_namespace != "$CN5G_KUBERNETES_NAMESPACE" || \
+          ! $state_revision =~ ^[1-9][0-9]*$ || \
+          $state_pvc_uid != "$pvc_uid" || \
+          $state_pvc_volume != "$pvc_volume" ]]; then
+      printf 'error: saved uninstall state does not match retained resources\n' \
+        >&2
+      return 1
+    fi
+    if release_json=$(helm --kubeconfig "$kubeconfig" \
+        --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+        status "$CN5G_HELM_RELEASE_NAME" --output json 2>/dev/null); then
+      release_present=true
+      release_revision=$(jq -er '.version' <<<"$release_json")
+      if [[ $(jq -er '.info.status' <<<"$release_json") != "deployed" || \
+            $release_revision != "$state_revision" ]]; then
+        printf 'error: live release does not match saved uninstall state\n' >&2
+        return 1
+      fi
+      printf 'scoped_uninstall_resume=pre-release-removal\n'
+    else
+      printf 'scoped_uninstall_resume=post-release-removal\n'
+    fi
+  else
+    require_deployed_release
+    release_present=true
+    release_json=$(helm --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      status "$CN5G_HELM_RELEASE_NAME" --output json)
+    release_revision=$(jq -er '.version' <<<"$release_json")
+    pvc_json=$(bound_pvc_json)
+    pvc_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+    pvc_volume=$(jq -er '.spec.volumeName' <<<"$pvc_json")
+    create_mongodb_evidence_marker
+    write_lifecycle_state "$uninstall_state" \
+      "release=$CN5G_HELM_RELEASE_NAME" \
+      "namespace=$CN5G_KUBERNETES_NAMESPACE" \
+      "uninstalled_revision=$release_revision" \
+      "pvc_uid=$pvc_uid" \
+      "pvc_volume=$pvc_volume"
+  fi
+  remove_n6_return_route
+  if [[ $release_present == true ]]; then
+    helm uninstall "$CN5G_HELM_RELEASE_NAME" \
+      --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      --wait --timeout=5m
+  fi
+  remove_completed_historical_subscriber_jobs
+  for attempt in $(seq 1 60); do
+    remaining=$(kubectl --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      get all,configmaps,serviceaccounts \
+      --selector "app.kubernetes.io/instance=${CN5G_HELM_RELEASE_NAME}" \
+      --output name)
+    [[ -z $remaining ]] && break
+    sleep 2
+  done
+  if [[ -n $remaining ]]; then
+    printf 'error: Helm-owned resources remain after uninstall:\n%s\n' \
+      "$remaining" >&2
+    return 1
+  fi
+  retained_pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$retained_pvc_json") != "$pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$retained_pvc_json") != "$pvc_volume" ]]; then
+    printf 'error: retained MongoDB PVC identity changed during uninstall\n' >&2
+    return 1
+  fi
+  verify_namespace
+  verify_secret
+  printf 'helm_release=absent\n'
+  printf 'mongodb_pvc=retained-bound\n'
+  printf 'namespace=retained-project-owned\n'
+  printf 'subscriber_secret=retained-project-owned\n'
+  printf 'phase04_uninstall=pass\n'
+}
+
+verify_reinstall_persistence() {
+  local state_release state_namespace expected_pvc_uid expected_pvc_volume
+  local pvc_json
+  require_deployed_release
+  state_release=$(read_lifecycle_state "$uninstall_state" release)
+  state_namespace=$(read_lifecycle_state "$uninstall_state" namespace)
+  expected_pvc_uid=$(read_lifecycle_state "$uninstall_state" pvc_uid)
+  expected_pvc_volume=$(read_lifecycle_state "$uninstall_state" pvc_volume)
+  if [[ $state_release != "$CN5G_HELM_RELEASE_NAME" || \
+        $state_namespace != "$CN5G_KUBERNETES_NAMESPACE" ]]; then
+    printf 'error: uninstall state does not match the release contract\n' >&2
+    return 1
+  fi
+  pvc_json=$(bound_pvc_json)
+  if [[ $(jq -er '.metadata.uid' <<<"$pvc_json") != "$expected_pvc_uid" || \
+        $(jq -er '.spec.volumeName' <<<"$pvc_json") != "$expected_pvc_volume" ]]; then
+    printf 'error: MongoDB PVC identity changed across uninstall/reinstall\n' >&2
+    return 1
+  fi
+  verify_and_remove_mongodb_evidence_marker
+  rm -f -- "$uninstall_state"
+  printf 'mongodb_pvc_identity=preserved\n'
+  printf 'helm_reinstall_persistence=pass\n'
 }
 
 recover_failed_install() {
@@ -676,16 +1730,14 @@ repair_failed_release() {
   verify_runtime_sbi_advertisements
 
   restart_project_deployment nrf
-  wait_for_nrf_profiles >/dev/null
   for component in udr udm ausf pcf nssf smf; do
     restart_project_deployment "$component"
   done
   restart_project_deployment scp
   restart_project_deployment amf
   verify_nrf_profiles
-  restart_project_deployment gnb
-  restart_project_deployment ue
-  verify_ue_protocol_state
+  reconcile_5g_session_chain
+  reconcile_n6_return_route
 
   repaired_pvc_json=$(kubectl --kubeconfig "$kubeconfig" \
     --namespace "$CN5G_KUBERNETES_NAMESPACE" get pvc "$pvc_name" \
@@ -798,8 +1850,49 @@ case "$action" in
       --kubeconfig "$kubeconfig" \
       --namespace "$CN5G_KUBERNETES_NAMESPACE" \
       --wait=watcher --wait-for-jobs --timeout=8m
+    installed_revision=$(helm --kubeconfig "$kubeconfig" \
+      --namespace "$CN5G_KUBERNETES_NAMESPACE" \
+      status "$CN5G_HELM_RELEASE_NAME" --output json | \
+      jq -er '.version')
+    converge_deployed_release "$installed_revision"
     show_status
     printf 'phase04_install=pass\n'
+    ;;
+  validate)
+    require_cluster
+    verify_secret
+    run_kubernetes_validation
+    printf 'phase04_validation=pass\n'
+    ;;
+  observe-resources)
+    require_cluster
+    observe_runtime_resources
+    ;;
+  test-persistence)
+    require_cluster
+    require_deployed_release
+    test_mongodb_persistence
+    ;;
+  upgrade)
+    require_cluster
+    verify_images
+    verify_node_images
+    verify_secret
+    controlled_upgrade
+    ;;
+  rollback)
+    require_cluster
+    verify_secret
+    controlled_rollback
+    ;;
+  uninstall)
+    require_cluster
+    scoped_uninstall
+    ;;
+  verify-reinstall)
+    require_cluster
+    verify_secret
+    verify_reinstall_persistence
     ;;
   repair-failed-release)
     require_cluster

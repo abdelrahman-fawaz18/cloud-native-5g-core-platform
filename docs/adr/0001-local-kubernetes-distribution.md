@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted on 2026-08-02
+Accepted on 2026-08-02; real single-UE workload acceptance confirmed on
+2026-08-04
 
 ## Context
 
@@ -61,19 +62,23 @@ requirement that the accepted feasibility tests did not model.
 - A second same-runtime create/delete cycle reproduced readiness and cleanup.
   Host snapshots before and after that cycle had identical network, service,
   Docker-resource, and firewall-rule structure.
+- The Helm-managed Open5GS/UERANSIM release subsequently passed real N2
+  SCTP/NGAP, N4 PFCP, N3 GTP-U, TUN, N6 return routing, bidirectional user
+  traffic, upgrade, rollback, and uninstall/reinstall persistence on kind.
 
 ## Consequences
 
 The project gains a named, automatable local cluster without a permanent
 Kubernetes control-plane service. Networking remains nested inside Docker:
 Pods use per-Pod node-side `veth` routes, Services add virtual addresses, and
-5G tunnels add another encapsulation layer. Phase 4 must therefore configure
-advertised N2/N3/N4 addresses deliberately and retain the verified Maximum
+5G tunnels add another encapsulation layer. Phase 4 therefore configures
+advertised N2/N3/N4 addresses deliberately and retains the verified Maximum
 Transmission Unit, capability, return-routing, and packet-observation checks.
 
-The Phase 3 probe established transport feasibility, not NGAP, PFCP, or GTP-U
-message semantics. The accepted distribution still requires a real
-single-UE Open5GS/UERANSIM validation before the Helm platform is accepted.
+The Phase 3 probe established transport feasibility rather than protocol
+semantics. Phase 4 supplied the required real single-UE Open5GS/UERANSIM
+validation, so kind is now accepted for the local Helm baseline. This does not
+make the single-node cluster a production or high-availability platform.
 
 ## Reversal Or Migration
 

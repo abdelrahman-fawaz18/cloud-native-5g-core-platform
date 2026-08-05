@@ -1,7 +1,7 @@
 # Automation Scripts
 
-This directory will contain idempotent helpers for environment inspection,
-image builds, cluster creation, deployment, validation, experiments, status,
+This directory contains idempotent helpers for environment inspection, image
+builds, cluster creation, deployment, validation, experiments, status,
 rollback, and scoped cleanup.
 
 Scripts must fail clearly, avoid broad destructive actions, inspect exact
@@ -25,11 +25,21 @@ targets, and support a dry-run or read-only mode where practical.
   mode-0700 directory containing only mode-0600 files. It validates consistency
   without printing subscriber identifiers or authentication values and refuses
   to overwrite existing material.
-- `helm-lab.sh`: verifies accepted local images and the file-backed Secret,
-  loads only those images into the named kind node, performs a server-side Helm
-  dry run, installs the namespace-scoped release with readiness and Job waits,
-  and reports scoped workload state. Cluster lifecycle remains delegated to
-  the accepted `kind-feasibility.sh` ownership boundary.
+- `helm-lab.sh`: owns the Phase 4 release lifecycle. It verifies accepted
+  image identities and the file-backed Secret, loads only accepted images,
+  performs server-side dry runs, installs and converges the namespace-scoped
+  release, validates real 5G operation, samples cgroup resources, proves
+  persistence, performs controlled upgrade and rollback, and uninstalls only
+  identity-checked release resources while retaining the bound MongoDB claim.
+  Interrupted upgrade, rollback, and uninstall operations use ignored,
+  permission-restricted state files so a retry verifies the exact release and
+  storage identities before resuming. Cluster lifecycle remains delegated to
+  `kind-feasibility.sh`.
+- `validate-kubernetes.sh`: independently validates the deployed Phase 4
+  release. It proves Helm and workload readiness, subscriber state, stable SBI
+  identities, N2 SCTP/NGAP, 5G-AKA, NAS security, registration, PDU session,
+  N4 PFCP, N3 GTP-U, the exact N6 return route, HTTP/ICMP traffic, positive
+  bidirectional UE/UPF tunnel-counter deltas, and effective capability masks.
 - `kind-feasibility.sh`: performs collision and resource preflight, then
   creates, inspects, or deletes only the named `cn5g` kind feasibility cluster
   through a repository-local kubeconfig. Destructive cleanup requires an
@@ -84,3 +94,64 @@ The expected terminal gates are `transport_validation=pass`,
 `scoped_cluster_cleanup=pass`. The N6 validation uses a synthetic
 IP-over-UDP/2152 relay to test Kubernetes networking mechanics; it is not a
 GTP-U protocol implementation.
+
+## Helm-Managed Single-UE Lifecycle
+
+Phase 4 uses one repository-local kubeconfig and one exact release/namespace
+pair. The normal lifecycle is:
+
+```bash
+sudo ./scripts/helm-lab.sh preflight
+sudo ./scripts/kind-feasibility.sh create
+sudo ./scripts/helm-lab.sh load-images
+sudo ./scripts/helm-lab.sh prepare-secret
+sudo ./scripts/helm-lab.sh install
+sudo ./scripts/helm-lab.sh validate
+```
+
+Synthetic subscriber files must already exist in the ignored Phase 4 secrets
+directory. `prepare-secret` creates or verifies only the `cn5g` namespace and
+`cn5g-subscriber` Secret; it never prints their values. `install` first checks
+the Docker and kind-node runtime image identities, then performs a Helm
+server-side dry run. API acceptance is followed by ordered workload waits,
+nine-profile NRF convergence, deterministic UPF/SMF/gNB/UE session-chain
+reconciliation, and the exact kind-node N6 return route.
+
+Read-only status and measurement operations are:
+
+```bash
+sudo ./scripts/helm-lab.sh status
+sudo ./scripts/helm-lab.sh observe-resources
+```
+
+`observe-resources` samples cgroup v2 CPU and memory inside each container for
+ten seconds and prints the result beside declared requests and limits. It is a
+single-UE steady-state observation, not a load test.
+
+The accepted persistence and release-revision gates are:
+
+```bash
+sudo ./scripts/helm-lab.sh test-persistence
+sudo ./scripts/helm-lab.sh upgrade
+sudo ./scripts/helm-lab.sh rollback
+sudo ./scripts/helm-lab.sh uninstall --confirm
+sudo ./scripts/helm-lab.sh install
+sudo ./scripts/helm-lab.sh verify-reinstall
+sudo ./scripts/helm-lab.sh validate
+```
+
+`test-persistence` recreates only the MongoDB Pod and verifies a temporary
+marker and unchanged claim identity. Upgrade and rollback preserve the bound
+claim, wait for the exact revision-scoped subscriber Job, and run complete 5G
+validation. Uninstall requires confirmation, records the claim UID and backing
+volume, removes the exact owned N6 route and Helm release, removes only
+completed historical Jobs with matching Helm labels and annotations, and
+retains the namespace, Secret, and bound claim. `verify-reinstall` proves the
+saved marker and identities before deleting only the temporary evidence
+collection and lifecycle state.
+
+The helper never uses a default kubeconfig, host-level route mutation,
+wildcard deletion, `docker system prune`, privileged Pods, or deletion of a
+bound PersistentVolumeClaim. Cluster deletion is a separate, explicitly
+confirmed operation because the local-path volume does not survive deletion
+of the kind node.
