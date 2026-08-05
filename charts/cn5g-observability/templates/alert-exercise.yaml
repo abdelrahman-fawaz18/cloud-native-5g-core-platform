@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "alert-exercise") | nindent 4 }}
+data:
+  metrics: |-
+    # HELP cn5g_observability_alert_exercise Controlled alert lifecycle input.
+    # TYPE cn5g_observability_alert_exercise gauge
+    cn5g_observability_alert_exercise{scenario="target-down"} 0
+    cn5g_observability_alert_exercise{scenario="ue-count"} 0
+    cn5g_observability_alert_exercise{scenario="user-plane"} 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "alert-exercise") | nindent 4 }}
+spec:
+  selector:
+    {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "alert-exercise") | nindent 4 }}
+  ports:
+    - {name: metrics, port: 8080, targetPort: metrics, protocol: TCP}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "alert-exercise") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "alert-exercise") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "alert-exercise") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: exporter
+          image: {{ include "cn5g-observability.localImage" .Values.images.alertExercise }}
+          imagePullPolicy: {{ .Values.images.alertExercise.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              cp /config/metrics /metrics/metrics
+              exec /bin/busybox-extras httpd -f -p 8080 -h /metrics
+          ports:
+            - {name: metrics, containerPort: 8080, protocol: TCP}
+          readinessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.alertExercise.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: metrics, mountPath: /metrics}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}
+        - name: metrics
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}

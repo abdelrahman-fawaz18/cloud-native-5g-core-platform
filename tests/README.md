@@ -1,9 +1,9 @@
 # Tests
 
 The current test suite covers repository, Compose, Phase 3 feasibility, Phase
-4 static contracts, and Phase 5 identity/chart/lifecycle contracts. Later
-phases extend it with observability, performance, reliability, and release
-automation.
+4 static contracts, Phase 5 identity/chart/lifecycle contracts, and Phase 6
+observability architecture/security/lifecycle contracts. Later phases extend
+it with performance, reliability, and release automation.
 
 Current Phase 4 coverage includes:
 
@@ -23,7 +23,6 @@ Current Phase 4 coverage includes:
 
 Planned later-phase coverage includes:
 
-- observability and alert behavior;
 - performance methodology;
 - controlled failure and recovery;
 - cleanup and repeatability.
@@ -46,3 +45,13 @@ TUN counters, an isolated invalid UE, partial-subscriber reprovision recovery,
 PVC-preserving rollback, and repeat migration. Those runtime checks remain
 separate from hosted Continuous Integration because they require kind, SCTP,
 TUN devices, and narrowly scoped network capabilities.
+
+Phase 6 static coverage verifies immutable image pins, deterministic rendering,
+the separate-release boundary, bounded UE metric labels, exact scrape jobs,
+four alert definitions, four valid dashboard models, 24-hour retention,
+API-based log collection, least-privilege security/RBAC, local-only Grafana
+access, scoped cleanup, and absence of committed credentials. The privileged
+runtime gate passed on 2026-08-05 with 13 required healthy targets, five UE
+targets, matching five-session AMF/PFCP state, five successful probes, recent
+Loki ingestion, two data sources, four dashboards, bounded cardinality, and
+three alert firing/resolution lifecycles.

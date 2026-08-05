@@ -91,6 +91,10 @@ spec:
   publishNotReadyAddresses: true
   selector:
     {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 4 }}
+  {{- if .Values.phase06.enabled }}
+  ports:
+    - {name: metrics, protocol: TCP, port: {{ .Values.phase06.metricsPort }}, targetPort: metrics}
+  {{- end }}
 {{- end }}
 {{- $root := . }}
 {{- if .Values.phase05.enabled }}

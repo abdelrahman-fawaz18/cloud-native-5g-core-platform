@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cn5g-observability
+description: Project-scoped metrics, logs, dashboards, and alert rules for the CN5G platform
+type: application
+version: 0.1.0
+appVersion: "phase-06"
+kubeVersion: ">=1.36.0-0"
+annotations:
+  cn5g.io/phase: "06"

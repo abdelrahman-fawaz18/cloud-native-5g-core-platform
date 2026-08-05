@@ -6,8 +6,8 @@ This repository implements a reproducible, containerized 5G Standalone (5G
 SA) Core platform. It deploys Open5GS, MongoDB, and UERANSIM on a local
 Kubernetes environment, exercises multiple synthetic User Equipments (UEs),
 and preserves measured evidence for signalling, user-plane traffic, lifecycle,
-isolation, and recovery behavior. Observability, load, and controlled-failure
-evidence are added through the remaining roadmap phases.
+isolation, recovery, metrics, logs, dashboards, and alert behavior. Controlled
+load and failure-recovery experiments remain in later roadmap phases.
 
 The project extends the validated protocol baseline documented in the
 [5G SA Core Protocol Lab](https://github.com/abdelrahman-fawaz18/5g-sa-core-protocol-lab).
@@ -16,15 +16,17 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-The repository boundary, host preflight, container baseline, Kubernetes
-networking feasibility gate, and Helm-managed single-UE platform are complete.
-The accepted Phase 5 release runs Open5GS, MongoDB, one UERANSIM gNodeB, five
-concurrent UERANSIM UEs, and two isolated controlled data endpoints in a
-disposable single-node kind cluster. It has passed real N2 SCTP/NGAP, 5G-AKA,
+Phases 0-6 are complete. The accepted release runs Open5GS, MongoDB, one
+UERANSIM gNodeB, five concurrent UERANSIM UEs, and two isolated controlled
+data endpoints in a disposable single-node kind cluster. A separate
+observability release provides Prometheus metrics and alert evaluation,
+Grafana dashboards, Loki logs, Grafana Alloy collection, and Kubernetes
+object/resource telemetry. The platform has passed real N2 SCTP/NGAP, 5G-AKA,
 NAS security, per-UE registration and PDU sessions, N4 PFCP, N3 GTP-U,
 bidirectional N6 traffic, two-DNN selection/isolation, negative access,
 partial-provisioning recovery, persistence, rollback/rerun, least-privilege,
-and resource-observation gates. See the [project
+bounded-cardinality, centralized-log, dashboard-provisioning, and alert-
+lifecycle gates. See the [project
 status](docs/project-status.md), [container report](reports/02_container_baseline.md),
 and [architecture decisions](docs/adr/README.md).
 
@@ -237,6 +239,45 @@ same acceptance result. The [Phase 5 implementation and visual model](docs/READM
 and [sanitized validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
 document the full evidence and limitations.
 
+## Verified Phase 6 Observability Platform
+
+Phase 6 adds an independent telemetry lifecycle around the accepted Phase 5
+service. Prometheus pulls Kubernetes, node, container, Open5GS, and UE-probe
+metrics; Alloy sends project-scoped logs to Loki; and Grafana renders four
+version-controlled dashboards from Prometheus and Loki.
+
+```mermaid
+flowchart LR
+    CORE["Five-UE 5G platform"] -->|"native 5G metrics"| PROM["Prometheus"]
+    UE["Five source-bound UE probes"] -->|"bounded /metrics"| PROM
+    K8S["Kubernetes API + kubelet"] --> KSM["kube-state-metrics"] --> PROM
+    K8S -->|"node/container metrics"| PROM
+    LOGS["Project Pod logs + Events"] --> ALLOY["Grafana Alloy"] --> LOKI["Loki"]
+    PROM --> GRAFANA["Grafana\n4 provisioned dashboards"]
+    LOKI --> GRAFANA
+    PROM --> ALERTS["Prometheus alert rules"]
+```
+
+Runtime acceptance verified:
+
+- all 13 required Prometheus targets healthy, including five UE targets;
+- five AMF sessions, five PFCP sessions, and five successful user-plane
+  probes;
+- 20 custom UE series against a hard limit of 30;
+- recent centralized logs, two provisioned data sources, and four dashboards;
+- target-down, registered-UE mismatch, and user-plane failure alerts each
+  firing and resolving; and
+- two Bound 2 GiB telemetry claims, zero final observability restarts, and the
+  complete Phase 5 regression gate still passing.
+
+Grafana remains cluster-internal and is exposed only by an explicit loopback
+port-forward. The [Phase 6 architecture](docs/architecture/phase-06-observability.md),
+[runbook](docs/runbooks/phase-06-observability.md), and [sanitized validation
+summary](reports/README.md#phase-6-observability-validation-summary) describe
+the signal model, limits, lifecycle, recovery, and accepted evidence. These
+results do not claim throughput, packet loss, high availability, long-term
+retention, or production monitoring scale.
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -290,7 +331,7 @@ flowchart LR
 ```
 
 The target topology builds on the accepted kind, Helm, and five-UE/two-DNN
-baseline. Phase 6 adds operational metrics, dashboards, alerts, and correlated
+baseline. Phase 6 added operational metrics, dashboards, alerts, and correlated
 logs without changing the accepted subscriber or user-plane contracts.
 
 ## Repository Structure
@@ -335,6 +376,10 @@ machine-readable measurements, and concise reports.
 - [Complete Phase 4 visual system and operational guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
 - [Phase 5 multi-UE and DNN validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
 - [Phase 5 multi-UE visual and operational model](docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
+- [Phase 6 observability architecture](docs/architecture/phase-06-observability.md)
+- [Phase 6 observability runbook](docs/runbooks/phase-06-observability.md)
+- [Phase 6 sanitized validation summary](reports/README.md#phase-6-observability-validation-summary)
+- [Phase 6 visual and operational model](docs/README.md#32-phase-6-observability-and-operational-mental-model)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

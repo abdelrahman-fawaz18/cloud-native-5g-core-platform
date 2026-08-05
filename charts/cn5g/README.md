@@ -4,7 +4,8 @@ For a system-level visual explanation of where this chart runs and how its
 objects, 5G interfaces, address domains, lifecycle, persistence, and validation
 fit together, see the
 [complete Phase 4 system guide](../../docs/README.md#23-phase-4-complete-system-and-operational-model)
-and the [accepted Phase 5 multi-UE model](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model).
+the [accepted Phase 5 multi-UE model](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model),
+and the [accepted Phase 6 observability model](../../docs/README.md#32-phase-6-observability-and-operational-mental-model).
 
 This chart packages the verified Open5GS, MongoDB, UERANSIM, and controlled
 data-network images as one Kubernetes release. The baseline deliberately runs
@@ -18,13 +19,27 @@ controlled endpoint. The runtime gate in the
 [system guide](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
 passed on 2026-08-05.
 
+`values-phase06.yaml` composes with the Phase 5 overlay and adds one bounded
+user-plane metrics sidecar to each UE Pod plus a headless metrics port. The
+sidecar binds its synthetic HTTP request to `uesimtun0`, exposes only fixed
+ordinal/DNN labels, mounts no subscriber material, has no API token, and drops
+all capabilities. The separate `cn5g-observability` chart owns every metrics,
+logging, dashboard, and alert backend.
+
+The Phase 6 overlay passed the complete Phase 5 regression validator plus
+live target, telecom-metric, user-plane probe, cardinality, log-ingestion,
+dashboard-provisioning, and alert-lifecycle gates on 2026-08-05.
+
 Non-sensitive configuration is rendered through ConfigMaps. The chart never
 templates subscriber authentication material; `subscriberSecret.existingSecret`
 must name a Secret created from the ignored files produced by
 `scripts/generate-subscriber-secret.sh`.
 
-Every workload uses `imagePullPolicy: Never` and must be loaded into the named
-kind node only after its local identity matches the Phase 2 manifest. MongoDB's
+Project-built workload images use `imagePullPolicy: Never` and must be loaded
+into the named kind node only after their local identities match the Phase 2
+manifest. The Phase 6 Python sidecar uses an upstream version-and-digest-pinned
+image with `IfNotPresent`; its immutable registry identity is recorded in the
+Phase 6 version manifest. MongoDB's
 upstream `tag@digest` is verified before its fixed-version tag is imported;
 the imported containerd image ID is then compared with that accepted digest.
 This two-sided gate is required because kind's Docker-image import preserves

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CN5G observability values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "images", "grafana", "prometheus", "loki", "alloy", "kubeStateMetrics", "alertExercise"],
+  "properties": {
+    "global": {
+      "type": "object", "additionalProperties": false,
+      "required": ["coreNamespace", "clusterName", "retention", "storageClassName"],
+      "properties": {
+        "coreNamespace": {"const": "cn5g"},
+        "clusterName": {"const": "cn5g"},
+        "retention": {"const": "24h"},
+        "storageClassName": {"const": "standard"}
+      }
+    },
+    "images": {
+      "type": "object", "additionalProperties": false,
+      "required": ["prometheus", "grafana", "loki", "alloy", "kubeStateMetrics", "alertExercise"],
+      "properties": {
+        "prometheus": {"$ref": "#/$defs/registryImage"},
+        "grafana": {"$ref": "#/$defs/registryImage"},
+        "loki": {"$ref": "#/$defs/registryImage"},
+        "alloy": {"$ref": "#/$defs/registryImage"},
+        "kubeStateMetrics": {"$ref": "#/$defs/registryImage"},
+        "alertExercise": {"$ref": "#/$defs/localImage"}
+      }
+    },
+    "grafana": {"$ref": "#/$defs/secretWorkload"},
+    "prometheus": {"$ref": "#/$defs/prometheusWorkload"},
+    "loki": {"$ref": "#/$defs/storageWorkload"},
+    "alloy": {"$ref": "#/$defs/workload"},
+    "kubeStateMetrics": {"$ref": "#/$defs/workload"},
+    "alertExercise": {"$ref": "#/$defs/workload"}
+  },
+  "$defs": {
+    "registryImage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "pullPolicy": {"enum": ["IfNotPresent", "Never"]}
+      }
+    },
+    "localImage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "pullPolicy": {"const": "Never"}
+      }
+    },
+    "resourcePair": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": {"type": ["string", "number"]},
+        "memory": {"type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$"}
+      }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {"$ref": "#/$defs/resourcePair"},
+        "limits": {"$ref": "#/$defs/resourcePair"}
+      }
+    },
+    "workload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resources"],
+      "properties": {"resources": {"$ref": "#/$defs/resources"}}
+    },
+    "storageWorkload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storageSize", "resources"],
+      "properties": {
+        "storageSize": {"type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi)$"},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    },
+    "secretWorkload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["existingAdminSecret", "resources"],
+      "properties": {
+        "existingAdminSecret": {"const": "cn5g-grafana-admin"},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    },
+    "prometheusWorkload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storageSize", "retentionSize", "scrapeInterval", "evaluationInterval", "resources"],
+      "properties": {
+        "storageSize": {"type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi)$"},
+        "retentionSize": {"const": "1GB"},
+        "scrapeInterval": {"const": "15s"},
+        "evaluationInterval": {"const": "15s"},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    }
+  }
+}

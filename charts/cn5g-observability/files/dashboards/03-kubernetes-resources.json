@@ -1,0 +1,11 @@
+{
+  "uid":"cn5g-kubernetes","title":"CN5G Kubernetes Resources","tags":["cn5g","kubernetes","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
+  "time":{"from":"now-30m","to":"now"},
+  "panels":[
+    {"id":1,"type":"stat","title":"Ready pods","gridPos":{"h":8,"w":8,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_pod_status_ready{namespace=~\"cn5g|cn5g-observability\",condition=\"true\"})","legendFormat":"pods"}]},
+    {"id":2,"type":"stat","title":"Pod restarts","gridPos":{"h":8,"w":8,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_pod_container_status_restarts_total{namespace=~\"cn5g|cn5g-observability\"})","legendFormat":"restarts"}]},
+    {"id":3,"type":"stat","title":"Bound PVCs","gridPos":{"h":8,"w":8,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_persistentvolumeclaim_status_phase{namespace=~\"cn5g|cn5g-observability\",phase=\"Bound\"})","legendFormat":"PVCs"}]},
+    {"id":4,"type":"timeseries","title":"Container CPU by component","gridPos":{"h":10,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (namespace,container) (rate(container_cpu_usage_seconds_total{namespace=~\"cn5g|cn5g-observability\",container!=\"\"}[2m]))","legendFormat":"{{namespace}} / {{container}}"}]},
+    {"id":5,"type":"timeseries","title":"Container memory by component","gridPos":{"h":10,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (namespace,container) (container_memory_working_set_bytes{namespace=~\"cn5g|cn5g-observability\",container!=\"\"})","legendFormat":"{{namespace}} / {{container}}"}]}
+  ]
+}

@@ -120,6 +120,21 @@ class Phase05LifecycleStaticTests(unittest.TestCase):
             self.assertIn(expected, self.lifecycle)
         self.assertNotIn("ip -4 route flush", self.lifecycle)
 
+    def test_session_repair_is_scoped_and_does_not_create_a_helm_revision(self):
+        self.assertIn("repair-sessions", self.lifecycle)
+        repair_body = self.lifecycle.split("repair_phase05_sessions()", 1)[1].split(
+            "write_state()", 1
+        )[0]
+        self.assertIn("verify_release_deployed", repair_body)
+        self.assertIn('release_phase05_enabled) != "true"', repair_body)
+        self.assertIn("verify_secret", repair_body)
+        self.assertIn("restart_session_chain", repair_body)
+        self.assertIn("reconcile_return_routes", repair_body)
+        self.assertIn('"$validator"', repair_body)
+        self.assertNotIn("helm upgrade", repair_body)
+        self.assertNotIn("helm rollback", repair_body)
+        self.assertIn("phase05_session_repair=pass", repair_body)
+
     def test_rollback_removes_only_phase05_managed_records(self):
         self.assertIn('deleteMany({"cn5g_managed.phase":5})', self.lifecycle)
         self.assertIn("expected four Phase 5-only records", self.lifecycle)
@@ -187,6 +202,13 @@ class Phase05LifecycleStaticTests(unittest.TestCase):
         self.assertNotIn("/secret/dnn-", self.validator)
         self.assertIn("Cannot find PFCP-Node", self.validator)
         self.assertIn("No PFCP session modification response", self.validator)
+
+    def test_fseid_validation_uses_current_sessions_not_historical_log_rows(self):
+        self.assertIn("latest_fseid_rows=", self.validator)
+        self.assertIn("latest[$4] = $0", self.validator)
+        self.assertIn('for ue_ip in "${observed_addresses[@]}"', self.validator)
+        self.assertIn("current UPF session evidence is ambiguous", self.validator)
+        self.assertIn('<<<"$latest_fseid_rows"', self.validator)
 
     def test_validator_checks_all_effective_capability_boundaries(self):
         self.assertIn("0000000000001000", self.validator)

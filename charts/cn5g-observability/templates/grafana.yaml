@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana-provisioning") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+data:
+  datasources.yaml: |-
+    apiVersion: 1
+    deleteDatasources:
+      - {name: Prometheus, orgId: 1}
+      - {name: Loki, orgId: 1}
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "cn5g-observability.componentName" (dict "root" . "component" "prometheus") }}:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: {{ .Values.prometheus.scrapeInterval | quote }}
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://{{ include "cn5g-observability.componentName" (dict "root" . "component" "loki") }}:3100
+        editable: false
+  dashboards.yaml: |-
+    apiVersion: 1
+    providers:
+      - name: CN5G
+        orgId: 1
+        folder: CN5G Platform
+        type: file
+        disableDeletion: true
+        allowUiUpdates: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana-dashboards") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+data:
+{{- range $path, $_ := .Files.Glob "files/dashboards/*.json" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+  ports:
+    - {name: http, port: 3000, targetPort: http, protocol: TCP}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "grafana") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "grafana") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "grafana") | nindent 8 }}
+      annotations:
+        cn5g.io/config-revision: "1"
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: grafana
+          image: {{ include "cn5g-observability.image" .Values.images.grafana }}
+          imagePullPolicy: {{ .Values.images.grafana.pullPolicy }}
+          env:
+            - {name: GF_USERS_ALLOW_SIGN_UP, value: "false"}
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "false"}
+            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+            - {name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false"}
+            - {name: GF_SECURITY_ADMIN_USER__FILE, value: /run/secrets/admin-user}
+            - {name: GF_SECURITY_ADMIN_PASSWORD__FILE, value: /run/secrets/admin-password}
+          ports:
+            - {name: http, containerPort: 3000, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          volumeMounts:
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml, readOnly: true}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml, readOnly: true}
+            - {name: dashboards, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+            - {name: admin, mountPath: /run/secrets, readOnly: true}
+            - {name: data, mountPath: /var/lib/grafana}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: provisioning
+          configMap:
+            name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana-provisioning") }}
+        - name: dashboards
+          configMap:
+            name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "grafana-dashboards") }}
+        - name: admin
+          secret:
+            secretName: {{ .Values.grafana.existingAdminSecret }}
+        - name: data
+          emptyDir: {sizeLimit: 256Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}

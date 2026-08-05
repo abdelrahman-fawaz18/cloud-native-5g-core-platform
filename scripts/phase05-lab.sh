@@ -12,6 +12,9 @@ Actions:
   prepare-secret  Create or verify the exact file-backed Phase 5 Secret.
   upgrade         Migrate the accepted release to five stable UE identities,
                   two DNNs, and two isolated data endpoints; then validate it.
+  repair-sessions Quiesce the five UEs, restart only the project-owned 5G
+                  session chain in dependency order, and revalidate Phase 5.
+                  This does not create a Helm revision or alter subscriber data.
   validate        Reconcile the two exact kind-node return routes and run the
                   complete per-UE Phase 5 validator.
   test-invalid-ue Launch one non-provisioned synthetic UE, prove that it
@@ -34,7 +37,7 @@ EOF
 
 action=${1:-}
 case "$action" in
-  preflight|prepare-secret|upgrade|validate|test-invalid-ue|test-reprovision|observe-resources|rollback|status) ;;
+  preflight|prepare-secret|upgrade|repair-sessions|validate|test-invalid-ue|test-reprovision|observe-resources|rollback|status) ;;
   remove-secret)
     if [[ ${2:-} != "--confirm" ]]; then
       printf 'error: remove-secret requires --confirm\n' >&2
@@ -389,6 +392,20 @@ restart_session_chain() {
   wait_for_phase05_nrf_profiles
   scale_phase05_ues 5
   printf 'statefulset=ue session_cache_reset=pass\n'
+}
+
+repair_phase05_sessions() {
+  verify_release_deployed
+  if [[ $(release_phase05_enabled) != "true" ]]; then
+    printf 'error: session repair requires the deployed Phase 5 topology\n' >&2
+    return 1
+  fi
+  verify_secret
+  printf 'phase05_session_repair=dependency-ordered-restart\n'
+  restart_session_chain
+  reconcile_return_routes
+  "$validator"
+  printf 'phase05_session_repair=pass\n'
 }
 
 write_state() {
@@ -965,6 +982,7 @@ case "$action" in
   preflight) run_preflight ;;
   prepare-secret) require_cluster; prepare_secret ;;
   upgrade) require_cluster; controlled_upgrade ;;
+  repair-sessions) require_cluster; repair_phase05_sessions ;;
   validate) require_cluster; verify_secret; reconcile_return_routes; "$validator" ;;
   test-invalid-ue) require_cluster; test_invalid_ue ;;
   test-reprovision) require_cluster; test_reprovision ;;

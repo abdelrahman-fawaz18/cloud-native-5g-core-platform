@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -31,6 +31,11 @@ Grafana Alloy for sending logs to Loki.
 - Keep high-cardinality per-UE detail in logs and reports; expose bounded
   aggregate metrics unless a cardinality review approves otherwise.
 - Pin every image by version and release-baseline digest in Phase 6.
+- Run the stack as a separate `cn5g-observability` Helm release and namespace.
+- Collect node/container metrics through the authenticated API proxy and logs
+  through the Kubernetes API rather than host mounts.
+- Defer Alertmanager until a notification receiver and credential boundary
+  are approved; Prometheus evaluates and tests rules in this phase.
 
 ## Alternatives Considered
 
@@ -51,8 +56,19 @@ Grafana Alloy for sending logs to Loki.
   recommends Alloy as the primary log-ingestion method.
 - [Grafana Alloy documentation](https://grafana.com/docs/alloy/latest/collect/logs-in-kubernetes/)
   documents Kubernetes log collection.
-- The host has about 10 GiB available memory and 37 GiB free disk, requiring
-  bounded retention and staged deployment.
+- The accepted Phase 5 preflight observed about 8 GiB available memory and
+  28 GiB free Docker filesystem space, requiring bounded retention, explicit
+  resource limits, and staged deployment.
+- Registry identities are pinned in `versions/phase-06.env`; both charts pass
+  strict linting, deterministic rendering, and Kubernetes server-side dry-run.
+- Live acceptance on 2026-08-05 verified 14 active Prometheus targets, all 13
+  required targets healthy, five UE probe targets, five AMF sessions, five
+  PFCP sessions, 20 bounded custom UE series, recent Loki ingestion, two
+  Grafana data sources, four dashboards, and three alert firing/resolution
+  lifecycles.
+- Prometheus reported no firing exercise alert after the lifecycle test, all
+  observability workloads were Ready with zero restarts, and both 2 GiB
+  telemetry claims were Bound.
 
 ## Consequences
 
@@ -60,6 +76,12 @@ The stack covers the required metrics, logs, dashboards, and alerts with
 supported components. It adds storage, memory, permissions, and label-design
 work. Single replicas demonstrate observability behavior, not high
 availability.
+
+The accepted implementation also records two compatibility constraints:
+kube-state-metrics exposes startup health on the metrics listener and
+readiness on its telemetry listener, while Prometheus 3 requires an explicit
+fallback scrape protocol for the deliberately minimal alert-exercise
+exporter. Both constraints are encoded in the chart and protected by tests.
 
 ## Reversal Or Migration
 

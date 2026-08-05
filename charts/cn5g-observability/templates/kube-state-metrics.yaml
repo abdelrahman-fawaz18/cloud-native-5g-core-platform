@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "kube-state-metrics") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "kube-state-metrics") | nindent 4 }}
+spec:
+  selector:
+    {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "kube-state-metrics") | nindent 4 }}
+  ports:
+    - {name: metrics, port: 8080, targetPort: metrics, protocol: TCP}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "kube-state-metrics") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "kube-state-metrics") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "kube-state-metrics") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "kube-state-metrics") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "cn5g-observability.componentName" (dict "root" . "component" "kube-state-metrics") }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: kube-state-metrics
+          image: {{ include "cn5g-observability.image" .Values.images.kubeStateMetrics }}
+          imagePullPolicy: {{ .Values.images.kubeStateMetrics.pullPolicy }}
+          args:
+            - --namespaces={{ .Values.global.coreNamespace }},{{ .Release.Namespace }}
+            - --resources=pods,deployments,statefulsets,jobs,persistentvolumeclaims
+          ports:
+            - {name: metrics, containerPort: 8080, protocol: TCP}
+            - {name: telemetry, containerPort: 8081, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: telemetry}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /livez, port: metrics}
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.kubeStateMetrics.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}

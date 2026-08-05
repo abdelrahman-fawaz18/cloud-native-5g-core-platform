@@ -4,9 +4,9 @@
 
 Accepted
 
-Acceptance covers Phase 2 inputs. Phase-specific Kubernetes, Helm,
-observability, and Continuous Integration pins remain provisional until their
-gates pass.
+Acceptance covers the Phase 2 runtime, Phase 3 Kubernetes, Phase 4 Helm, and
+Phase 6 observability inputs. Continuous Integration pins remain provisional
+until their gate passes.
 
 ## Context
 
@@ -34,8 +34,11 @@ rather than permanent stagnation.
 Phase 2 accepted Docker Engine 29.7.1, containerd 2.2.6, Buildx 0.36.0, Docker
 Compose 5.3.1, Open5GS 2.7.7, UERANSIM 3.2.8, MongoDB 8.0.28, and their
 recorded package versions, source checksums, base manifests, and image
-identities. kind 0.32.0, Kubernetes/kubectl 1.36.1, Helm 4.2.0, and later
-observability/CI inputs remain candidates until their respective phase gates.
+identities. Phase 3 accepted kind 0.32.0 and Kubernetes/kubectl 1.36.1; Phase
+4 accepted Helm 4.2.0; and Phase 6 accepted the exact Prometheus, Grafana,
+Loki, Alloy, kube-state-metrics, and UE probe image identities recorded in
+`versions/phase-06.env`. Later Continuous Integration inputs remain candidates
+until their phase gate passes.
 
 ## Alternatives Considered
 
@@ -58,6 +61,9 @@ observability/CI inputs remain candidates until their respective phase gates.
 - `versions/phase-02.env` records the accepted Docker package strings,
   application commits/checksums, base manifests, MongoDB manifest, and tested
   local image IDs.
+- `versions/phase-03.env`, `versions/phase-04.env`, and
+  `versions/phase-06.env` record the accepted Kubernetes, Helm, and
+  observability artifacts and immutable identities.
 
 ## Consequences
 

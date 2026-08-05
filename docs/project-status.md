@@ -10,7 +10,7 @@ Last updated: 2026-08-05
 | 3 — Kubernetes networking feasibility | Complete | kind transport, TUN, capability, synthetic N6, packet visibility, and scoped cleanup verified |
 | 4 — Helm-managed single-UE platform | Complete | Chart, real 5G path, persistence, resource baseline, upgrade, rollback, and scoped uninstall/reinstall verified |
 | 5 — Multi-UE and DNN automation | Complete | Five concurrent UEs, two isolated DNNs, negative/recovery behavior, rollback, resource observation, and clean rerun verified |
-| 6 — Observability and operational visibility | Ready to begin | Phase 5 concurrent-session baseline is accepted |
+| 6 — Observability and operational visibility | Complete | Metrics, logs, dashboards, bounded cardinality, persistence, and three alert firing/resolution lifecycles verified |
 | 7-10 | Not started | Each later phase remains gated by the preceding verified baseline |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
@@ -130,3 +130,27 @@ mCPU, 241 MiB current memory, and 691 MiB peak memory under its 500 mCPU/768
 MiB limit. Individual UEs averaged 17-19 mCPU, used 5-10 MiB current memory,
 and peaked at 11-15 MiB. These are local scheduling observations, not capacity,
 throughput, availability, or production-sizing claims.
+
+Phase 6 is complete. The core release now exposes bounded native and synthetic
+telemetry, while a separate `cn5g-observability` Helm release owns Prometheus,
+Grafana, Loki, Grafana Alloy, and project-scoped kube-state-metrics. Prometheus
+and Loki each use a retained 2 GiB claim with 24-hour retention. Grafana is
+provisioned entirely from code and remains reachable only through an explicit
+loopback port-forward.
+
+Runtime acceptance found 14 active Prometheus targets, including five UE
+probe targets, with all 13 required non-exercise targets healthy. Native
+Open5GS metrics reported five registered UE sessions and five active PFCP
+sessions; the five source-bound user-plane probes succeeded; and the custom UE
+telemetry remained at 20 series against a limit of 30. Loki returned recent
+project logs, and Grafana exposed exactly two provisioned data sources and
+four version-controlled dashboards.
+
+Three controlled alert exercises each proved both firing and resolution for a
+scrape-target failure, registered-UE mismatch, and user-plane probe failure.
+No exercise alert remained firing afterward. All observability workloads were
+Ready with zero restarts at final inspection, both telemetry claims were
+Bound, the complete Phase 5 validation still passed, and the post-Phase-6 host
+snapshot was captured. These results establish operational visibility for the
+five-UE local baseline; they do not establish throughput, packet-loss,
+long-duration retention, high availability, or production monitoring scale.

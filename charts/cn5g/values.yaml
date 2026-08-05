@@ -34,6 +34,12 @@ images:
     digest: sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
     pullPolicy: Never
     expectedImageID: sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5
+  ueProbe:
+    repository: python
+    tag: 3.13.7-alpine3.22
+    digest: sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
+    pullPolicy: IfNotPresent
+    expectedImageID: sha256:527c28b29498575b851ad88e7522ac7201bbd9e920d2c11b00ff2b39b315f5f8
 
 subscriberSecret:
   existingSecret: cn5g-subscriber
@@ -65,6 +71,18 @@ phase05:
       endpoint: data-enterprise
       routeTable: 1061
       rulePriority: 1061
+
+# Phase 6 adds one least-privileged metrics sidecar to each Phase 5 UE Pod.
+# The sidecar performs a bounded, synthetic user-plane request through the
+# existing UE TUN and exposes only ordinal/DNN labels; subscriber identities
+# never enter the metric label set.
+phase06:
+  enabled: false
+  probeIntervalSeconds: 15
+  metricsPort: 9101
+  resources:
+    requests: {cpu: 5m, memory: 8Mi}
+    limits: {cpu: 50m, memory: 32Mi}
 
 mongodb:
   storageClassName: standard

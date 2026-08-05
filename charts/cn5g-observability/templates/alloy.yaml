@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alloy-config") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "alloy") | nindent 4 }}
+data:
+  config.alloy: |-
+    logging {
+      level  = "info"
+      format = "logfmt"
+    }
+
+    discovery.kubernetes "core_pods" {
+      role = "pod"
+      namespaces {
+        names = ["{{ .Values.global.coreNamespace }}"]
+      }
+    }
+
+    discovery.kubernetes "observability_pods" {
+      role = "pod"
+      namespaces {
+        names = ["{{ .Release.Namespace }}"]
+      }
+    }
+
+    discovery.relabel "project_pods" {
+      targets = array.concat(
+        discovery.kubernetes.core_pods.targets,
+        discovery.kubernetes.observability_pods.targets,
+      )
+      rule {
+        source_labels = ["__meta_kubernetes_pod_phase"]
+        regex         = "Pending|Succeeded|Failed"
+        action        = "drop"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+      rule {
+        target_label = "cluster"
+        replacement  = "{{ .Values.global.clusterName }}"
+      }
+    }
+
+    loki.source.kubernetes "project_pods" {
+      targets    = discovery.relabel.project_pods.output
+      forward_to = [loki.process.project.receiver]
+    }
+
+    loki.process "project" {
+      stage.cri {}
+      stage.label_drop {
+        values = ["filename", "job"]
+      }
+      forward_to = [loki.write.local.receiver]
+    }
+
+    loki.source.kubernetes_events "core_events" {
+      job_name   = "integrations/kubernetes/eventhandler"
+      namespaces = ["{{ .Values.global.coreNamespace }}", "{{ .Release.Namespace }}"]
+      log_format = "logfmt"
+      forward_to = [loki.write.local.receiver]
+    }
+
+    loki.write "local" {
+      endpoint {
+        url = "http://{{ include "cn5g-observability.componentName" (dict "root" . "component" "loki") }}:3100/loki/api/v1/push"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alloy") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "alloy") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "alloy") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "alloy") | nindent 8 }}
+      annotations:
+        cn5g.io/config-revision: "1"
+    spec:
+      serviceAccountName: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alloy") }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 473
+        runAsGroup: 473
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: alloy
+          image: {{ include "cn5g-observability.image" .Values.images.alloy }}
+          imagePullPolicy: {{ .Values.images.alloy.pullPolicy }}
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --storage.path=/var/lib/alloy
+            - --server.http.listen-addr=0.0.0.0:12345
+          ports:
+            - {name: http, containerPort: 12345, protocol: TCP}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: {path: /-/healthy, port: http}
+            periodSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.alloy.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alloy, readOnly: true}
+            - {name: data, mountPath: /var/lib/alloy}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "alloy-config") }}
+        - name: data
+          emptyDir: {sizeLimit: 256Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 32Mi}

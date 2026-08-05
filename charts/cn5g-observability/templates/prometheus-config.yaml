@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g-observability.componentName" (dict "root" . "component" "prometheus-config") }}
+  labels:
+    {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "prometheus") | nindent 4 }}
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval: {{ .Values.prometheus.scrapeInterval }}
+      evaluation_interval: {{ .Values.prometheus.evaluationInterval }}
+      external_labels:
+        cluster: {{ .Values.global.clusterName | quote }}
+        environment: "local-kind"
+    rule_files:
+      - /etc/prometheus/rules/*.yaml
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["127.0.0.1:9090"]
+      - job_name: open5gs-amf
+        static_configs:
+          - targets: ["cn5g-amf.{{ .Values.global.coreNamespace }}.svc.cluster.local:9090"]
+      - job_name: open5gs-pcf
+        static_configs:
+          - targets: ["cn5g-pcf.{{ .Values.global.coreNamespace }}.svc.cluster.local:9090"]
+      - job_name: open5gs-smf
+        static_configs:
+          - targets: ["cn5g-smf.{{ .Values.global.coreNamespace }}.svc.cluster.local:9090"]
+      - job_name: open5gs-upf
+        static_configs:
+          - targets: ["cn5g-upf.{{ .Values.global.coreNamespace }}.svc.cluster.local:9090"]
+      - job_name: cn5g-ue-user-plane
+        dns_sd_configs:
+          - names: ["cn5g-ue.{{ .Values.global.coreNamespace }}.svc.cluster.local"]
+            type: A
+            port: 9101
+            refresh_interval: 15s
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "kube-state-metrics") }}:8080"]
+      - job_name: alert-exercise
+        # BusyBox httpd does not emit a Content-Type header. Prometheus 3
+        # requires an explicit fallback for this deliberately minimal,
+        # project-owned OpenMetrics test fixture.
+        fallback_scrape_protocol: PrometheusText0.0.4
+        static_configs:
+          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}:8080"]
+      - job_name: kubernetes-node
+        scheme: https
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc.cluster.local:443
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc.cluster.local:443
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+  alerts.yaml: |-
+    groups:
+      - name: cn5g-platform
+        rules:
+          - alert: Cn5gPrometheusTargetDown
+            expr: (up{job=~"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics"} == 0) or on() (cn5g_observability_alert_exercise{scenario="target-down"} == 1)
+            for: 30s
+            labels: {severity: critical, service: cn5g}
+            annotations:
+              summary: "A required CN5G metrics target is unavailable"
+              description: "Prometheus cannot scrape {{ "{{" }} $labels.job {{ "}}" }} at {{ "{{" }} $labels.instance {{ "}}" }}."
+          - alert: Cn5gWorkloadUnavailable
+            expr: kube_deployment_status_replicas_available{namespace="cn5g",deployment=~"cn5g-.*"} < kube_deployment_spec_replicas{namespace="cn5g",deployment=~"cn5g-.*"}
+            for: 60s
+            labels: {severity: critical, service: cn5g}
+            annotations:
+              summary: "A CN5G Deployment has unavailable replicas"
+              description: "Deployment {{ "{{" }} $labels.deployment {{ "}}" }} is below its requested replica count."
+          - alert: Cn5gRegisteredUeMismatch
+            expr: (max(amf_session) != 5) or on() (cn5g_observability_alert_exercise{scenario="ue-count"} == 1)
+            for: 60s
+            labels: {severity: warning, service: cn5g-control-plane}
+            annotations:
+              summary: "The active AMF UE count differs from the Phase 5 contract"
+              description: "Expected five active AMF sessions; observed {{ "{{" }} $value {{ "}}" }}."
+          - alert: Cn5gUserPlaneProbeFailed
+            expr: (cn5g_ue_user_plane_probe_success == 0) or on() (cn5g_observability_alert_exercise{scenario="user-plane"} == 1)
+            for: 45s
+            labels: {severity: critical, service: cn5g-user-plane}
+            annotations:
+              summary: "A synthetic UE user-plane probe is failing"
+              description: "UE ordinal {{ "{{" }} $labels.ordinal {{ "}}" }} on DNN {{ "{{" }} $labels.dnn {{ "}}" }} cannot reach its intended endpoint."

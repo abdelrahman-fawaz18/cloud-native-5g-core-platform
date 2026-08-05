@@ -202,6 +202,16 @@ if [[ $upf_logs == *"Cannot find PFCP-Node"* || \
 fi
 printf 'pfcp_control_plane_health=pass\n'
 
+# A StatefulSet rolling update replaces one UE session at a time. Open5GS
+# retains both the removed session's historical INFO line and the replacement
+# session's line in the same container log. Keep only the newest record for
+# each address so uniqueness describes current UE assignments rather than the
+# accumulated log history.
+latest_fseid_rows=$(sed -n \
+  's/.*UE F-SEID\[UP:\([^ ]*\) CP:\([^]]*\)\].*APN\[\([^]]*\)\].*IPv4\[\([^]]*\)\].*/\1 \2 \3 \4/p' \
+  <<<"$upf_logs" | awk '{latest[$4] = $0} END {for (ip in latest) print latest[ip]}' | \
+  sort -k4,4)
+
 internet_ip=$(component_pod_ip data-internet)
 enterprise_ip=$(component_pod_ip data-enterprise)
 upf_ip=$(component_pod_ip upf)
@@ -280,10 +290,10 @@ for ordinal in 0 1 2 3 4; do
   esac
   ue_ip=${address%/*}
   observed_addresses+=("$ue_ip")
-  if ! awk -v expected_dnn="APN[$dnn]" -v expected_ip="IPv4[$ue_ip]" '
-      index($0, expected_dnn) && index($0, expected_ip) {found = 1}
+  if ! awk -v expected_dnn="$dnn" -v expected_ip="$ue_ip" '
+      $3 == expected_dnn && $4 == expected_ip {found = 1}
       END {exit !found}
-    ' <<<"$upf_logs"; then
+    ' <<<"$latest_fseid_rows"; then
     printf 'error: UPF session does not correlate %s with %s\n' "$dnn" "$ue_ip" >&2
     exit 27
   fi
@@ -324,10 +334,17 @@ if [[ $unique_address_count != "5" ]]; then
   printf 'error: UE tunnel address collision detected\n' >&2
   exit 31
 fi
-fseid_rows=$(sed -n \
-  's/.*UE F-SEID\[UP:\([^ ]*\) CP:\([^]]*\)\].*IPv4\[\([^]]*\)\].*/\1 \2 \3/p' \
-  <<<"$upf_logs" | sort -u)
-fseid_address_count=$(awk '{print $3}' <<<"$fseid_rows" | sort -u | sed '/^$/d' | wc -l)
+fseid_rows=''
+for ue_ip in "${observed_addresses[@]}"; do
+  row=$(awk -v expected_ip="$ue_ip" '$4 == expected_ip {print}' \
+    <<<"$latest_fseid_rows")
+  if [[ $(sed '/^$/d' <<<"$row" | wc -l) != "1" ]]; then
+    printf 'error: current UPF session evidence is ambiguous: %s\n' "$ue_ip" >&2
+    exit 31
+  fi
+  fseid_rows+="${row}"$'\n'
+done
+fseid_address_count=$(awk '{print $4}' <<<"$fseid_rows" | sort -u | sed '/^$/d' | wc -l)
 fseid_up_count=$(awk '{print $1}' <<<"$fseid_rows" | sort -u | sed '/^$/d' | wc -l)
 fseid_cp_count=$(awk '{print $2}' <<<"$fseid_rows" | sort -u | sed '/^$/d' | wc -l)
 if [[ $fseid_address_count != "5" || $fseid_up_count != "5" || $fseid_cp_count != "5" ]]; then

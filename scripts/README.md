@@ -37,6 +37,12 @@ targets, and support a dry-run or read-only mode where practical.
   ordinal-zero execution during controller-kind migration, reconciles two
   exact kind-node return routes, validates the five-UE topology, and restores
   the accepted Phase 4 revision without deleting persistent storage.
+- `phase06-lab.sh`: owns the separate observability lifecycle. It verifies the
+  Phase 5 baseline and resource budget, creates or hash-verifies a restricted
+  Grafana Secret, applies the bounded UE probe overlay, installs Prometheus,
+  Grafana, Loki, Alloy, and kube-state-metrics, validates live metrics/logs/
+  dashboards/cardinality, tests three alert firing-resolution cycles, exposes
+  Grafana only on loopback, and performs exact retained-data cleanup.
 - `validate-phase05.sh`: reports each ordinal, Pod, DNN, tunnel address,
   registration/session result, intended endpoint result, and cross-DNN denial.
   It also verifies five database records, unique addresses and F-SEIDs,
@@ -230,3 +236,34 @@ The rollback waiter derives the restored subscriber Job from the active Helm
 manifest rather than assuming that its suffix equals the new rollback
 revision. Post-apply rollback and already-complete subscriber cleanup are both
 verified resumable states.
+
+## Phase 6 Observability Lifecycle
+
+The Phase 6 workflow begins only from a validated Phase 5 release:
+
+```bash
+sudo ./scripts/phase06-lab.sh preflight
+sudo ./scripts/phase06-lab.sh prepare-secret
+sudo ./scripts/phase06-lab.sh install
+sudo ./scripts/phase06-lab.sh test-alerts
+sudo ./scripts/phase06-lab.sh validate
+```
+
+`install` upgrades the core release only to add one bounded,
+least-privileged user-plane metrics sidecar per UE. All backends, dashboards,
+rules, and read-only collectors belong to the separate
+`cn5g-observability` release and namespace. Prometheus and Loki each use a
+retained 2 GiB PVC; Grafana is reconstructed from provisioned files and its
+credential is an ignored pre-created Secret.
+
+The accepted runtime run completed installation, repeated validation, and
+three alert firing/resolution cycles on 2026-08-05. It verified 13 required
+healthy Prometheus targets, five UE targets, five AMF and PFCP sessions, five
+successful user-plane probes, 20 bounded custom series, recent Loki data, two
+Grafana data sources, and four dashboards.
+
+Use `sudo ./scripts/phase06-lab.sh grafana` for a temporary
+`127.0.0.1:13000` port-forward. Normal uninstall restores the Phase 5 core
+overlay and preserves Phase 6 PVCs/credential. A separate confirmed `destroy`
+action removes only those verified retained objects after the release is
+absent.

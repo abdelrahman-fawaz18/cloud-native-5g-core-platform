@@ -1,0 +1,13 @@
+{
+  "uid":"cn5g-5g-service","title":"CN5G Control and User Plane","tags":["cn5g","5g","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
+  "time":{"from":"now-30m","to":"now"},
+  "panels":[
+    {"id":1,"type":"stat","title":"AMF sessions","gridPos":{"h":8,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(amf_session)","legendFormat":"sessions"}]},
+    {"id":2,"type":"stat","title":"RAN UEs","gridPos":{"h":8,"w":6,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(ran_ue)","legendFormat":"UEs"}]},
+    {"id":3,"type":"stat","title":"PFCP sessions","gridPos":{"h":8,"w":6,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(pfcp_sessions_active)","legendFormat":"sessions"}]},
+    {"id":4,"type":"stat","title":"PFCP peers","gridPos":{"h":8,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(pfcp_peers_active)","legendFormat":"peers"}]},
+    {"id":5,"type":"timeseries","title":"Per-UE synthetic user-plane status","gridPos":{"h":9,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_user_plane_probe_success","legendFormat":"UE {{ordinal}} / {{dnn}}"}]},
+    {"id":6,"type":"timeseries","title":"Synthetic user-plane latency","gridPos":{"h":9,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_user_plane_probe_duration_seconds","legendFormat":"UE {{ordinal}} / {{dnn}}"}]},
+    {"id":7,"type":"timeseries","title":"UE TUN packet counters","gridPos":{"h":9,"w":24,"x":0,"y":17},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_tun_packets_total","legendFormat":"UE {{ordinal}} {{dnn}} {{direction}}"}]}
+  ]
+}

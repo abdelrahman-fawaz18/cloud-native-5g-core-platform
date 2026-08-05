@@ -24,3 +24,6 @@ Current manifests:
   feasibility baseline.
 - `phase-04.env`: accepted Helm artifact identity and project-owned release,
   namespace, chart-version, and N6 route contract for the single-UE platform.
+- `phase-06.env`: accepted Prometheus, Grafana, Loki, Alloy,
+  kube-state-metrics, and UE probe runtime versions plus immutable registry
+  index digests for the observability baseline.

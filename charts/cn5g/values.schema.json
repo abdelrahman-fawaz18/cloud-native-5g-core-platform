@@ -3,7 +3,7 @@
   "title": "CN5G Helm values",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "images", "subscriberSecret", "phase05", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
+  "required": ["global", "images", "subscriberSecret", "phase05", "phase06", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
   "properties": {
     "global": {
       "type": "object",
@@ -37,12 +37,13 @@
     "images": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["open5gs", "ueransim", "dataNetwork", "mongodb"],
+      "required": ["open5gs", "ueransim", "dataNetwork", "mongodb", "ueProbe"],
       "properties": {
         "open5gs": {"$ref": "#/$defs/localImage"},
         "ueransim": {"$ref": "#/$defs/localImage"},
         "dataNetwork": {"$ref": "#/$defs/localImage"},
-        "mongodb": {"$ref": "#/$defs/registryImage"}
+        "mongodb": {"$ref": "#/$defs/registryImage"},
+        "ueProbe": {"$ref": "#/$defs/pullableRegistryImage"}
       }
     },
     "subscriberSecret": {
@@ -85,6 +86,17 @@
         }
       }
     },
+    "phase06": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "probeIntervalSeconds", "metricsPort", "resources"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "probeIntervalSeconds": {"const": 15},
+        "metricsPort": {"const": 9101},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    },
     "mongodb": {"$ref": "#/$defs/storageWorkload"},
     "open5gs": {
       "type": "object",
@@ -121,6 +133,18 @@
         "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
         "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "pullPolicy": {"const": "Never"},
+        "expectedImageID": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "pullableRegistryImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy", "expectedImageID"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "pullPolicy": {"const": "IfNotPresent"},
         "expectedImageID": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       }
     },

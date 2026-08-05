@@ -1,0 +1,9 @@
+{
+  "uid":"cn5g-logs","title":"CN5G Project Logs","tags":["cn5g","logs","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
+  "time":{"from":"now-30m","to":"now"},
+  "panels":[
+    {"id":1,"type":"logs","title":"Core workload logs","gridPos":{"h":12,"w":24,"x":0,"y":0},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{namespace=\"cn5g\"}","queryType":"range"}],"options":{"showTime":true,"showLabels":true,"wrapLogMessage":true,"sortOrder":"Descending"}},
+    {"id":2,"type":"timeseries","title":"Log volume by component","gridPos":{"h":9,"w":12,"x":0,"y":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"sum by (component) (count_over_time({namespace=\"cn5g\"}[1m]))","queryType":"range","legendFormat":"{{component}}"}]},
+    {"id":3,"type":"logs","title":"Warning and error signals","gridPos":{"h":9,"w":12,"x":12,"y":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{namespace=\"cn5g\"} |~ `(?i)warn|error|fail|reject|denied`","queryType":"range"}],"options":{"showTime":true,"showLabels":true,"wrapLogMessage":true,"sortOrder":"Descending"}}
+  ]
+}

@@ -301,6 +301,41 @@ spec:
             - {name: iproute2, mountPath: /etc/iproute2}
             - {name: logs, mountPath: /opt/ueransim/logs}
             - {name: tmp, mountPath: /tmp}
+        {{- if .Values.phase06.enabled }}
+        - name: user-plane-metrics
+          image: {{ include "cn5g.image" .Values.images.ueProbe }}
+          imagePullPolicy: {{ .Values.images.ueProbe.pullPolicy }}
+          command: ["python3", "/opt/cn5g/probe.py"]
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          ports:
+            - {name: metrics, containerPort: {{ .Values.phase06.metricsPort }}, protocol: TCP}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          startupProbe:
+            httpGet: {path: /metrics, port: metrics}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.phase06.resources | nindent 12 }}
+          volumeMounts:
+            - {name: ue-probe, mountPath: /opt/cn5g, readOnly: true}
+        {{- end }}
       volumes:
         - name: tun-device
           hostPath: {path: /dev/net/tun, type: CharDevice}
@@ -320,3 +355,9 @@ spec:
           emptyDir: {sizeLimit: 32Mi}
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        {{- if .Values.phase06.enabled }}
+        - name: ue-probe
+          configMap:
+            name: {{ include "cn5g.fullname" . }}-ue-probe
+            defaultMode: 0444
+        {{- end }}

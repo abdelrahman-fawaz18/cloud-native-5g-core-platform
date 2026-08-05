@@ -19,6 +19,12 @@ The explanations describe the verified local architecture. They do not claim
 that a single-node kind cluster has the availability, scale, storage,
 networking, or security controls of a production telecommunications platform.
 
+Phase-specific extensions:
+
+- [Phase 6 observability architecture](architecture/phase-06-observability.md)
+- [Phase 6 observability runbook](runbooks/phase-06-observability.md)
+- [ADR-0005 observability stack decision](adr/0005-observability-stack.md)
+
 Because this is a long-form reference, it can be read in parts:
 
 - Sections 1-10 build the execution and reconciliation model.
@@ -2619,6 +2625,12 @@ five UE TUN devices and reports the narrower conclusion that no TEID collision
 symptom was observed. Direct numeric TEID evidence requires a packet-level
 capture and is reserved for the observability evidence phase.
 
+The validator treats those INFO lines as event history rather than a live
+session table. During an ordinal StatefulSet rollout, it retains the newest
+F-SEID row for each currently assigned UE address before checking uniqueness.
+Historical rows from replaced sessions therefore cannot be misreported as
+concurrent session collisions.
+
 The two runtime negative actions are intentionally separate from normal
 validation. `test-invalid-ue` creates a temporary configuration Secret and a
 sixth, unprovisioned UE Pod, confirms that registration never succeeds, checks
@@ -2734,3 +2746,274 @@ baseline for Phase 6 observability. It does not establish high availability,
 multi-node behavior, production storage, numeric GTP-U Tunnel Endpoint
 Identifier capture, carrier throughput, or general capacity beyond the five
 accepted concurrent UEs.
+
+## 32. Phase 6 Observability And Operational Mental Model
+
+Phase 6 answers a question that Kubernetes alone cannot answer: **is the 5G
+service actually working, and what evidence explains a failure?** A green Pod
+only means its readiness check currently passes. It does not prove that a UE
+is registered, that an SMF programmed a PFCP session, or that user traffic can
+cross GTP-U and reach the selected DNN.
+
+### 32.1 The four evidence planes
+
+```mermaid
+mindmap
+  root((Operational truth))
+    Platform state
+      Pods and controllers
+      PVC state
+      CPU and memory
+      Scrape health
+    5G state
+      Registered UEs
+      PFCP sessions
+      SBI profiles
+    User-plane state
+      Per-ordinal probe success
+      Probe duration
+      TUN packet counters
+    Diagnostic context
+      Container logs
+      Kubernetes Events
+      Cross-component timeline
+```
+
+Each plane answers a different question:
+
+| Evidence plane | Main question | Source |
+| --- | --- | --- |
+| Platform | Did Kubernetes create and keep the requested objects healthy? | Kubernetes API, kube-state-metrics, kubelet/cAdvisor |
+| 5G | Does Open5GS currently report the expected registrations and sessions? | native AMF, PCF, SMF, and UPF metrics |
+| User plane | Can each UE reach only its assigned endpoint through its live session? | one bounded probe sidecar per UE |
+| Diagnostics | What events and component messages explain a transition? | Alloy-collected Pod logs and Kubernetes Events in Loki |
+
+The dashboard is useful because it places these planes next to each other. It
+does not merge them into one vague “healthy” light.
+
+### 32.2 Component connection map
+
+```mermaid
+flowchart TB
+    subgraph C["cn5g namespace — service release"]
+        NF["Open5GS network functions\nAMF / PCF / SMF / UPF"]
+        UES["UE StatefulSet\n5 UEs + 5 probe sidecars"]
+        OBJ["Deployments / StatefulSets / Jobs / PVC"]
+        OUT["Container stdout and stderr"]
+    end
+
+    subgraph O["cn5g-observability namespace — telemetry release"]
+        KSM["kube-state-metrics\nobject-state translator"]
+        P[("Prometheus\nmetrics + PromQL + alerts")]
+        A["Grafana Alloy\nlog collector"]
+        L[("Loki\nlogs + LogQL")]
+        G["Grafana\n4 dashboards"]
+    end
+
+    API["Kubernetes API and kubelet proxy"]
+    OBJ --> API --> KSM --> P
+    API -->|"node/container metrics"| P
+    NF -->|"HTTP /metrics"| P
+    UES -->|"five HTTP /metrics targets"| P
+    OUT -->|"project-scoped API streams"| A --> L
+    P --> G
+    L --> G
+```
+
+- **Prometheus** is a time-series database and rule engine. It periodically
+  *scrapes*—pulls—numeric metrics from HTTP endpoints and stores the samples
+  with timestamps and bounded labels.
+- **PromQL** (Prometheus Query Language) selects and calculates over those
+  time series. Dashboards and alerts use the same query language.
+- **kube-state-metrics** reads Kubernetes objects and converts fields such as
+  desired replicas, available replicas, Pod readiness, Job completion, and
+  PVC phase into Prometheus metrics. It does not measure CPU and does not know
+  5G protocols.
+- **kubelet/cAdvisor** provide node and container CPU, memory, network, and
+  filesystem measurements through the authenticated Kubernetes API proxy.
+- **Loki** stores logs. Unlike a full-text database that indexes every word,
+  Loki indexes a deliberately small set of stream labels and stores compressed
+  log content.
+- **LogQL** (Loki Query Language) selects log streams and filters or aggregates
+  their contents.
+- **Grafana Alloy** reads only the project namespaces through the Kubernetes
+  API and pushes those streams to Loki. It replaces the retired Promtail
+  collector without mounting host log directories or the container runtime
+  socket.
+- **Grafana** is the visual layer. It contains no manually created source of
+  truth: two data sources and four dashboards are provisioned from Git.
+
+### 32.3 Why a probe sidecar is needed
+
+Open5GS can report that a session exists, but a control-plane session record
+does not prove that an application response crosses the complete user plane.
+Each UE Pod therefore contains a small non-root sidecar. A **sidecar** is a
+second container in the same Pod that assists the main process. Containers in
+one Pod share its network namespace, so the sidecar can use the TUN interface
+created by UERANSIM without receiving subscriber credentials.
+
+```mermaid
+sequenceDiagram
+    participant S as UE probe sidecar
+    participant T as uesimtun0
+    participant R as gNB
+    participant U as UPF
+    participant D as assigned DNN endpoint
+    participant P as Prometheus
+
+    S->>T: bind HTTP source to UE session address
+    T->>R: simulated radio user plane
+    R->>U: N3 GTP-U / UDP 2152
+    U->>D: route through selected DNN
+    D-->>S: HTTP response over return path
+    S->>S: update success, duration, RX/TX samples
+    P->>S: scrape /metrics on port 9101
+```
+
+The probe runs as UID/GID 65532, drops every Linux capability, uses a read-only
+root filesystem, mounts no subscriber Secret, and receives no Kubernetes API
+token. Its only variable labels are five ordinals, two DNN names, and two
+packet directions. This produces 20 custom series and is rejected if it grows
+beyond 30.
+
+### 32.4 Pull metrics, push logs, query both
+
+```text
+metrics producer <-- HTTP pull -- Prometheus <-- PromQL -- Grafana/alerts
+
+log producer -- API stream --> Alloy -- push --> Loki <-- LogQL -- Grafana
+```
+
+This direction matters. A failed Prometheus scrape immediately becomes a
+target-health signal. A failed log collector does not make the application
+unhealthy, but it creates a diagnostic blind spot that must be visible in the
+platform dashboard and collector logs.
+
+### 32.5 Alert states and the tested lifecycle
+
+An alert expression does not jump directly from normal to notification. Its
+local lifecycle is:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Inactive
+    Inactive --> Pending: condition becomes true
+    Pending --> Firing: condition remains true for required duration
+    Pending --> Inactive: condition clears early
+    Firing --> Inactive: condition resolves
+```
+
+Prometheus evaluates four project rules. Three can be exercised safely without
+stopping a real workload:
+
+| Alert | Condition represented | Accepted exercise |
+| --- | --- | --- |
+| `Cn5gPrometheusTargetDown` | required metrics target is unavailable | fired, then resolved |
+| `Cn5gWorkloadUnavailable` | requested Deployment replica is unavailable | installed; not disrupted in the bounded exercise |
+| `Cn5gRegisteredUeMismatch` | AMF session count differs from five | fired, then resolved |
+| `Cn5gUserPlaneProbeFailed` | one or more UE probes fail | fired, then resolved |
+
+The exercise endpoint changes only a synthetic metric used by the real rule
+expressions. A trap restores all exercise values to zero if the command is
+interrupted. Alertmanager—which would send notifications to an external
+receiver—is deliberately absent because no receiver and credential boundary
+has been approved.
+
+### 32.6 Persistence and ownership
+
+```text
+Helm release cn5g
+└── UE probe ConfigMap, sidecars, and metrics Service port
+
+Helm release cn5g-observability
+├── Prometheus StatefulSet -> retained 2 GiB PVC, 24 h / 1 GB limit
+├── Loki StatefulSet       -> retained 2 GiB PVC, 24 h retention
+├── Grafana Deployment     -> 2 data sources + 4 dashboards from code
+├── Alloy Deployment       -> disposable collector state
+└── kube-state-metrics     -> read-only, project-scoped API access
+
+Pre-created ignored material
+└── Grafana administrator Secret
+```
+
+The separation lets telemetry be upgraded or removed without pretending it is
+part of the 5G protocol service itself. Normal uninstall restores the Phase 5
+core overlay and retains the two observability claims, namespace, and Grafana
+Secret. Confirmed destruction is a separate operation and refuses to continue
+until it can identify the exact release-owned boundary.
+
+### 32.7 Accepted runtime evidence
+
+The final 2026-08-05 acceptance state was:
+
+| Check | Result |
+| --- | --- |
+| Helm | core revision 12 deployed; observability revision 2 deployed |
+| Kubernetes | four observability Deployments and two StatefulSets Ready; zero final restarts |
+| Storage | Prometheus and Loki PVCs Bound at 2 GiB each |
+| Scraping | 14 active targets; 13/13 required targets healthy; five UE targets |
+| Telecom state | five AMF sessions; five active PFCP sessions |
+| End-to-end probe | five of five UE probes successful |
+| Cardinality | 20 custom UE series, maximum 30 |
+| Logs | recent project streams returned from Loki |
+| Grafana | two data sources and four dashboards provisioned |
+| Alerts | target-down, UE mismatch, and user-plane failure each fired and resolved |
+| Regression | full Phase 5 five-UE/two-DNN validator passed |
+
+The terminal gates were `phase06_install=pass`,
+`phase06_validation=pass`, and
+`phase06_alert_lifecycle=pass tested=3`. A final host-state snapshot was
+captured after acceptance; its raw local data remains ignored by Git.
+
+### 32.8 Failures found and what they teach
+
+| Symptom | Cause | Durable correction |
+| --- | --- | --- |
+| Phase 5 validation saw ten addresses/F-SEIDs after UE rollout | the log parser counted historical sessions in the retained UPF log | correlate only the latest row for each current UE address |
+| kube-state-metrics never became Ready | health paths were assigned to the wrong listener ports | startup uses `/healthz` on metrics; readiness uses `/readyz` on telemetry |
+| Prometheus rejected the exercise target | Prometheus 3 required an explicit protocol for the intentionally minimal text endpoint | declare the Prometheus text fallback scrape protocol |
+| first observability install rolled back | readiness failure was correctly enforced by rollback-on-failure | preserve the exact failed workload evidence, fix the chart, and rerun without deleting PVCs |
+
+These are useful Kubernetes lessons: longer timeouts do not repair a wrong
+endpoint; retained logs require current-state correlation; and automatic Helm
+rollback protects the release but does not replace diagnosis.
+
+### 32.9 What the dashboards prove—and do not prove
+
+```mermaid
+flowchart LR
+    M["Measured now"] --> A["readiness / restarts"]
+    M --> B["CPU / memory"]
+    M --> C["current 5G sessions"]
+    M --> D["UE path success / probe duration"]
+    M --> E["searchable recent logs"]
+
+    N["Not yet measured"] --> F["maximum throughput"]
+    N --> G["packet loss under controlled load"]
+    N --> H["long-duration reliability"]
+    N --> I["multi-node or HA behavior"]
+    N --> J["external notification delivery"]
+```
+
+The current metrics are operational signals, not a performance benchmark.
+Probe duration is not radio latency, a current session gauge is not an
+availability percentage, and a short CPU sample is not capacity planning.
+Phase 7 must define offered traffic, warm-up, measurement duration,
+repetitions, percentiles, loss calculation, and pass/fail thresholds before
+reporting throughput or performance.
+
+### 32.10 Compact operator model
+
+When investigating a problem, move from broad dependency to narrow evidence:
+
+1. Check Helm and Kubernetes state: did the desired objects converge?
+2. Check Prometheus target health: is the evidence pipeline intact?
+3. Compare AMF, PFCP, and UE-probe counts: platform issue, control/session
+   issue, or data-path issue?
+4. Use the dashboard time window to identify when the signals diverged.
+5. Query Loki for the affected component and time range.
+6. Run the full Phase 5 validator before declaring recovery complete.
+
+This is the central Phase 6 mental model: **metrics reveal the shape and time
+of a problem; logs explain the component behavior; application validation
+proves the service has actually recovered.**

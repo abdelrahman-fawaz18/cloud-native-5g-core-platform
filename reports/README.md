@@ -13,6 +13,7 @@ and whether the tested gate passed or failed.
 - [Phase 2 container baseline](02_container_baseline.md)
 - [Phase 4 single-UE Kubernetes validation summary](#phase-4-single-ue-kubernetes-validation-summary)
 - [Phase 5 multi-UE and DNN validation summary](#phase-5-multi-ue-and-dnn-validation-summary)
+- [Phase 6 observability validation summary](#phase-6-observability-validation-summary)
 
 The validation evidence below is paired with the
 [complete Phase 4 visual system guide](../docs/README.md#23-phase-4-complete-system-and-operational-model),
@@ -143,3 +144,51 @@ integration, differentiated slice treatment, or production security. Numeric
 GTP-U TEIDs were not exposed by the accepted INFO-level logs; the narrower
 claim is five unique F-SEID/address correlations with no observed concurrent
 session-collision symptom.
+
+## Phase 6 Observability Validation Summary
+
+Validated on 2026-08-05 against the accepted five-UE/two-DNN release. The
+accepted state was core Helm revision 12 and independent
+`cn5g-observability` revision 2. Component images and immutable registry
+identities are recorded in `versions/phase-06.env`.
+
+### Method
+
+The lifecycle helper first ran the complete Phase 5 validator, applied the
+bounded UE metrics sidecars, installed the separate observability chart, and
+waited for every Deployment and StatefulSet. It then queried Prometheus target
+and query APIs, Loki's query API, and Grafana's provisioning API from inside
+the cluster. A separate exercise changed only a bounded synthetic metric and
+waited for each real Prometheus alert to fire and resolve. Final inspection
+checked release state, workload restarts, claims, active targets, 5G gauges,
+probe counts, cardinality, and remaining alerts.
+
+### Result
+
+| Gate | Accepted evidence |
+| --- | --- |
+| Releases | Core revision 12 and observability revision 2 both `deployed` |
+| Workloads | Four observability Deployments and two StatefulSets Ready with zero restarts |
+| Storage | Prometheus and Loki each retained one Bound 2 GiB claim |
+| Scraping | 14 active targets; all 13 required non-exercise targets healthy; five UE targets |
+| 5G gauges | five active AMF sessions and five active PFCP sessions |
+| User plane | five source-bound UE probes successful through the accepted session paths |
+| Cardinality | 20 custom UE series, below the enforced limit of 30 |
+| Logs | recent project log entries queryable from Loki |
+| Dashboards | exactly two provisioned data sources and four provisioned dashboards |
+| Alerts | target-down, UE-count mismatch, and user-plane failure each fired and resolved |
+| Steady state | zero exercise alerts firing after the lifecycle test |
+| Regression | complete Phase 5 registration, session, DNN isolation, and user-plane validation passed |
+
+The install ended with `phase06_install=pass`; the repeated validator ended
+with `phase06_validation=pass`; and the alert exercise ended with
+`phase06_alert_lifecycle=pass tested=3`.
+
+### Limitations
+
+This is a 24-hour, single-node, single-replica local observability baseline.
+It does not prove backend high availability, external alert delivery,
+long-term retention, production access control, throughput, packet loss, or
+capacity. The UE probe duration is an operational reachability signal, not a
+radio or carrier-grade latency benchmark. Phase 7 must define and execute a
+controlled load methodology before any performance claim is made.
