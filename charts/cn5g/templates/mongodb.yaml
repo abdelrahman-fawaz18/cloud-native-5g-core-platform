@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "mongodb") | nindent 4 }}
+spec:
+  serviceName: {{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "cn5g.selectorLabels" (dict "root" . "component" "mongodb") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" . "component" "mongodb") | nindent 8 }}
+      annotations:
+        cn5g.io/rollout-token: {{ .Values.global.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: mongodb
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
+          imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
+          ports:
+            - {name: mongodb, containerPort: 27017, protocol: TCP}
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -d /data/db && mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "exec mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'"]
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.mongodb.resources | nindent 12 }}
+          volumeMounts:
+            - {name: mongodb-data, mountPath: /data/db}
+            - {name: mongodb-config, mountPath: /data/configdb}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: mongodb-config, emptyDir: {}}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-data
+        labels:
+          {{- include "cn5g.componentLabels" (dict "root" . "component" "mongodb") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.mongodb.storageClassName | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.mongodb.storageSize }}

@@ -1,9 +1,9 @@
 # Helm Charts
 
-This directory will contain the versioned Helm package for the complete 5G
-platform. The chart will define Open5GS, MongoDB, UERANSIM, observability, and
-supporting resources after their individual container and networking behavior
-has been validated.
+The `cn5g/` chart packages the accepted single-UE Open5GS, MongoDB, UERANSIM,
+and controlled data-network baseline. Its default values passed Phase 4
+runtime, lifecycle, persistence, resource-observation, and scoped cleanup
+gates.
 
 Required chart quality includes documented values, consistent labels,
 meaningful probes, resource settings, least-privilege security contexts,

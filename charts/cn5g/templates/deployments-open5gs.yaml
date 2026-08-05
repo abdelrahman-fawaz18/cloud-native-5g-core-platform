@@ -1,0 +1,159 @@
+{{- $root := . -}}
+{{- range $component := list "nrf" "scp" "amf" "ausf" "udm" "udr" "pcf" "nssf" "smf" "upf" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" $root "component" $component) }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" $root "component" $component) | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    # Explicit null removes a RollingUpdate subfield retained by server-side
+    # apply when an existing Deployment migrates to Recreate.
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      {{- include "cn5g.selectorLabels" (dict "root" $root "component" $component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" $root "component" $component) | nindent 8 }}
+      annotations:
+        cn5g.io/rollout-token: {{ $root.Values.global.rolloutToken | quote }}
+        checksum/open5gs-config: {{ include (print $root.Template.BasePath "/configmap-open5gs.yaml") $root | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "cn5g.serviceAccountName" $root }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: render-config
+          image: {{ include "cn5g.image" $root.Values.images.open5gs }}
+          imagePullPolicy: {{ $root.Values.images.open5gs.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - >-
+              sed "s/__POD_IP__/${POD_IP}/g"
+              "/config-source/${COMPONENT}.yaml"
+              > "/etc/open5gs/${COMPONENT}.yaml";
+              test -s "/etc/open5gs/${COMPONENT}.yaml"
+          env:
+            - name: POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+            - {name: COMPONENT, value: {{ $component | quote }}}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml $root.Values.open5gs.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config-source, mountPath: /config-source, readOnly: true}
+            - {name: config-runtime, mountPath: /etc/open5gs}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "cn5g.image" $root.Values.images.open5gs }}
+          imagePullPolicy: {{ $root.Values.images.open5gs.pullPolicy }}
+          {{- if eq $component "upf" }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - >-
+              test "$(cat /proc/sys/net/ipv4/ip_forward)" = 1;
+              exec open5gs-entrypoint upf
+          {{- else }}
+          args: [{{ $component | quote }}]
+          {{- end }}
+          env:
+            - name: POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+          ports:
+            {{- if ne $component "upf" }}
+            - {name: sbi, containerPort: 7777, protocol: TCP}
+            {{- end }}
+            {{- if eq $component "amf" }}
+            - {name: n2-sctp, containerPort: 38412, protocol: SCTP}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            {{- else if eq $component "smf" }}
+            - {name: n4-pfcp, containerPort: 8805, protocol: UDP}
+            - {name: n3-gtpu, containerPort: 2152, protocol: UDP}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            {{- else if eq $component "pcf" }}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            {{- else if eq $component "upf" }}
+            - {name: n4-pfcp, containerPort: 8805, protocol: UDP}
+            - {name: n3-gtpu, containerPort: 2152, protocol: UDP}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            {{- end }}
+          securityContext:
+            {{- if eq $component "upf" }}
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            {{- else }}
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            {{- end }}
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              {{- if eq $component "upf" }}
+              add: ["NET_ADMIN"]
+              {{- end }}
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -s /etc/open5gs/{{ $component }}.yaml && kill -0 1"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                {{- if eq $component "upf" }}
+                ["open5gs-healthcheck", "upf"]
+                {{- else }}
+                ["/bin/sh", "-ec", "open5gs-healthcheck {{ $component }} \"$POD_IP\""]
+                {{- end }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "kill -0 1"]
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- if eq $component "upf" }}
+            {{- toYaml $root.Values.open5gs.upfResources | nindent 12 }}
+            {{- else }}
+            {{- toYaml $root.Values.open5gs.resources | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - {name: config-runtime, mountPath: /etc/open5gs, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            {{- if eq $component "upf" }}
+            - {name: tun-device, mountPath: /dev/net/tun}
+            {{- end }}
+      volumes:
+        - name: config-source
+          configMap: {name: {{ include "cn5g.fullname" $root }}-open5gs-config}
+        - name: config-runtime
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        {{- if eq $component "upf" }}
+        - name: tun-device
+          hostPath: {path: /dev/net/tun, type: CharDevice}
+        {{- end }}
+{{- end }}

@@ -1,0 +1,5 @@
+The {{ .Release.Name }} release has been submitted to namespace {{ .Release.Namespace }}.
+
+This message confirms Helm rendering and API submission only. It does not
+confirm 5G registration or user-plane operation. Run the project validation
+helper after all workloads and the subscriber initialization Job are ready.

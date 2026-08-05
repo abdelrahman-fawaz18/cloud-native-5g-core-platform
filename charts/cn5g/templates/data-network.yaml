@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "data-network") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "data-network") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 8 }}
+      annotations:
+        cn5g.io/rollout-token: {{ .Values.global.rolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: data-network
+          image: {{ include "cn5g.image" .Values.images.dataNetwork }}
+          imagePullPolicy: {{ .Values.images.dataNetwork.pullPolicy }}
+          command: ["/bin/busybox-extras", "httpd"]
+          args: ["-f", "-p", "8080", "-h", "/srv"]
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "ss -H -lnt | grep -q ':8080 '"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "kill -0 1"]
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.dataNetwork.resources | nindent 12 }}

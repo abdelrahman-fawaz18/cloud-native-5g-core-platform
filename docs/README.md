@@ -1,10 +1,10 @@
-# Kubernetes Architecture Foundation And Technical Documentation
+# Kubernetes Foundations And Phase 4 System Guide
 
 This document provides the conceptual and operational foundation for the
 Kubernetes implementation in this repository. It begins with the container
 model, explains the Kubernetes objects and control loops that manage those
 containers, reconstructs the Phase 3 feasibility work, and maps those results
-to the Helm-managed single-UE platform planned for Phase 4.
+to the accepted Helm-managed single-UE platform implemented in Phase 4.
 
 The document is deliberately self-contained. A reader who understands a
 container as an isolated process with its own filesystem and networking should
@@ -13,7 +13,7 @@ be able to use this file to answer four questions:
 1. Why is Kubernetes being introduced after the Docker Compose baseline?
 2. What are the main Kubernetes components and how do they connect?
 3. What exactly did Phase 3 prove, and what did it not prove?
-4. Which Kubernetes resources and behaviors will Phase 4 implement?
+4. Which Kubernetes resources and behaviors did Phase 4 implement and prove?
 
 The explanations describe the verified local architecture. They do not claim
 that a single-node kind cluster has the availability, scale, storage,
@@ -25,7 +25,9 @@ Because this is a long-form reference, it can be read in parts:
 - Sections 11-13 build the networking and 5G address model.
 - Sections 14-20 explain configuration, storage, health, resources, security,
   operations, and Helm.
-- Sections 21-24 connect Compose, Phase 3, Phase 4, and production practice.
+- Sections 21-24 connect Compose and Phase 3 to a complete visual and
+  operational model of the accepted Phase 4 platform, then compare that local
+  system with production practice.
 - Sections 25-30 provide troubleshooting, a concise narrative, a glossary,
   readiness questions, the documentation index, and authoritative references.
 
@@ -455,7 +457,8 @@ For example, two namespaces may each contain a Service named `mongodb`.
 Cluster DNS distinguishes them using namespace-qualified names.
 
 Phase 3 used `cn5g-feasibility` so every temporary probe object had a clear
-ownership boundary. Phase 4 will use a project namespace for the Helm release.
+ownership boundary. Phase 4 uses the separate `cn5g` namespace for the Helm
+release, retained claim, and pre-created subscriber Secret.
 
 ### 8.2 Name
 
@@ -546,7 +549,7 @@ forever.
 Directly creating long-running Pods is uncommon because a bare Pod has no
 higher-level controller to replace it. Phase 3 used bare Pods intentionally
 because they were short-lived, precisely controlled feasibility probes. Phase
-4 will use workload controllers.
+4 uses workload controllers for the long-running platform.
 
 ### 10.1 Deployment
 
@@ -554,10 +557,10 @@ A **Deployment** manages interchangeable, normally stateless Pods. It creates
 and manages a **ReplicaSet**, which maintains the requested number of matching
 Pods.
 
-Likely Phase 4 uses include Open5GS control-plane Network Functions for which
-one instance can be replaced by another using the same configuration. The
-initial replica count may be one; using a Deployment still gives replacement
-and rollout behavior.
+Phase 4 uses Deployments for Open5GS, UERANSIM, and the controlled data
+endpoint. Each initial replica count is one; the controller still provides
+replacement and rollout behavior when a Pod disappears or the template
+changes.
 
 “Stateless” here does not mean a process has no runtime memory. It means the
 Pod does not require a unique persistent identity or local state to be a valid
@@ -566,7 +569,8 @@ replacement.
 ### 10.2 StatefulSet
 
 A **StatefulSet** manages Pods that require stable identity, ordered lifecycle,
-or stable association with storage. MongoDB is the main Phase 4 candidate.
+or stable association with storage. Phase 4 uses a MongoDB StatefulSet with a
+retained PersistentVolumeClaim.
 
 A StatefulSet does not make data durable by itself. Persistence comes from the
 PersistentVolumeClaim and its backing storage. The StatefulSet makes the
@@ -748,10 +752,10 @@ Function (SMF) uses it to control the UPF on N4.
 **GTP-U** means GPRS Tunnelling Protocol User Plane. It carries user packets
 between the gNB and UPF on N3.
 
-A successful UDP/2152 test proves that UDP can cross the path on that port. It
-does not prove that GTP-U headers, Tunnel Endpoint Identifiers (TEIDs), or
-session state are correct. Phase 4 must use real Open5GS and UERANSIM traffic
-to make that stronger claim.
+A successful UDP/2152 test alone proves only that UDP can cross the path on
+that port. Phase 4 made the stronger claim with real Open5GS and UERANSIM
+traffic, visible PFCP/GTP-U session evidence, application responses, and
+positive UE/UPF tunnel counters.
 
 ---
 
@@ -865,9 +869,11 @@ It can prove Pod replacement and Helm release persistence behavior within the
 local cluster. Deleting the disposable kind node removes that local storage;
 it is not equivalent to a production network or cloud storage service.
 
-Phase 4 must explicitly test the persistence contract recorded in ADR-0004.
-It must also distinguish Helm uninstall behavior from cluster deletion and
-must never delete unrelated claims or volumes.
+Phase 4 proved the persistence contract recorded in ADR-0004. A synthetic
+marker and the exact claim UID/backing volume survived MongoDB Pod recreation,
+controlled upgrade, rollback, and complete Helm uninstall/reinstall. Cluster
+deletion remains a separate boundary because kind local-path data resides
+inside the disposable node.
 
 ---
 
@@ -892,7 +898,8 @@ Examples of meaningful distinctions:
 
 Probe settings include interval, timeout, success threshold, and failure
 threshold. Aggressive liveness checks can create restart loops or cascading
-failures. Phase 4 will justify probe behavior per component.
+failures. The accepted chart uses component-specific startup, readiness, and
+liveness checks and keeps end-to-end protocol validation separate.
 
 Probes are platform health evidence. End-to-end UE registration and PDU
 session validation remain separate functional evidence.
@@ -918,9 +925,12 @@ Requests that are too high waste schedulable capacity. Requests that are too
 low make contention and eviction more likely. Limits that are copied from an
 unrelated example are not evidence-based.
 
-Phase 4 will first measure idle and functional single-UE behavior, then set
-initial requests and limits with documented headroom. These values will be a
-local baseline, not a production capacity claim.
+Phase 4 measured the functional single-UE steady state twice with ten-second
+cgroup v2 samples. The accepted requests are 200 mCPU/256 MiB for MongoDB,
+25 mCPU/64 MiB for the shared Open5GS control-plane profile, 20 mCPU/64 MiB
+for UPF, 10 mCPU/16 MiB for the data endpoint, and 25 mCPU/96 MiB for each
+UERANSIM workload. Limits retain startup and transient headroom. These values
+are a local scheduling baseline, not a production-capacity claim.
 
 The one-node kind cluster cannot prove rescheduling across nodes, node
 anti-affinity, topology spread, or high availability.
@@ -1084,8 +1094,9 @@ configuration surface.
 
 Helm rollback restores previously rendered Kubernetes configuration as a new
 revision. It does not automatically reverse external side effects or database
-schema/data changes. Phase 4 rollback tests must use a controlled change whose
-reversal can be verified safely.
+schema/data changes. The Phase 4 test used a controlled rollout-token change,
+restored the accepted revision-7 configuration as revision 11, preserved the
+MongoDB claim, rebuilt service/session state, and reran complete validation.
 
 ### 20.6 Ownership and uninstall
 
@@ -1345,113 +1356,705 @@ kind is accepted for the local single-node Kubernetes baseline. The k3s
 fallback is not needed. The result proves that the infrastructure primitives
 required for the next phase are available with narrowly scoped privilege.
 
-Phase 3 did not deploy the real Kubernetes Open5GS/UERANSIM platform. Real
-NGAP, authentication, registration, PFCP session creation, GTP-U traffic, and
-N6 behavior are Phase 4 acceptance evidence.
+Phase 3 did not deploy the real Kubernetes Open5GS/UERANSIM platform. Phase 4
+subsequently proved real NGAP, authentication, registration, PFCP session
+creation, GTP-U traffic, and N6 behavior on the accepted kind foundation.
 
 ---
 
-## 23. Phase 4 Mental Model
+## 23. Phase 4: Complete System And Operational Model
 
-Phase 4 converts the working Compose topology into one declarative Helm
-release without changing the required 5G functional outcome.
+Phase 4 converted the verified Compose topology into a declarative Kubernetes
+application packaged as one Helm release. The telecom behavior did not change:
+Open5GS still provides the 5G Core, UERANSIM still provides the gNodeB (gNB)
+and User Equipment (UE), and MongoDB still stores subscriber and policy data.
+What changed is the platform contract around those processes: Kubernetes now
+creates, addresses, checks, replaces, and allocates resources to them, while
+Helm versions the complete group of Kubernetes objects as one release.
 
-### 23.1 Planned object hierarchy
+The diagrams in this section are intended for the GitHub web interface, which
+renders Mermaid natively. Every diagram is followed by a prose or table
+interpretation. In ownership diagrams, read from top to bottom. In packet-path
+diagrams, follow the numbered arrows. A solid arrow carries runtime traffic; a
+dashed arrow represents configuration or control of another object.
 
-This is a responsibility map. Indentation means “manages or supplies.”
+### 23.1 Phase boundary: what changed and what stayed the same
 
-```text
-Helm release in project namespace
-├── ConfigMaps
-│   └── non-secret Open5GS and UERANSIM configuration
-├── generated Secrets
-│   └── synthetic authentication material not stored in Git
-├── ServiceAccounts and minimum RBAC
-├── MongoDB StatefulSet
-│   ├── MongoDB Pod
-│   ├── MongoDB Service
-│   └── PersistentVolumeClaim -> PersistentVolume
-├── subscriber initialization Job
-│   └── writes idempotent synthetic subscriber state to MongoDB
-├── Open5GS workload controllers
-│   ├── control-plane Pods
-│   ├── SBI Services and DNS
-│   ├── SMF N4 endpoint
-│   └── UPF TUN/N3/N6 configuration
-├── UERANSIM workload controllers
-│   ├── gNB Pod and explicit N2/N3 endpoints
-│   └── UE Pod with TUN access
-├── controlled data-network workload and Service
-└── validation hooks or Jobs where lifecycle semantics are appropriate
+| Concern | Phase 2 Compose baseline | Phase 3 feasibility spike | Accepted Phase 4 system |
+| --- | --- | --- | --- |
+| Purpose | Prove the container images and complete one-UE application | Prove kind can support the required networking primitives | Run the real application as a managed Kubernetes release |
+| Workload definition | `compose.yaml` services | purpose-built probe Pods and Services | Helm-rendered Deployments, StatefulSet, Job, Services, ConfigMaps, and ServiceAccount |
+| 5G software | real Open5GS and UERANSIM | synthetic transport/TUN/N6 probes | real Open5GS and UERANSIM |
+| Stable discovery | Compose service names | probe Service DNS | Kubernetes Service DNS and EndpointSlices |
+| Process recovery | container restart policy and scripts | probe recreation only | Deployment/StatefulSet reconciliation plus application-aware convergence |
+| Persistent state | Docker named volume | not in scope | retained 2 GiB PersistentVolumeClaim (PVC) and PersistentVolume (PV) |
+| Release history | image and Compose configuration in Git | disposable cluster procedure | Helm revisions with tested upgrade and rollback |
+| Acceptance proof | registration, session, and data path | SCTP/UDP/TUN/capability/N6 primitives | real N2, N3, N4, N6, Service-Based Interface (SBI), persistence, and lifecycle |
+
+The important distinction is that Phase 3 answered **“can this local
+Kubernetes environment carry the required kinds of traffic safely?”** Phase 4
+answered **“can the complete 5G system operate and survive managed lifecycle
+changes in that environment?”**
+
+### 23.2 The five-layer mental model
+
+Read this diagram from the operator at the top to subscriber traffic at the
+bottom. Each layer consumes the contract exposed by the layer above it.
+
+```mermaid
+flowchart TB
+    OP["Operator and repository scripts"]
+    HELM["Helm client<br/>renders chart and records release revisions"]
+    API["Kubernetes API<br/>stores desired state"]
+    CTRL["Kubernetes controllers and scheduler<br/>reconcile workload objects"]
+    KUBELET["kubelet and containerd<br/>run containers in the kind node"]
+    PLATFORM["CoreDNS + Services + kindnet CNI + local-path storage"]
+    APP["Open5GS + MongoDB + UERANSIM + data endpoint"]
+    SESSION["5G-AKA -> registration -> PDU session -> GTP-U/N6 traffic"]
+
+    OP -->|"install / upgrade / rollback / validate"| HELM
+    HELM -->|"submit rendered objects"| API
+    API -->|"watch desired state"| CTRL
+    CTRL -->|"schedule and maintain Pods"| KUBELET
+    PLATFORM -->|"DNS, network, storage"| APP
+    KUBELET -->|"execute containers"| APP
+    APP -->|"provide telecom behavior"| SESSION
 ```
 
-The exact object type and endpoint strategy for each component becomes an
-accepted decision only after implementation and real-protocol validation.
+The layers have different responsibilities:
 
-### 23.2 Planned control flow
+1. **Repository automation** checks ownership, versions, images, secrets, and
+   host safety before invoking the platform.
+2. **Helm** is a rendering and release-history client. Helm is not a daemon
+   that keeps Pods running after installation.
+3. **Kubernetes** stores desired state and continuously reconciles controllers,
+   Pods, storage, and Service endpoints.
+4. **Cluster infrastructure** supplies Pod networking, stable DNS, virtual
+   Service addresses, and local persistent storage.
+5. **The 5G application** performs authentication, mobility/session control,
+   tunnelling, and user-plane forwarding. Kubernetes cannot infer whether
+   these telecom procedures succeeded, so repository validation proves them
+   separately.
 
-```text
-[1] preflight verifies host, cluster ranges, ownership, and pinned tools
-[2] project images are made available to the kind node runtime
-[3] Helm chart is linted and rendered deterministically
-[4] installation-specific synthetic Secrets are generated outside Git
-[5] Helm submits the release objects to the Kubernetes API
-[6] controllers create Pods; scheduler and kubelet make them run
-[7] startup probes permit slow initialization
-[8] readiness probes add functional endpoints to Services
-[9] subscriber Job completes idempotently
-[10] gNB establishes real N2 SCTP/NGAP with AMF
-[11] UE authenticates, registers, and establishes a PDU session
-[12] SMF and UPF establish real PFCP state
-[13] bidirectional GTP-U and N6 traffic reaches the data endpoint
-[14] controlled upgrade and rollback prove release revision behavior
-[15] uninstall and scoped checks prove ownership and persistence behavior
+### 23.3 Where everything runs
+
+Read outside-in: the Ubuntu host runs Docker; Docker runs one kind node; that
+node contains both Kubernetes system components and the project namespace.
+
+```mermaid
+flowchart TB
+    subgraph HOST["Ubuntu host"]
+        HOSTLAB["Existing host Open5GS/MongoDB lab<br/>left active and unchanged"]
+        DOCKER["Docker Engine"]
+
+        subgraph NODE["Docker container: cn5g-control-plane (kind node)"]
+            CP["Kubernetes control plane<br/>API server, etcd, scheduler, controllers"]
+            NODEAGENT["kubelet + containerd + kube-proxy"]
+            ADDONS["kindnet CNI + CoreDNS + local-path provisioner"]
+
+            subgraph NS["Kubernetes namespace: cn5g"]
+                CORE["Open5GS Network Function Pods"]
+                DB["MongoDB Pod + retained storage claim"]
+                RAN["UERANSIM gNB Pod + UE Pod"]
+                DN["Controlled data-network Pod"]
+                SVC["ClusterIP/headless Services + EndpointSlices"]
+            end
+        end
+    end
+
+    DOCKER -->|"runs"| NODE
+    CP -->|"desired-state decisions"| NODEAGENT
+    NODEAGENT -->|"starts and monitors"| NS
+    ADDONS -->|"network, DNS, storage"| NS
+    HOSTLAB -.->|"coexists; no shared runtime objects"| CP
+    SVC -->|"stable in-cluster discovery"| CORE
+    SVC -->|"stable in-cluster discovery"| DB
 ```
 
-### 23.3 Planned real 5G packet and signalling map
+This is a **single-node** cluster: the control plane and all application Pods
+share the same kind node. It proves Kubernetes packaging and reconciliation,
+but it cannot prove cross-node scheduling or high availability. The Kubernetes
+API is exposed only on a loopback host port. No Phase 4 application Service is
+published through a `NodePort`, `LoadBalancer`, host port, or host network.
 
-Every arrow names an interface and protocol:
+### 23.4 Kubernetes object inventory and ownership
 
-```text
-UERANSIM UE
-  <-> simulated radio <->
-UERANSIM gNB
-  -- N2: NGAP over SCTP/38412 --> AMF
-  -- N3: GTP-U over UDP/2152 <-> UPF
+```mermaid
+flowchart TD
+    RELEASE["Helm release: cn5g<br/>namespace: cn5g"]
+    CM["ConfigMaps<br/>non-secret runtime configuration"]
+    SA["ServiceAccount<br/>API token disabled"]
+    DEP["13 Deployments"]
+    STS["1 MongoDB StatefulSet"]
+    JOB["1 revision-scoped subscriber Job"]
+    SERVICES["13 internal Services"]
+    PODS["Replaceable application Pods"]
+    PVC["Retained 2 GiB PVC"]
+    PV["local-path PV"]
+    SECRET["Pre-created subscriber Secret<br/>outside Helm ownership"]
 
-AMF and other control-plane Network Functions
-  <-> SBI: HTTP-based Service communication through Kubernetes Services/DNS
-  <-> MongoDB where the function's data model requires it
-
-SMF
-  -- N4: PFCP over UDP/8805 <-> UPF
-
-UE inner address on TUN
-  <-> simulated radio/N3 tunnel <-> UPF TUN/routing
-  <-> N6 routed IPv4 <-> controlled data-network endpoint
+    RELEASE --> CM
+    RELEASE --> SA
+    RELEASE --> DEP
+    RELEASE --> STS
+    RELEASE --> JOB
+    RELEASE --> SERVICES
+    DEP --> PODS
+    STS --> PODS
+    STS --> PVC
+    PVC --> PV
+    SECRET -.->|"mounted read-only"| JOB
+    SECRET -.->|"UE configuration"| PODS
 ```
 
-### 23.4 Phase 4 acceptance gate
+| Object | Quantity or identity | Why it exists | Lifecycle owner |
+| --- | --- | --- | --- |
+| Namespace | `cn5g` | API naming and project ownership boundary | project helper; retained on normal uninstall |
+| Helm release | `cn5g` | one versioned package and revision history | Helm |
+| Deployments | 13 | nine SBI functions, UPF, gNB, UE, and data endpoint | Helm definition; Kubernetes controller reconciliation |
+| StatefulSet | 1, `cn5g-mongodb` | stable MongoDB Pod/storage association | Helm and StatefulSet controller |
+| Job | `cn5g-subscriber-init-r<revision>` | finite, idempotent subscriber provisioning | Helm; exact completion checked by helper |
+| Services | 13 | stable cluster DNS/virtual IPs and protocol ports | Helm; EndpointSlices updated by Kubernetes |
+| ConfigMaps | Open5GS and UERANSIM configuration | versioned non-secret configuration | Helm |
+| Secret | `cn5g-subscriber` | synthetic authentication and UE material | pre-created by project helper, deliberately not Helm-owned |
+| ServiceAccount | `cn5g-workload` | explicit workload identity without API access | Helm |
+| PVC/PV | 2 GiB ReadWriteOnce claim and local-path backing volume | database state beyond the MongoDB Pod lifetime | StatefulSet creates claim; keep policy retains it |
 
-Phase 4 is complete only when all of the following are reproducibly true:
+There are two ownership chains that must not be confused:
 
-- `helm lint` passes;
-- rendered manifests are deterministic for pinned inputs;
-- documented values are validated;
+```text
+Helm release -> Deployment -> ReplicaSet -> Pod -> container
+Helm release -> StatefulSet -> MongoDB Pod -> mounted PVC -> PV
+```
+
+Helm owns the declared release objects. Kubernetes controllers own the
+replaceable runtime objects beneath them. The retained PVC and pre-created
+subscriber Secret intentionally cross a normal release-uninstall boundary.
+
+### 23.5 Component and protocol connectivity
+
+Read left-to-right for access/session traffic and top-to-bottom for SBI and
+database dependencies. The labels on arrows identify the actual protocol and
+port, not merely a conceptual relationship.
+
+```mermaid
+flowchart LR
+    UE["UERANSIM UE"]
+    GNB["UERANSIM gNB"]
+    AMF["AMF"]
+    SMF["SMF"]
+    UPF["UPF"]
+    DN["Controlled data network"]
+
+    subgraph SBI["Service-Based Interface control plane"]
+        NRF["NRF"]
+        SCP["SCP"]
+        AUSF["AUSF"]
+        UDM["UDM"]
+        UDR["UDR"]
+        PCF["PCF"]
+        NSSF["NSSF"]
+    end
+
+    DB[("MongoDB")]
+
+    UE <-->|"simulated radio"| GNB
+    GNB -->|"N2: NGAP / SCTP 38412"| AMF
+    GNB <-->|"N3: GTP-U / UDP 2152"| UPF
+    AMF <-->|"SBI: HTTP / TCP 7777"| SCP
+    SMF <-->|"SBI: HTTP / TCP 7777"| SCP
+    SCP <-->|"SBI discovery/routing"| NRF
+    AUSF <-->|"SBI"| SCP
+    UDM <-->|"SBI"| SCP
+    UDR <-->|"SBI"| SCP
+    PCF <-->|"SBI"| SCP
+    NSSF <-->|"SBI"| SCP
+    SMF <-->|"N4: PFCP / UDP 8805"| UPF
+    UPF <-->|"N6: routed IPv4"| DN
+    UDM -->|"MongoDB / TCP 27017"| DB
+    UDR -->|"MongoDB / TCP 27017"| DB
+    PCF -->|"MongoDB / TCP 27017"| DB
+```
+
+The diagram groups the SBI functions to keep the picture readable. The nine
+NRF profiles validated in the accepted release are NRF, SCP, AMF, AUSF, UDM,
+UDR, PCF, NSSF, and SMF. UPF is controlled through PFCP rather than registered
+as an SBI Network Function in this topology.
+
+### 23.6 Stable identities versus replaceable identities
+
+Kubernetes treats Pods as replaceable. A Pod name and address can change after
+an upgrade, rollback, restart, or manual deletion. Components therefore use a
+stable name when the protocol supports it and a current runtime address only
+when the protocol requires an explicit transport endpoint.
+
+| Identity | Example | Stability | Used for |
+| --- | --- | --- | --- |
+| Helm release/namespace | `cn5g` / `cn5g` | stable until explicit removal | ownership and lifecycle scope |
+| Service DNS | `cn5g-nrf.cn5g.svc.cluster.local` | stable across Pod replacement | SBI advertisement and discovery |
+| ClusterIP | allocated from `10.96.0.0/16` | stable for the Service lifetime | in-cluster virtual endpoint |
+| Pod IP | allocated from `10.244.0.0/16` | replaceable | process listener binding and current transport endpoint |
+| EndpointSlice entry | current Pod IP selected by labels | automatically updated | Service-to-Pod forwarding |
+| UE session address | `10.60.0.2/24` in the accepted single-UE run | session identity, separate from Pod IP | inner subscriber packet source |
+| UPF TUN gateway | `10.60.0.1/24` | configured data-plane gateway | UE subnet termination |
+| node-side veth name | generated, for example `veth...` | replaceable | exact kind-node return route to the current UPF Pod |
+
+This distinction explains why the release needs application-aware convergence.
+Kubernetes can update a Service endpoint when a Pod changes, but Open5GS peers
+may still hold cached SBI, PFCP, or GTP-U state that refers to the old process.
+The helper verifies stable NRF advertisements and reconstructs the session
+chain when required.
+
+### 23.7 The four address domains
+
+Read the diagram as nested forwarding domains. Addresses from one box do not
+automatically imply reachability in another box; Services, CNI routing, TUN
+devices, and the explicit N6 return route connect them.
+
+```mermaid
+flowchart LR
+    HOSTNET["Host/Docker node network<br/>kind node: 172.18.0.0/16"]
+    PODNET["Kubernetes Pod network<br/>10.244.0.0/16"]
+    SVCNET["Kubernetes Service network<br/>10.96.0.0/16"]
+    UENET["5G UE session network<br/>10.60.0.0/24"]
+
+    HOSTNET -->|"kind node contains CNI routes"| PODNET
+    SVCNET -->|"kube-proxy selects EndpointSlice Pod IP"| PODNET
+    UENET -->|"TUN + GTP-U + N6 return route"| PODNET
+```
+
+| Domain | Allocator/owner | What lives there | What it is not |
+| --- | --- | --- | --- |
+| Docker/kind node network | Docker | kind node container and loopback-published API path | the application Pod network |
+| Pod network | kindnet CNI | one IP per Pod | a stable service identity or UE address pool |
+| Service network | Kubernetes | virtual ClusterIP addresses and DNS names | a real interface inside an application container |
+| UE session network | SMF/UPF configuration and UERANSIM session | inner subscriber addresses on `uesimtun0` and `ogstun` | a Kubernetes Pod or Service subnet |
+
+### 23.8 Registration and authentication sequence
+
+Read top-to-bottom. The sequence intentionally separates radio/NAS signalling
+from the HTTP-based core-service interactions it triggers.
+
+```mermaid
+sequenceDiagram
+    participant UE as UERANSIM UE
+    participant GNB as UERANSIM gNB
+    participant AMF as AMF
+    participant AUSF as AUSF
+    participant UDM as UDM/UDR
+    participant DB as MongoDB
+
+    UE->>GNB: RRC connection and Registration Request
+    GNB->>AMF: Initial UE Message (NGAP over SCTP)
+    AMF->>AUSF: Authentication request (SBI HTTP)
+    AUSF->>UDM: Obtain authentication data (SBI HTTP)
+    UDM->>DB: Read synthetic subscriber record
+    DB-->>UDM: Key material and sequence state
+    UDM-->>AUSF: Authentication vector
+    AUSF-->>AMF: Authentication result
+    AMF-->>GNB: NAS Authentication and Security Mode messages
+    GNB-->>UE: Forward NAS messages
+    UE-->>GNB: Authentication/Security responses
+    GNB-->>AMF: Forward protected NAS responses
+    AMF-->>GNB: Registration Accept
+    GNB-->>UE: Registration Accept
+```
+
+The acceptance validator does not infer registration from a Running Pod. It
+checks component evidence for the SCTP association, NG Setup, 5G Authentication
+and Key Agreement (5G-AKA), Non-Access Stratum (NAS) security activation, and
+the final registered UE state.
+
+### 23.9 PDU session control sequence
+
+```mermaid
+sequenceDiagram
+    participant UE as UE
+    participant GNB as gNB
+    participant AMF as AMF
+    participant SMF as SMF
+    participant UPF as UPF
+
+    UE->>GNB: PDU Session Establishment Request
+    GNB->>AMF: Protected NAS request over N2
+    AMF->>SMF: Create session context over SBI
+    SMF->>UPF: PFCP Association/Session Establishment over N4
+    UPF-->>SMF: PFCP rules and tunnel endpoint accepted
+    SMF-->>AMF: Session result and N2 transfer data
+    AMF-->>GNB: PDU Session Resource Setup
+    GNB-->>UE: PDU Session Establishment Accept
+    Note over UE,UPF: UE receives 10.60.0.x and creates uesimtun0
+```
+
+PFCP programs the UPF with the relationship between the UE address, the gNB's
+GTP-U endpoint, and the N6 forwarding path. A successful NAS accept is
+therefore necessary but not sufficient; Phase 4 also checks PFCP session and
+GTP-U session evidence.
+
+### 23.10 User-plane packet path
+
+Follow the numbered arrows for the request. The response traverses the same
+elements in reverse, but the kind-node return route is what directs the UE
+subnet back to the current UPF Pod.
+
+```mermaid
+flowchart LR
+    APP["1. UE application packet<br/>source 10.60.0.x"]
+    UETUN["2. uesimtun0<br/>MTU 1400"]
+    GNB["3. UERANSIM gNB"]
+    N3["4. N3 GTP-U<br/>UDP 2152 on Pod network"]
+    UPF["5. UPF decapsulates<br/>ogstun 10.60.0.1"]
+    N6["6. N6 routed IPv4"]
+    DATA["7. controlled data endpoint<br/>HTTP and ICMP response"]
+    ROUTE["8. kind-node return route<br/>10.60.0.0/24 via current UPF Pod veth"]
+
+    APP --> UETUN --> GNB --> N3 --> UPF --> N6 --> DATA
+    DATA -->|"response"| ROUTE --> UPF
+    UPF -->|"re-encapsulate GTP-U"| GNB --> UETUN --> APP
+```
+
+The route is installed **inside the disposable kind node**, not in the Ubuntu
+host network namespace. It is marked with project-specific protocol and metric
+values, checked against the current UPF Pod IP and node-side veth, reconciled
+after address-changing rollouts, and removed during scoped uninstall/cluster
+cleanup.
+
+Phase 4 proves bidirectionality in two independent ways:
+
+- controlled HTTP and ICMP requests receive valid responses; and
+- both UE and UPF TUN receive/transmit counters increase during that traffic.
+
+### 23.11 Configuration and secret delivery
+
+```mermaid
+flowchart LR
+    VALUES["Tracked values.yaml + schema"]
+    TEMPLATES["Tracked Helm templates"]
+    CONFIGMAP["Rendered ConfigMaps"]
+    PODCONFIG["Read-only configuration in Pods"]
+    LOCAL["Ignored, permission-restricted<br/>synthetic subscriber files"]
+    SECRET["Pre-created Kubernetes Secret"]
+    JOB["Revision-scoped provisioning Job"]
+    UE["UERANSIM UE Pod"]
+    DB[("MongoDB subscriber record")]
+
+    VALUES --> TEMPLATES --> CONFIGMAP --> PODCONFIG
+    LOCAL -->|"prepare-secret"| SECRET
+    SECRET -->|"subscriber-init.js"| JOB --> DB
+    SECRET -->|"ue.yaml"| UE
+```
+
+The repository contains templates and generation logic, not live subscriber
+credentials. Kubernetes Secret data is base64-encoded API content, not
+encryption. The helper therefore validates local file permissions and exact
+Secret ownership/content without printing authentication material. Helm only
+receives the name of the existing Secret.
+
+At container startup, tracked configuration placeholders such as the current
+Pod IP are resolved into a writable temporary copy. The tracked ConfigMap
+remains immutable from the process's point of view, and no live container is
+manually edited.
+
+### 23.12 Startup, readiness, and dependency convergence
+
+Read this as a gate chain: the next functional layer is accepted only after
+the previous one is proven.
+
+```mermaid
+flowchart LR
+    MONGO["MongoDB startup/readiness/liveness"]
+    JOB["Subscriber Job completes"]
+    NRF["NRF ready"]
+    SBI["Nine stable SBI profiles"]
+    N2["gNB N2 association and NG Setup"]
+    UE["UE registration and PDU session"]
+    N4["PFCP and GTP-U session state"]
+    N6["Return route + HTTP/ICMP + counters"]
+
+    MONGO --> JOB --> NRF --> SBI --> N2 --> UE --> N4 --> N6
+```
+
+- A **startup probe** gives a slow-starting process time before liveness is
+  evaluated.
+- A **readiness probe** controls whether a Pod is eligible as a Service
+  endpoint.
+- A **liveness probe** detects a process that should be restarted.
+- Repository convergence goes further than all three: it verifies nine stable
+  NRF profiles and the complete current PFCP/GTP-U session chain.
+
+This extra convergence is necessary because application caches can be stale
+even when every container process is alive and every basic probe passes.
+
+### 23.13 Security and privilege map
+
+```text
+No added Linux capabilities
+├── MongoDB and subscriber Job
+├── nine Open5GS SBI control-plane functions
+├── UERANSIM gNB
+└── controlled data-network endpoint
+
+CAP_NET_ADMIN only (effective mask 0x1000)
+└── UPF + /dev/net/tun
+
+CAP_NET_ADMIN + CAP_NET_RAW (effective mask 0x3000)
+└── UE + /dev/net/tun
+```
+
+| Control | Accepted Phase 4 behavior |
+| --- | --- |
+| Container user | non-root image users where supported |
+| Capability baseline | drop `ALL`, add only UPF/UE network capabilities shown above |
+| Privileged mode | disabled for every workload |
+| TUN mount | present only in UPF and UE |
+| Privilege escalation | disabled |
+| Seccomp | `RuntimeDefault` |
+| Root filesystem | read-only where application behavior permits; writable temporary volumes are explicit |
+| Kubernetes API token | automatic mounting disabled |
+| RBAC | no Role or RoleBinding because workloads do not call the API |
+| External exposure | no application NodePort, LoadBalancer, host port, or host network |
+
+The gNB does not receive `NET_RAW` merely because it carries SCTP/GTP-U; the
+kernel and ordinary sockets provide what it needs. The UE receives `NET_RAW`
+because its health and controlled validation include raw-network operations.
+
+### 23.14 MongoDB persistence lifecycle
+
+Read the state diagram clockwise. The Pod is replaceable; the PVC/PV identity
+is the persistence boundary.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Installed: Helm install
+    Installed --> PodRecreated: delete MongoDB Pod
+    PodRecreated --> Installed: StatefulSet creates replacement<br/>same PVC and marker
+    Installed --> Upgraded: controlled Helm upgrade
+    Upgraded --> RolledBack: Helm rollback
+    RolledBack --> Uninstalled: scoped Helm uninstall
+    Uninstalled --> Reinstalled: fresh Helm install<br/>retained PVC reattached
+    Reinstalled --> Verified: same claim UID, volume, and marker
+    Verified --> [*]
+```
+
+The test wrote a synthetic evidence marker, then verified:
+
+1. MongoDB Pod identity changed after deletion;
+2. PVC identity did not change;
+3. the marker survived Pod recreation;
+4. the same claim survived upgrade and rollback;
+5. uninstall retained the bound claim; and
+6. a fresh Helm release reattached it and recovered the marker.
+
+This proves persistence across the tested workload/release lifecycle. It does
+not prove survival after deletion of the kind node because local-path storage
+resides in that disposable node.
+
+### 23.15 Helm lifecycle and application-aware recovery
+
+```mermaid
+stateDiagram-v2
+    [*] --> Preflight
+    Preflight --> ImagesLoaded: accepted image identities loaded
+    ImagesLoaded --> SecretReady: subscriber Secret verified
+    SecretReady --> Installed: lint + render + server dry run + install
+    Installed --> Validated: full Kubernetes and 5G validation
+    Validated --> Upgraded: controlled upgrade
+    Upgraded --> UpgradeValidated: convergence + full validation
+    UpgradeValidated --> RolledBack: controlled rollback
+    RolledBack --> RollbackValidated: convergence + full validation
+    RollbackValidated --> Uninstalled: ownership-gated uninstall
+    Uninstalled --> Reinstalled: retained PVC/Secret reused
+    Reinstalled --> Validated: persistence + full validation
+```
+
+The lifecycle helper adds safeguards that plain Helm commands do not provide:
+
+- verifies accepted host and kind-runtime image identities;
+- validates the existing Secret without disclosing it;
+- performs Helm lint, deterministic render, schema, and API dry-run gates;
+- waits for the exact revision-scoped subscriber Job and all controllers;
+- verifies stable Service DNS advertisements and exactly nine NRF profiles;
+- rebuilds address-sensitive state in the order UPF, SMF, gNB, and UE when
+  required;
+- reconciles the exact project-marked N6 return route;
+- resumes interrupted upgrade, rollback, repair, and uninstall operations from
+  identity-checked state; and
+- deletes only exact, labeled, annotated project resources.
+
+### 23.16 Why the controlled recovery order matters
+
+```mermaid
+flowchart LR
+    UPF["1. UPF<br/>new N3/N4 endpoint"]
+    SMF["2. SMF<br/>new PFCP association/session"]
+    NRF["3. Verify nine stable NRF profiles"]
+    GNB["4. gNB<br/>new N2 and N3 state"]
+    UE["5. UE<br/>new registration/PDU session"]
+    VALIDATE["6. PFCP + GTP-U + traffic proof"]
+
+    UPF --> SMF --> NRF --> GNB --> UE --> VALIDATE
+```
+
+Restarting these components in arbitrary order can leave one process caching
+an address or session from the previous Pod generation. The order reconstructs
+the dependency chain from the user-plane anchor outward, then creates a fresh
+UE session only after the core peers are current.
+
+### 23.17 Engineering problems found and resolved
+
+| Observed problem | Root cause | Permanent engineering response |
+| --- | --- | --- |
+| digest-pinned MongoDB image could not be loaded by its `tag@digest` reference | kind imports local Docker archives and containerd records different repository aliases/configuration identities | verify the accepted upstream digest, create an exact local export tag, then compare the runtime configuration identity actually loaded into kind |
+| Pods were Ready but UE convergence failed after replacement | replaceable Pod addresses left stale NRF, PFCP, SCTP, or GTP-U state | advertise stable SBI Service names and perform ordered, application-aware session-chain recovery |
+| Helm 4 upgrade rejected `RollingUpdate` to `Recreate` | server-side apply retained the incompatible `rollingUpdate` field during the strategy transition | perform an ownership-checked Deployment strategy migration and server-side preview before Helm applies the new revision |
+| interrupted install/upgrade/rollback left a failed release | Helm revision state, PVC state, and live resources could diverge | make operations resumable from exact release revision, resource ownership, and PVC identity |
+| historical subscriber Jobs remained after lifecycle trials | old revision-scoped Jobs were not part of the current release manifest | remove only completed Jobs matching exact project labels, annotations, and names |
+| N6 response path broke when the UPF Pod changed | the kind-node route still referenced an obsolete Pod IP/veth | identify the current node-side interface and reconcile one ownership-marked route |
+
+These fixes are part of the platform contract rather than undocumented manual
+repair steps.
+
+### 23.18 Validation architecture
+
+Read left-to-right. A later gate never substitutes for an earlier one.
+
+```mermaid
+flowchart LR
+    STATIC["Static gates<br/>shell, Python, YAML, Helm lint/render"]
+    API["API gates<br/>server dry run and object ownership"]
+    READY["Platform gates<br/>controllers, Pods, Jobs, Services, PVC"]
+    CONTROL["5G control gates<br/>NRF, N2, AKA, NAS, registration, PDU"]
+    USER["5G user-plane gates<br/>PFCP, GTP-U, N6, HTTP, ICMP, counters"]
+    LIFE["Lifecycle gates<br/>persistence, upgrade, rollback, uninstall/reinstall"]
+    SECURITY["Security/resource gates<br/>capabilities and cgroup observation"]
+
+    STATIC --> API --> READY --> CONTROL --> USER --> LIFE --> SECURITY
+```
+
+| Validation layer | Evidence accepted in Phase 4 |
+| --- | --- |
+| Packaging | strict Helm lint, deterministic rendering, schema-negative tests |
+| Kubernetes API | server-side dry run and project ownership checks |
+| Workload state | 13 Deployments Ready, MongoDB StatefulSet Ready, exact Job Complete |
+| Discovery | stable advertised SBI names and exactly nine NRF profiles |
+| Access/control | N2 SCTP association, NG Setup, 5G-AKA, NAS security, registration |
+| Session | IPv4 PDU session, PFCP association/session, GTP-U session |
+| User plane | N6 return route, HTTP, ICMP, and positive UE/UPF bidirectional TUN deltas |
+| Security | UPF `0x1000`, UE `0x3000`, data endpoint zero capabilities, no privileged Pods |
+| Persistence | same PVC UID/PV and marker across all tested lifecycle boundaries |
+| Release operations | upgrade, rollback, uninstall, fresh reinstall, and revalidation |
+
+### 23.19 Resource observations and accepted scheduling values
+
+The bars below show measured average CPU relative to each accepted CPU
+request. They are visual scheduling evidence, not performance benchmarks.
+
+```text
+Component/profile       Observed average       Accepted request
+MongoDB                 143-170 mCPU  █████████████████   200 mCPU
+Open5GS control plane    12-22 mCPU   ██                 25 mCPU
+UPF                          14 mCPU   █                  20 mCPU
+Data endpoint              6-8 mCPU   █                  10 mCPU
+gNB                       11-15 mCPU   █                  25 mCPU
+UE                        16-17 mCPU   ██                 25 mCPU
+```
+
+| Component/profile | Current memory observed | Peak observed | Request | Limit |
+| --- | ---: | ---: | ---: | ---: |
+| MongoDB | 217-222 MiB | 380-381 MiB | 256 MiB | 768 MiB |
+| Open5GS control-plane functions | 6-40 MiB | within the observed range per function | 64 MiB | 256 MiB |
+| UPF | 7-12 MiB | 13-17 MiB | 64 MiB | 384 MiB |
+| Data endpoint | 3 MiB | 7-8 MiB | 16 MiB | 64 MiB |
+| gNB | 7-11 MiB | 13-17 MiB | 96 MiB | 512 MiB |
+| UE | 9 MiB | 11-12 MiB | 96 MiB | 512 MiB |
+
+Two ten-second cgroup v2 observations were taken in the validated single-UE
+steady state, including one after the requests were applied. Requests reserve
+scheduling capacity; limits bound consumption. These measurements must be
+revisited under Phase 5 concurrency and Phase 7 load before any capacity claim.
+
+### 23.20 Operator workflow
+
+The normal command path is intentionally short; the helper performs the
+identity, ownership, readiness, convergence, and validation checks behind each
+operation.
+
+```text
+preflight
+  -> create kind cluster
+  -> load accepted images
+  -> prepare synthetic subscriber Secret
+  -> install
+  -> validate
+  -> test persistence
+  -> upgrade and validate
+  -> rollback and validate
+  -> observe resources
+  -> uninstall/reinstall and verify persistence
+  -> capture reviewed host state
+```
+
+Exact commands, expected output, recovery paths, and destructive confirmation
+boundaries are maintained in the [automation reference](../scripts/README.md#helm-managed-single-ue-lifecycle).
+
+### 23.21 Accepted end state after Phase 4
+
+```text
+Local cluster       kind cn5g, one control-plane node
+Application scope   namespace cn5g, Helm release cn5g
+Workloads           13 Deployments + 1 MongoDB StatefulSet
+Finite work         1 completed revision-scoped subscriber Job
+Discovery           13 internal Services; 9 stable NRF SBI profiles
+Persistence         retained 2 GiB MongoDB PVC/PV
+Subscriber path     one synthetic UE, IPv4 10.60.0.x/24
+Data path           UE TUN <-> gNB <-> GTP-U <-> UPF <-> N6 endpoint
+Security            no privileged Pods; narrowly scoped capabilities/TUN mounts
+Exposure            cluster-internal application Services only
+Validation          phase04_validation=pass
+Lifecycle           upgrade, rollback, uninstall/reinstall, persistence passed
+```
+
+The accepted test history included a controlled upgrade to revision 10,
+rollback of revision-7 configuration as revision 11, and a full
+uninstall/reinstall that intentionally reset Helm history to revision 1 while
+preserving the same MongoDB claim and evidence marker. Revision numbers are
+release history, not software versions.
+
+### 23.22 Compact architecture narrative
+
+The Phase 4 platform is a Helm-packaged, single-node Kubernetes deployment of
+Open5GS, MongoDB, UERANSIM, and a controlled data endpoint. Helm renders and
+versions the Kubernetes objects; Kubernetes controllers reconcile Pods;
+CoreDNS and internal Services provide stable discovery; kindnet routes Pod
+traffic; a retained PVC holds MongoDB state; and narrowly privileged TUN
+workloads implement the subscriber data path. SBI uses stable Service DNS,
+while N2, N3, and N4 use current transport endpoints. One project-marked route
+inside the kind node returns the UE subnet to the current UPF Pod. Acceptance
+requires both Kubernetes health and real 5G evidence: N2/NGAP, 5G-AKA, NAS
+security, registration, PDU session, PFCP, GTP-U, N6 traffic, tunnel counters,
+persistence, and release lifecycle all passed.
+
+### 23.23 Phase 4 acceptance result
+
+The Phase 4 exit gate is accepted because:
+
+- `helm lint`, schema validation, and deterministic rendering pass;
 - installation reaches meaningful Ready state;
-- MongoDB persistence matches its accepted lifecycle contract;
-- startup, readiness, and liveness probes have distinct justified behavior;
-- initial resource requests and limits are based on observed behavior;
-- ServiceAccounts and RBAC grant no unjustified API access;
-- the gNB establishes a real SCTP association and NG Setup;
-- 5G Authentication and Key Agreement (5G-AKA), Non-Access Stratum (NAS)
-  security, UE registration, and PDU session establishment pass;
-- real PFCP session creation and bidirectional GTP-U traffic are visible;
-- the controlled N6 endpoint is reachable with a working return path;
-- install, validate, upgrade, rollback, and uninstall helpers pass; and
-- uninstall removes only project-owned resources.
+- stable Service discovery converges to exactly nine NRF profiles;
+- one synthetic UE completes 5G-AKA, NAS security, registration, and an IPv4
+  PDU session;
+- PFCP and bidirectional GTP-U/N6 traffic are proven independently;
+- requests, limits, capabilities, TUN mounts, ServiceAccount, and RBAC match
+  observed and minimum-required behavior;
+- MongoDB persistence matches ADR-0004 across every tested boundary;
+- upgrade, rollback, scoped uninstall, and reinstall pass; and
+- post-phase host state contains only the expected project-owned cluster,
+  Docker-network, route/firewall, storage, and resource changes.
 
-Passing Kubernetes readiness alone is insufficient.
+Phase 5 can therefore treat this one-UE release as its stable starting point.
+Phase 5 will change subscriber/configuration generation and workload
+concurrency; it must not weaken the Phase 4 lifecycle, persistence, network,
+security, or validation gates.
 
 ---
 
@@ -1552,14 +2155,14 @@ kindnet supplies Pod networking; CoreDNS and ClusterIP Services provide stable
 application discovery; and Helm packages the complete application as a
 versioned release.
 
-SBI traffic can use Kubernetes Services and DNS, while N2, N3, N4, and N6
-require explicit endpoint and routing decisions because 5G protocols can
-advertise addresses or carry tunneled subscriber traffic. Phase 3 proved TCP,
-UDP, SCTP, TUN, minimum Linux capabilities, a bidirectional synthetic N6
-return path, packet visibility, and exact cleanup. Phase 4 will replace the
+SBI traffic uses Kubernetes Services and DNS, while N2, N3, N4, and N6 use
+explicit endpoint and routing decisions because 5G protocols can advertise
+addresses or carry tunneled subscriber traffic. Phase 3 proved TCP, UDP,
+SCTP, TUN, minimum Linux capabilities, a bidirectional synthetic N6 return
+path, packet visibility, and exact cleanup. Phase 4 then replaced the
 synthetic protocol-port probes with Helm-managed Open5GS, MongoDB, and
-UERANSIM workloads and must prove real registration, PFCP, GTP-U, persistence,
-upgrade, rollback, and uninstall behavior.
+UERANSIM workloads and proved real registration, PFCP, GTP-U, persistence,
+upgrade, rollback, and uninstall/reinstall behavior.
 
 This narrative is short enough to state without losing the distinction
 between container execution, Kubernetes orchestration, Helm packaging, and 5G
@@ -1616,10 +2219,10 @@ protocol validation.
 
 ---
 
-## 28. Readiness Checklist Before Phase 4
+## 28. Phase 4 Foundation And Verified Outcome
 
-A reader is prepared to follow Phase 4 when they can explain the following
-without treating the terms as interchangeable:
+A reader understands the foundation and accepted Phase 4 outcome when they
+can explain the following without treating the terms as interchangeable:
 
 - an image is the packaged filesystem; a container is a running process
   environment; a Pod is the Kubernetes scheduling and network unit;
@@ -1636,10 +2239,11 @@ without treating the terms as interchangeable:
 - RBAC controls API access while Linux capabilities control kernel privileges;
 - Helm renders and submits Kubernetes objects but Kubernetes performs ongoing
   reconciliation;
-- Phase 3 proved infrastructure primitives, not real NGAP, PFCP, or GTP-U
-  semantics; and
-- Phase 4 succeeds only after both Kubernetes lifecycle gates and real 5G
-  functional gates pass.
+- Phase 3 proved infrastructure primitives, while Phase 4 proved real NGAP,
+  PFCP, GTP-U, and N6 behavior; and
+- the accepted Phase 4 result combines Kubernetes lifecycle gates, real 5G
+  functional gates, least privilege, measured resource requests, and retained
+  MongoDB persistence.
 
 ---
 
@@ -1662,8 +2266,19 @@ After this foundation, use the following review order:
    deployment, validation, diagnostics, persistence, and cleanup.
 7. [Phase 2 validation report](../reports/02_container_baseline.md) — accepted
    functional and coexistence evidence.
-8. [Architecture Decision Records](adr/README.md) — decisions, alternatives,
-   evidence, consequences, and reversal boundaries.
+8. [Phase 4 complete visual system guide](#23-phase-4-complete-system-and-operational-model)
+   — layered architecture, object ownership, address domains, signalling,
+   user plane, storage, security, lifecycle, recovery, validation, and
+   resource model.
+9. [Phase 4 validation summary](../reports/README.md#phase-4-single-ue-kubernetes-validation-summary)
+   — concise real 5G, lifecycle, persistence, security, resource, and
+   limitation evidence.
+10. [CN5G chart reference](../charts/cn5g/README.md) — Kubernetes object,
+   network, recovery, security, resource, and accepted-scope model.
+11. [Automation reference](../scripts/README.md) — exact Phase 3 and Phase 4
+    lifecycle commands, ownership boundaries, and cleanup behavior.
+12. [Architecture Decision Records](adr/README.md) — decisions, alternatives,
+    evidence, consequences, and reversal boundaries.
 
 Raw logs, host snapshots, runtime state, kubeconfigs, Secrets, keys, and packet
 captures remain local and ignored by default. Public reports contain only

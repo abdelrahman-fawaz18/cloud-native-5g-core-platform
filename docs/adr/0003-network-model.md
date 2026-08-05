@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted on 2026-08-02 for the local single-node baseline
+Accepted on 2026-08-02 for feasibility; real single-UE protocol behavior
+confirmed on 2026-08-04
 
 ## Context
 
@@ -85,6 +86,15 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
 - Exact cleanup removed the route, probe resources, cluster container,
   kubeconfig, and empty kind bridge. Same-runtime snapshots confirmed identical
   network, service, Docker-resource, and firewall-rule structure.
+- The Helm release proved real SBI discovery, N2 SCTP/NGAP, N4 PFCP, N3
+  GTP-U, UE/UPF TUN interfaces, and bidirectional N6 traffic without host
+  networking or host-published workload ports.
+- The accepted validator reconciles one protocol-186, metric-46060 route for
+  `10.60.0.0/24` through the current UPF Pod's dynamically discovered
+  node-side `veth`; it refuses to replace or remove an unrecognized route.
+- UPF required only `NET_ADMIN`, UE required `NET_ADMIN` and `NET_RAW`, and
+  the data endpoint required no effective capabilities. No Phase 4 workload
+  used privileged mode.
 
 ## Consequences
 
@@ -97,7 +107,7 @@ endpoint.
 
 ## Reversal Or Migration
 
-Phase 4 may revise an individual interface to host networking, Multus, or an
-external UERANSIM process only after a narrow failed real-protocol test and a
+A later phase may revise an individual interface to Multus, another Container
+Network Interface, or an external RAN only after a narrow requirement and a
 documented host-impact review. Remove only named project resources and exact
 owned routes, then repeat the host coexistence checks after reversal.

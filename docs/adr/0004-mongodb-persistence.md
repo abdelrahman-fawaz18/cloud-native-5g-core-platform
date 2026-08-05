@@ -2,10 +2,7 @@
 
 ## Status
 
-Accepted
-
-Acceptance covers the Phase 2 Compose volume baseline. Kubernetes storage
-remains proposed.
+Accepted on 2026-08-04 for the Compose and local Kubernetes baselines
 
 ## Context
 
@@ -17,8 +14,8 @@ provide production-grade distributed storage or high availability.
 ## Decision
 
 - Use a named Compose volume for the container baseline.
-- Use one MongoDB StatefulSet with one PersistentVolumeClaim for the
-  Helm-managed local baseline after storage behavior is tested.
+- Use one MongoDB StatefulSet with one retained 2 GiB PersistentVolumeClaim
+  for the Helm-managed local baseline.
 - Treat persistence across Pod recreation as required; persistence across
   complete kind-cluster deletion is not assumed.
 - Keep subscriber definitions deterministic and re-provisionable from
@@ -49,14 +46,23 @@ provide production-grade distributed storage or high availability.
   protocol revalidation after recreation.
 - Confirmed cleanup removed only the two project volumes and left host MongoDB
   active.
-- The selected kind storage class, PersistentVolumeClaim behavior, and reclaim
-  policy have not yet been tested, so the Kubernetes portion remains proposed.
+- The kind local-path provisioner bound the `standard` StorageClass claim and
+  reused the exact claim UID and backing volume after MongoDB Pod recreation.
+- A synthetic database marker survived a complete Helm uninstall/reinstall;
+  the lifecycle helper then removed only its dedicated evidence collection.
+- Controlled upgrade to revision 10 and rollback to the accepted revision-7
+  configuration as revision 11 preserved the exact claim identity.
+- Scoped uninstall removed release resources and verified historical Jobs but
+  retained the bound claim, namespace, and subscriber Secret. Reinstall
+  converged as a new revision-1 release against that retained storage.
 
 ## Consequences
 
-State survives routine process or Pod replacement, while full cluster deletion
-requires a deliberate data lifecycle decision. Deterministic provisioning
-limits dependence on irreplaceable local database state.
+State survives routine Pod replacement and Helm release uninstall/reinstall.
+Full kind-cluster deletion still removes local-path backing storage and
+therefore requires a deliberate export or data-lifecycle decision.
+Deterministic provisioning limits dependence on irreplaceable local database
+state. This single replica does not provide high availability.
 
 ## Reversal Or Migration
 

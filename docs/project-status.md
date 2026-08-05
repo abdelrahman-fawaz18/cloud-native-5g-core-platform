@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-04
 
 | Phase | State | Current gate |
 | --- | --- | --- |
@@ -8,8 +8,9 @@ Last updated: 2026-08-02
 | 1 — Host preflight and decisions | Complete | Host ready; safety constraints and proposed decisions recorded |
 | 2 — Container and Compose baseline | Complete | Healthy deployment, protocol/data path, persistence, recreation, and scoped cleanup verified |
 | 3 — Kubernetes networking feasibility | Complete | kind transport, TUN, capability, synthetic N6, packet visibility, and scoped cleanup verified |
-| 4 — Helm-managed single-UE platform | Ready to begin | kind accepted; no Phase 4 resources exist yet |
-| 5-10 | Not started | Each later phase remains gated by the preceding verified baseline |
+| 4 — Helm-managed single-UE platform | Complete | Chart, real 5G path, persistence, resource baseline, upgrade, rollback, and scoped uninstall/reinstall verified |
+| 5 — Multi-UE, DNN, and slice automation | Ready to begin | Phase 4 single-UE release is the accepted Kubernetes baseline |
+| 6-10 | Not started | Each later phase remains gated by the preceding verified baseline |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -55,6 +56,38 @@ routes, policy rules, listening services, Docker resources, and firewall rule
 structure; only volatile counters, timestamps, resource usage, and display
 ordering changed. ADR-0001 and ADR-0003 are accepted for the local baseline.
 
-Phase 3 proved transport and network primitives rather than telecom protocol
-semantics. Actual NGAP, PFCP, and GTP-U exchanges remain required Phase 4
-evidence from the Helm-managed Open5GS/UERANSIM topology.
+Phase 4 is complete. Checksum-pinned Helm 4.2.0 manages the `cn5g` chart in the
+`cn5g` namespace. The release contains thirteen Deployments, one MongoDB
+StatefulSet with a retained 2 GiB claim, one revision-scoped subscriber Job,
+thirteen cluster-internal Services, two ConfigMaps, and a workload
+ServiceAccount without Role or RoleBinding grants. The pre-created synthetic
+subscriber Secret is ignored by Git and validated by content hash without
+printing its values.
+
+The real single-UE path passed SCTP association, NG Setup, 5G-AKA, NAS
+security, registration, IPv4 PDU-session establishment, PFCP association and
+session creation, GTP-U session creation, HTTP and ICMP N6 traffic, and
+positive bidirectional UE/UPF tunnel-counter deltas. The current UE address is
+dynamically allocated from `10.60.0.0/24`; Kubernetes Pod and Service
+addresses remain separate routing domains. An exact protocol-186 route inside
+the disposable kind node returns that UE subnet through the current UPF Pod.
+
+UPF runs with only `NET_ADMIN`; UE runs with `NET_ADMIN` and `NET_RAW`; the
+data endpoint has zero effective capabilities. No workload uses privileged
+mode, host networking, a host-published port, or Kubernetes API credentials.
+Stable SBI advertisements and nine NRF profiles are checked after every
+controlled lifecycle operation.
+
+MongoDB data survived Pod recreation and full Helm uninstall/reinstall with
+the same claim UID and backing volume. A controlled Helm upgrade passed at
+revision 10; rollback created revision 11 from the accepted revision-7 state;
+uninstall removed only release-owned resources and two verified historical
+Jobs while retaining the namespace, Secret, and bound claim; reinstall then
+converged as a new revision-1 release and preserved the database marker.
+
+Two ten-second cgroup v2 observations established the single-UE scheduling
+baseline. The applied requests are 200 mCPU/256 MiB for MongoDB, 25 mCPU/64
+MiB for the shared Open5GS control-plane profile, 20 mCPU/64 MiB for UPF,
+10 mCPU/16 MiB for the controlled data endpoint, and 25 mCPU/96 MiB for each
+UERANSIM workload. These measurements do not establish multi-UE capacity,
+performance, high availability, or production sizing.

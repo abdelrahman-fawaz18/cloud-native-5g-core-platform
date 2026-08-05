@@ -1,0 +1,269 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "gnb") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "gnb") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 8 }}
+      annotations:
+        cn5g.io/rollout-token: {{ .Values.global.ranRolloutToken | quote }}
+        checksum/ueransim-config: {{ include (print .Template.BasePath "/configmap-ueransim.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: render-config
+          image: {{ include "cn5g.image" .Values.images.ueransim }}
+          imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              for attempt in $(seq 1 60); do
+                AMF_IP=$(getent ahostsv4 {{ include "cn5g.componentName" (dict "root" . "component" "amf") }} | awk 'NR == 1 {print $1}')
+                test -n "$AMF_IP" && break;
+                sleep 2;
+              done;
+              test -n "${AMF_IP:-}";
+              sed \
+                -e "s/__POD_IP__/${POD_IP}/g" \
+                -e "s/__AMF_IP__/${AMF_IP}/g" \
+                /config-source/gnb.yaml > /etc/ueransim/gnb.yaml;
+              test -s /etc/ueransim/gnb.yaml
+          env:
+            - name: POD_IP
+              valueFrom: {fieldRef: {fieldPath: status.podIP}}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.ueransim.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config-source, mountPath: /config-source, readOnly: true}
+            - {name: config-runtime, mountPath: /etc/ueransim}
+      containers:
+        - name: gnb
+          image: {{ include "cn5g.image" .Values.images.ueransim }}
+          imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
+          args: ["gnb"]
+          ports:
+            - {name: radio, containerPort: 4997, protocol: UDP}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -s /etc/ueransim/gnb.yaml && kill -0 1"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - >-
+                  last_event=$(grep -h -E
+                  'NG Setup procedure is successful|Association terminated for AMF'
+                  /opt/ueransim/logs/* 2>/dev/null | tail -n 1);
+                  printf '%s\n' "$last_event" |
+                  grep -Fq 'NG Setup procedure is successful'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - >-
+                  last_event=$(grep -h -E
+                  'NG Setup procedure is successful|Association terminated for AMF'
+                  /opt/ueransim/logs/* 2>/dev/null | tail -n 1);
+                  printf '%s\n' "$last_event" |
+                  grep -Fq 'NG Setup procedure is successful'
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.ueransim.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config-runtime, mountPath: /etc/ueransim, readOnly: true}
+            - {name: logs, mountPath: /opt/ueransim/logs}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config-source
+          configMap: {name: {{ include "cn5g.fullname" . }}-ueransim-config}
+        - name: config-runtime
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        - name: logs
+          emptyDir: {sizeLimit: 32Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "ue") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 8 }}
+      annotations:
+        cn5g.io/rollout-token: {{ .Values.global.ranRolloutToken | quote }}
+    spec:
+      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: wait-for-subscriber
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
+          imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              IMSI=$(cat /secret/{{ .Values.subscriberSecret.imsiKey }});
+              case "$IMSI" in (*[!0-9]*|'') exit 2;; esac;
+              for attempt in $(seq 1 90); do
+                if mongosh --quiet \
+                  "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs" \
+                  --eval "quit(db.subscribers.countDocuments({imsi:'${IMSI}'}) === 1 ? 0 : 1)"; then
+                  exit 0;
+                fi
+                sleep 2;
+              done;
+              exit 1
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.subscriberJob.resources | nindent 12 }}
+          volumeMounts:
+            - {name: subscriber-secret, mountPath: /secret, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+        - name: render-config
+          image: {{ include "cn5g.image" .Values.images.ueransim }}
+          imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              for attempt in $(seq 1 90); do
+                GNB_IP=$(getent ahostsv4 {{ include "cn5g.componentName" (dict "root" . "component" "gnb") }} | awk 'NR == 1 {print $1}')
+                test -n "$GNB_IP" && break;
+                sleep 2;
+              done;
+              test -n "${GNB_IP:-}";
+              sed "s/__GNB_IP__/${GNB_IP}/g" \
+                /secret/{{ .Values.subscriberSecret.ueConfigKey }} \
+                > /etc/ueransim/ue.yaml;
+              test -s /etc/ueransim/ue.yaml
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.ueransim.resources | nindent 12 }}
+          volumeMounts:
+            - {name: subscriber-secret, mountPath: /secret, readOnly: true}
+            - {name: config-runtime, mountPath: /etc/ueransim}
+      containers:
+        - name: ue
+          image: {{ include "cn5g.image" .Values.images.ueransim }}
+          imagePullPolicy: {{ .Values.images.ueransim.pullPolicy }}
+          args: ["ue"]
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN", "NET_RAW"]
+          startupProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -s /etc/ueransim/ue.yaml && kill -0 1"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["ueransim-healthcheck", "ue"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "kill -0 1"]
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.ueransim.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tun-device, mountPath: /dev/net/tun}
+            - {name: config-runtime, mountPath: /etc/ueransim, readOnly: true}
+            - {name: iproute2, mountPath: /etc/iproute2}
+            - {name: logs, mountPath: /opt/ueransim/logs}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tun-device
+          hostPath: {path: /dev/net/tun, type: CharDevice}
+        - name: subscriber-secret
+          secret:
+            secretName: {{ .Values.subscriberSecret.existingSecret }}
+            items:
+              - {key: {{ .Values.subscriberSecret.ueConfigKey }}, path: {{ .Values.subscriberSecret.ueConfigKey }}}
+              - {key: {{ .Values.subscriberSecret.imsiKey }}, path: {{ .Values.subscriberSecret.imsiKey }}}
+        - name: config-runtime
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        - name: iproute2
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        - name: logs
+          emptyDir: {sizeLimit: 32Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}

@@ -1,0 +1,186 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g.fullname" . }}-open5gs-config
+  labels:
+    {{- include "cn5g.labels" . | nindent 4 }}
+data:
+  nrf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    nrf:
+      serving:
+        - plmn_id: {mcc: {{ .Values.global.plmn.mcc }}, mnc: {{ .Values.global.plmn.mnc }}}
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "nrf") }}
+  scp.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    scp:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "scp") }}
+        client:
+          nrf:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "nrf") }}:7777
+  amf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    amf:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "amf") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+      ngap:
+        server:
+          - address: __POD_IP__
+      metrics:
+        server:
+          - {address: __POD_IP__, port: 9090}
+      guami:
+        - plmn_id: {mcc: {{ .Values.global.plmn.mcc }}, mnc: {{ .Values.global.plmn.mnc }}}
+          amf_id: {region: 2, set: 1}
+      tai:
+        - plmn_id: {mcc: {{ .Values.global.plmn.mcc }}, mnc: {{ .Values.global.plmn.mnc }}}
+          tac: {{ .Values.global.plmn.tac }}
+      plmn_support:
+        - plmn_id: {mcc: {{ .Values.global.plmn.mcc }}, mnc: {{ .Values.global.plmn.mnc }}}
+          s_nssai:
+            - sst: {{ .Values.global.slice.sst }}
+      security:
+        integrity_order: [NIA2, NIA1, NIA0]
+        ciphering_order: [NEA0, NEA1, NEA2]
+      network_name: {full: CN5G Synthetic Network, short: CN5G}
+      amf_name: cn5g-amf
+      time: {t3512: {value: 540}}
+  ausf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    ausf:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "ausf") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+  udm.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    udm:
+      hnet:
+        - {id: 1, scheme: 1, key: /opt/open5gs/etc/open5gs/hnet/curve25519-1.key}
+        - {id: 2, scheme: 2, key: /opt/open5gs/etc/open5gs/hnet/secp256r1-2.key}
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "udm") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+    db_uri: mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
+  udr.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    udr:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "udr") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+    db_uri: mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
+  pcf.yaml: |
+    db_uri: mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    pcf:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "pcf") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+      metrics:
+        server:
+          - {address: __POD_IP__, port: 9090}
+  nssf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    nssf:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "nssf") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+          nsi:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "nrf") }}:7777
+              s_nssai: {sst: {{ .Values.global.slice.sst }}}
+  smf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    smf:
+      sbi:
+        server:
+          - address: __POD_IP__
+            port: 7777
+            advertise: {{ include "cn5g.componentFqdn" (dict "root" . "component" "smf") }}
+        client:
+          scp:
+            - uri: http://{{ include "cn5g.componentName" (dict "root" . "component" "scp") }}:7777
+      pfcp:
+        server:
+          - address: __POD_IP__
+        client:
+          upf:
+            - address: {{ include "cn5g.componentName" (dict "root" . "component" "upf") }}
+      gtpc:
+        server:
+          - address: __POD_IP__
+      gtpu:
+        server:
+          - address: __POD_IP__
+      metrics:
+        server:
+          - {address: __POD_IP__, port: 9090}
+      session:
+        - {subnet: {{ .Values.global.uePool }}, gateway: {{ .Values.global.ueGateway }}, dnn: {{ .Values.global.dnn }}}
+      dns: [8.8.8.8, 8.8.4.4]
+      info:
+        - s_nssai:
+            - sst: {{ .Values.global.slice.sst }}
+              dnn: [{{ .Values.global.dnn }}]
+      mtu: {{ .Values.global.ueMtu }}
+  upf.yaml: |
+    logger: {level: info}
+    global: {max: {ue: 32}}
+    upf:
+      pfcp:
+        server:
+          - address: __POD_IP__
+      gtpu:
+        server:
+          - address: __POD_IP__
+      session:
+        - {subnet: {{ .Values.global.uePool }}, gateway: {{ .Values.global.ueGateway }}, dnn: {{ .Values.global.dnn }}, dev: ogstun}
+      metrics:
+        server:
+          - {address: __POD_IP__, port: 9090}

@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-subscriber-init-r%d" (include "cn5g.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "subscriber-init") | nindent 4 }}
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "cn5g.selectorLabels" (dict "root" . "component" "subscriber-init") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: wait-for-mongodb
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
+          imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              for attempt in $(seq 1 60); do
+                if mongosh --quiet \
+                  "mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/admin" \
+                  --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'; then
+                  exit 0;
+                fi
+                sleep 2;
+              done;
+              exit 1
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.subscriberJob.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: subscriber-init
+          image: {{ include "cn5g.kindLoadedImage" .Values.images.mongodb }}
+          imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
+          command: ["mongosh"]
+          args:
+            - --quiet
+            - mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
+            - /secret/{{ .Values.subscriberSecret.subscriberScriptKey }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.subscriberJob.resources | nindent 12 }}
+          volumeMounts:
+            - {name: subscriber-secret, mountPath: /secret, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: subscriber-secret
+          secret:
+            secretName: {{ .Values.subscriberSecret.existingSecret }}
+            items:
+              - {key: {{ .Values.subscriberSecret.subscriberScriptKey }}, path: {{ .Values.subscriberSecret.subscriberScriptKey }}}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
