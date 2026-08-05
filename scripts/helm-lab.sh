@@ -789,6 +789,25 @@ run_kubernetes_validation() {
   "$validator"
 }
 
+run_kubernetes_validation_with_session_repair() {
+  local output result
+  if output=$(run_kubernetes_validation 2>&1); then
+    printf '%s\n' "$output"
+    return
+  else
+    result=$?
+  fi
+  printf '%s\n' "$output"
+  if [[ $output != *"error: UPF PFCP/GTP-U session evidence is incomplete"* ]]; then
+    return "$result"
+  fi
+  printf 'phase04_session_evidence=stale repair=targeted-session-chain-reconciliation\n'
+  reconcile_5g_session_chain
+  reconcile_n6_return_route
+  run_kubernetes_validation
+  printf 'phase04_session_evidence_repair=pass\n'
+}
+
 component_cgroup_sample() {
   local component=$1 workload
   if [[ $component == "mongodb" ]]; then
@@ -1861,7 +1880,7 @@ case "$action" in
   validate)
     require_cluster
     verify_secret
-    run_kubernetes_validation
+    run_kubernetes_validation_with_session_repair
     printf 'phase04_validation=pass\n'
     ;;
   observe-resources)

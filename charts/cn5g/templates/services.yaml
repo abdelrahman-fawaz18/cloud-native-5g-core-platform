@@ -35,6 +35,23 @@ spec:
     - {name: n4-pfcp, protocol: UDP, port: 8805, targetPort: n4-pfcp}
     - {name: n3-gtpu, protocol: UDP, port: 2152, targetPort: n3-gtpu}
     - {name: metrics, protocol: TCP, port: 9090, targetPort: metrics}
+{{- if .Values.phase05.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "upf-pfcp") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "upf-pfcp") | nindent 4 }}
+spec:
+  # PFCP identifies peers by their transport address. Direct endpoint DNS avoids
+  # ClusterIP UDP translation while retaining a stable Kubernetes name.
+  clusterIP: None
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "upf") | nindent 4 }}
+  ports:
+    - {name: n4-pfcp, protocol: UDP, port: 8805, targetPort: n4-pfcp}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -61,6 +78,38 @@ spec:
     {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 4 }}
   ports:
     - {name: radio, protocol: UDP, port: 4997, targetPort: radio}
+{{- if .Values.phase05.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "ue") | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 4 }}
+{{- end }}
+{{- $root := . }}
+{{- if .Values.phase05.enabled }}
+{{- range $session := .Values.phase05.sessions }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cn5g.componentName" (dict "root" $root "component" $session.endpoint) }}
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" $root "component" $session.endpoint) | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "cn5g.selectorLabels" (dict "root" $root "component" $session.endpoint) | nindent 4 }}
+  ports:
+    - {name: http, protocol: TCP, port: 8080, targetPort: http}
+{{- end }}
+{{- else }}
 ---
 apiVersion: v1
 kind: Service
@@ -74,3 +123,4 @@ spec:
     {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 4 }}
   ports:
     - {name: http, protocol: TCP, port: 8080, targetPort: http}
+{{- end }}

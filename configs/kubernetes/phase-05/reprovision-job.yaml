@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cn5g-phase05-reprovision
+  namespace: cn5g
+  labels:
+    app.kubernetes.io/name: cn5g
+    app.kubernetes.io/instance: cn5g
+    app.kubernetes.io/component: subscriber-reprovision
+    app.kubernetes.io/part-of: cn5g-core
+    app.kubernetes.io/managed-by: cn5g-phase05-lab
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cn5g
+        app.kubernetes.io/instance: cn5g
+        app.kubernetes.io/component: subscriber-reprovision
+        app.kubernetes.io/part-of: cn5g-core
+        app.kubernetes.io/managed-by: cn5g-phase05-lab
+    spec:
+      restartPolicy: Never
+      serviceAccountName: cn5g-workload
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: subscriber-reprovision
+          image: mongo:8.0.28-noble
+          imagePullPolicy: Never
+          command: ["mongosh"]
+          args:
+            - --quiet
+            - mongodb://cn5g-mongodb:27017/open5gs
+            - /secret/subscriber-init.js
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 256Mi}
+          volumeMounts:
+            - {name: subscriber-secret, mountPath: /secret, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: subscriber-secret
+          secret: {secretName: cn5g-subscribers-phase05}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 32Mi}

@@ -12,6 +12,7 @@ and whether the tested gate passed or failed.
 - [Host preflight](01_host_preflight.md)
 - [Phase 2 container baseline](02_container_baseline.md)
 - [Phase 4 single-UE Kubernetes validation summary](#phase-4-single-ue-kubernetes-validation-summary)
+- [Phase 5 multi-UE and DNN validation summary](#phase-5-multi-ue-and-dnn-validation-summary)
 
 The validation evidence below is paired with the
 [complete Phase 4 visual system guide](../docs/README.md#23-phase-4-complete-system-and-operational-model),
@@ -83,3 +84,62 @@ differentiated DNN/slice behavior, carrier-grade throughput, or production
 security posture. The local-path PersistentVolume does not survive deletion
 of the kind node. Those boundaries prevent the report from being interpreted
 as a production-readiness or scale claim.
+
+## Phase 5 Multi-UE And DNN Validation Summary
+
+Validated on 2026-08-05 as Helm revision 8 on the accepted Phase 4 kind
+cluster. The [Phase 5 visual and operational model](../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
+explains the identity pipeline, StatefulSet mapping, DNN routing, PFCP
+discovery, recovery order, and lifecycle boundaries behind this summary.
+
+### Method
+
+The test generated permission-restricted subscriber material from a tracked
+synthetic plan and an ignored local seed, created a pre-existing Secret,
+server-side dry-ran and applied the Phase 5 Helm overlay, and converged the
+core before starting five StatefulSet UE replicas. Validation correlated
+runtime UE configuration, MongoDB records, Open5GS logs, routes, endpoint
+responses, TUN counters, and effective Linux capabilities. Separate tests
+introduced an unprovisioned sixth UE and one missing managed database record.
+The release was then rolled back to Phase 4 and migrated to Phase 5 again.
+
+### Result
+
+| Gate | Accepted evidence |
+| --- | --- |
+| Workloads | 13 Deployments, two StatefulSets, one completed revision-scoped Job, 16 Services, and five Ready UE replicas |
+| Identity | five distinct synthetic subscribers mapped to stable ordinals 0-4; database contained exactly five managed records |
+| DNN selection | three `internet` UEs received unique `10.60.0.x/24` addresses; two `enterprise` UEs received unique `10.61.0.x/24` addresses |
+| 5G control | N2 SCTP, NG Setup, nine NRF profiles, PFCP health, PDU sessions, and five distinct UP/CP F-SEIDs passed |
+| User plane | intended HTTP and ICMP passed for all five UEs; every UE TUN RX/TX counter increased |
+| Isolation | all five cross-DNN HTTP attempts were denied by source-policy routing |
+| N4 behavior | SMF reached the UPF through a headless PFCP Service resolving directly to the UPF Pod address |
+| Least privilege | UPF had `NET_ADMIN`; all UEs had `NET_ADMIN` and `NET_RAW`; data endpoints had zero effective capabilities |
+| Invalid identity | a sixth unprovisioned UE was denied, produced no database side effect, and did not disrupt the five valid UEs |
+| Recovery | an idempotent Job restored one deliberately missing managed record and full five-UE validation passed afterward |
+| Lifecycle | MongoDB PVC identity survived migration and rollback; Phase 4 passed after rollback; the repeat Phase 5 migration passed at revision 8 |
+
+The final command ended with `phase05_validation=pass` and
+`phase05_upgrade=pass`.
+
+### Resource Observation
+
+A ten-second cgroup v2 observation was collected after full five-UE validation.
+MongoDB averaged 162 mCPU, used 241 MiB current memory, and reached 691 MiB
+peak memory. The five UE Pods each averaged 17-19 mCPU, used 5-10 MiB current
+memory, and reached 11-15 MiB peak memory. Open5GS functions averaged 15-22
+mCPU, while the UPF averaged 15 mCPU; current memory was 5-20 MiB for the
+control plane and 7 MiB for the UPF. The two DNN endpoints averaged 8-9 mCPU
+and used 2-3 MiB current memory. All observed peaks remained below declared
+limits.
+
+### Limitations
+
+This result proves exactly five concurrent synthetic UEs, two differentiated
+DNN contracts, one gNB, one UPF, one local node, and one replica per Network
+Function. It does not prove general subscriber scale, performance, high
+availability, multi-node scheduling, production storage, external RAN
+integration, differentiated slice treatment, or production security. Numeric
+GTP-U TEIDs were not exposed by the accepted INFO-level logs; the narrower
+claim is five unique F-SEID/address correlations with no observed concurrent
+session-collision symptom.

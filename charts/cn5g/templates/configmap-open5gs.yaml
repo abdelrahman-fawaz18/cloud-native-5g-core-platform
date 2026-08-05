@@ -151,7 +151,7 @@ data:
           - address: __POD_IP__
         client:
           upf:
-            - address: {{ include "cn5g.componentName" (dict "root" . "component" "upf") }}
+            - address: {{ include "cn5g.componentName" (dict "root" . "component" (ternary "upf-pfcp" "upf" .Values.phase05.enabled)) }}
       gtpc:
         server:
           - address: __POD_IP__
@@ -162,12 +162,22 @@ data:
         server:
           - {address: __POD_IP__, port: 9090}
       session:
+        {{- if .Values.phase05.enabled }}
+        {{- range .Values.phase05.sessions }}
+        - {subnet: {{ .pool }}, gateway: {{ .gateway }}, dnn: {{ .name }}}
+        {{- end }}
+        {{- else }}
         - {subnet: {{ .Values.global.uePool }}, gateway: {{ .Values.global.ueGateway }}, dnn: {{ .Values.global.dnn }}}
+        {{- end }}
       dns: [8.8.8.8, 8.8.4.4]
       info:
         - s_nssai:
             - sst: {{ .Values.global.slice.sst }}
+              {{- if .Values.phase05.enabled }}
+              dnn: [{{ range $index, $session := .Values.phase05.sessions }}{{ if $index }}, {{ end }}{{ $session.name }}{{ end }}]
+              {{- else }}
               dnn: [{{ .Values.global.dnn }}]
+              {{- end }}
       mtu: {{ .Values.global.ueMtu }}
   upf.yaml: |
     logger: {level: info}
@@ -180,7 +190,13 @@ data:
         server:
           - address: __POD_IP__
       session:
+        {{- if .Values.phase05.enabled }}
+        {{- range .Values.phase05.sessions }}
+        - {subnet: {{ .pool }}, gateway: {{ .gateway }}, dnn: {{ .name }}, dev: {{ .tunDevice }}}
+        {{- end }}
+        {{- else }}
         - {subnet: {{ .Values.global.uePool }}, gateway: {{ .Values.global.ueGateway }}, dnn: {{ .Values.global.dnn }}, dev: ogstun}
+        {{- end }}
       metrics:
         server:
           - {address: __POD_IP__, port: 9090}

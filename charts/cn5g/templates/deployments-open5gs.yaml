@@ -59,6 +59,51 @@ spec:
           volumeMounts:
             - {name: config-source, mountPath: /config-source, readOnly: true}
             - {name: config-runtime, mountPath: /etc/open5gs}
+        {{- if and (eq $component "upf") $root.Values.phase05.enabled }}
+        - name: configure-dnn-network
+          image: {{ include "cn5g.image" $root.Values.images.open5gs }}
+          imagePullPolicy: {{ $root.Values.images.open5gs.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              default_gateway=$(ip -4 route show default | awk 'NR == 1 {print $3}')
+              test -n "$default_gateway"
+              {{- range $session := $root.Values.phase05.sessions }}
+              if ! ip link show {{ $session.tunDevice }} >/dev/null 2>&1; then
+                ip tuntap add name {{ $session.tunDevice }} mode tun
+              fi
+              ip address replace {{ $session.gateway }}/24 dev {{ $session.tunDevice }}
+              ip link set {{ $session.tunDevice }} mtu {{ $root.Values.global.ueMtu }} up
+              endpoint_ip=""
+              for attempt in $(seq 1 90); do
+                endpoint_ip=$(getent ahostsv4 {{ include "cn5g.componentName" (dict "root" $root "component" $session.endpoint) }} | awk 'NR == 1 {print $1}')
+                test -n "$endpoint_ip" && break
+                sleep 2
+              done
+              test -n "$endpoint_ip"
+              ip rule del priority {{ $session.rulePriority }} 2>/dev/null || true
+              # A named table has no FIB until its first route is installed.
+              # Treat that clean first-start state as empty; the route-add and
+              # post-start validation paths remain fail-closed.
+              ip route flush table {{ $session.routeTable }} 2>/dev/null || true
+              ip route add table {{ $session.routeTable }} "$endpoint_ip/32" via "$default_gateway" dev eth0
+              ip route add table {{ $session.routeTable }} unreachable default metric 42760
+              ip rule add priority {{ $session.rulePriority }} from {{ $session.pool }} table {{ $session.routeTable }}
+              {{- end }}
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN"]
+          resources:
+            {{- toYaml $root.Values.open5gs.upfResources | nindent 12 }}
+          volumeMounts:
+            - {name: tun-device, mountPath: /dev/net/tun}
+        {{- end }}
       containers:
         - name: {{ $component }}
           image: {{ include "cn5g.image" $root.Values.images.open5gs }}

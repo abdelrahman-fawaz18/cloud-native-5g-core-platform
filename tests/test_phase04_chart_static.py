@@ -287,7 +287,9 @@ class Phase04ChartStaticTests(unittest.TestCase):
             continued_arguments = [
                 index
                 for index, line in enumerate(lines)
-                if line.lstrip().startswith(("-e ", "/config-source/", "/secret/"))
+                if line.lstrip().startswith(
+                    ("-e ", "/config-source/", "/secret/", '"$ue_config"')
+                )
             ]
             self.assertTrue(continued_arguments)
             for index in continued_arguments:

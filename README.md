@@ -2,12 +2,12 @@
 
 ## Overview
 
-This repository is the implementation workspace for a reproducible,
-containerized 5G Standalone (5G SA) Core platform. The target system will
-deploy Open5GS, MongoDB, and UERANSIM on a local Kubernetes environment,
-exercise multiple synthetic User Equipments (UEs), and produce measured
-evidence for signalling, user-plane traffic, observability, load, failure, and
-recovery behavior.
+This repository implements a reproducible, containerized 5G Standalone (5G
+SA) Core platform. It deploys Open5GS, MongoDB, and UERANSIM on a local
+Kubernetes environment, exercises multiple synthetic User Equipments (UEs),
+and preserves measured evidence for signalling, user-plane traffic, lifecycle,
+isolation, and recovery behavior. Observability, load, and controlled-failure
+evidence are added through the remaining roadmap phases.
 
 The project extends the validated protocol baseline documented in the
 [5G SA Core Protocol Lab](https://github.com/abdelrahman-fawaz18/5g-sa-core-protocol-lab).
@@ -18,11 +18,13 @@ and reliability rather than repeating the original single-host installation.
 
 The repository boundary, host preflight, container baseline, Kubernetes
 networking feasibility gate, and Helm-managed single-UE platform are complete.
-The accepted release runs Open5GS, MongoDB, UERANSIM, and a controlled data
-endpoint in a disposable single-node kind cluster. It has passed real N2
-SCTP/NGAP, 5G-AKA, NAS security, registration, PDU-session, N4 PFCP, N3 GTP-U,
-bidirectional N6 traffic, persistence, upgrade, rollback, uninstall/reinstall,
-least-privilege, and resource-observation gates. See the [project
+The accepted Phase 5 release runs Open5GS, MongoDB, one UERANSIM gNodeB, five
+concurrent UERANSIM UEs, and two isolated controlled data endpoints in a
+disposable single-node kind cluster. It has passed real N2 SCTP/NGAP, 5G-AKA,
+NAS security, per-UE registration and PDU sessions, N4 PFCP, N3 GTP-U,
+bidirectional N6 traffic, two-DNN selection/isolation, negative access,
+partial-provisioning recovery, persistence, rollback/rerun, least-privilege,
+and resource-observation gates. See the [project
 status](docs/project-status.md), [container report](reports/02_container_baseline.md),
 and [architecture decisions](docs/adr/README.md).
 
@@ -185,6 +187,56 @@ address-domain, signalling-sequence, user-plane, security, persistence,
 lifecycle, recovery, validation, and resource visuals for this accepted
 architecture.
 
+## Verified Phase 5 Multi-UE And DNN Platform
+
+Phase 5 keeps the Phase 4 chart as its rollback baseline and applies an
+explicit overlay. The UE changes from one Deployment to a five-replica
+StatefulSet so Pod ordinal, synthetic subscriber identity, UERANSIM
+configuration, and requested Data Network Name (DNN) remain deterministic
+across Pod replacement. Ordinals 0-2 select `internet`; ordinals 3-4 select
+`enterprise`.
+
+```mermaid
+flowchart LR
+    PLAN["Synthetic five-UE plan"] --> JOB["Idempotent subscriber Job"]
+    PLAN --> SS["UE StatefulSet<br/>ordinals 0-4"]
+    JOB --> DB[("MongoDB<br/>five managed records")]
+    SS --> GNB["one UERANSIM gNB"]
+    GNB -->|"N2 / SCTP"| AMF["AMF and 5G control plane"]
+    AMF --> SMF["SMF"]
+    SMF -->|"N4 / PFCP<br/>direct endpoint DNS"| UPF["UPF"]
+    GNB -->|"N3 / GTP-U"| UPF
+    UPF -->|"10.60.0.0/24<br/>table 1060"| INTERNET["internet endpoint"]
+    UPF -->|"10.61.0.0/24<br/>table 1061"| ENTERPRISE["enterprise endpoint"]
+```
+
+The two DNNs are separate network contracts, not labels alone:
+
+| DNN | UE session pool | UPF interface | Policy table | Permitted endpoint |
+| --- | --- | --- | ---: | --- |
+| `internet` | `10.60.0.0/24` | `ogstun` | 1060 | `data-internet` |
+| `enterprise` | `10.61.0.0/24` | `ogstun2` | 1061 | `data-enterprise` |
+
+Each source-policy table contains one exact endpoint route and an
+`unreachable default`, so a packet cannot fall through to the ordinary Pod
+route when it targets the other DNN. A dedicated headless `cn5g-upf-pfcp`
+Service resolves directly to the UPF Pod and avoids virtual-IP translation on
+the stateful UDP PFCP association path.
+
+Runtime acceptance proved five concurrent registrations and sessions, three
+unique `internet` addresses, two unique `enterprise` addresses, five unique
+control-plane and user-plane F-SEIDs, correct endpoint identity for every UE,
+cross-DNN denial for every UE, and positive receive/transmit counter deltas on
+all five UE tunnels. An unprovisioned sixth UE was denied without affecting
+the accepted set. A deliberately removed subscriber was restored by the
+idempotent Job and the entire session chain reconverged.
+
+The release was rolled back to the single-UE Phase 4 baseline without changing
+the MongoDB claim, then migrated to Phase 5 again as Helm revision 8 with the
+same acceptance result. The [Phase 5 implementation and visual model](docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
+and [sanitized validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
+document the full evidence and limitations.
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -237,9 +289,9 @@ flowchart LR
     UE --> LOGS
 ```
 
-The target topology builds on the accepted kind and Helm single-UE baseline.
-Phase 5 extends this verified object and network model with concurrent
-synthetic UEs and differentiated DNN or slice behavior.
+The target topology builds on the accepted kind, Helm, and five-UE/two-DNN
+baseline. Phase 6 adds operational metrics, dashboards, alerts, and correlated
+logs without changing the accepted subscriber or user-plane contracts.
 
 ## Repository Structure
 
@@ -281,6 +333,8 @@ machine-readable measurements, and concise reports.
 - [Phase 2 validation and host-safety report](reports/02_container_baseline.md)
 - [Phase 4 single-UE Kubernetes validation summary](reports/README.md#phase-4-single-ue-kubernetes-validation-summary)
 - [Complete Phase 4 visual system and operational guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
+- [Phase 5 multi-UE and DNN validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
+- [Phase 5 multi-UE visual and operational model](docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

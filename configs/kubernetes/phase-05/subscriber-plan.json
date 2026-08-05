@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "plmn": {
+    "mcc": "999",
+    "mnc": "70",
+    "tac": 1
+  },
+  "slice": {
+    "sst": 1
+  },
+  "dnns": [
+    {
+      "name": "internet",
+      "pool": "10.60.0.0/24",
+      "gateway": "10.60.0.1",
+      "tunDevice": "ogstun",
+      "endpoint": "data-internet"
+    },
+    {
+      "name": "enterprise",
+      "pool": "10.61.0.0/24",
+      "gateway": "10.61.0.1",
+      "tunDevice": "ogstun2",
+      "endpoint": "data-enterprise"
+    }
+  ],
+  "subscribers": [
+    {
+      "ordinal": 0,
+      "imsi": "999700000000001",
+      "imei": "356938035643801",
+      "imeiSv": "4370816125816101",
+      "dnn": "internet"
+    },
+    {
+      "ordinal": 1,
+      "imsi": "999700000000002",
+      "imei": "356938035643802",
+      "imeiSv": "4370816125816102",
+      "dnn": "internet"
+    },
+    {
+      "ordinal": 2,
+      "imsi": "999700000000003",
+      "imei": "356938035643803",
+      "imeiSv": "4370816125816103",
+      "dnn": "internet"
+    },
+    {
+      "ordinal": 3,
+      "imsi": "999700000000004",
+      "imei": "356938035643804",
+      "imeiSv": "4370816125816104",
+      "dnn": "enterprise"
+    },
+    {
+      "ordinal": 4,
+      "imsi": "999700000000005",
+      "imei": "356938035643805",
+      "imeiSv": "4370816125816105",
+      "dnn": "enterprise"
+    }
+  ]
+}

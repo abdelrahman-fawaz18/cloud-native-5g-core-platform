@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted on 2026-08-05
 
 ## Context
 
@@ -47,7 +47,19 @@ Base64 encoding does not encrypt a Kubernetes Secret.
   requires additional controls for confidentiality.
 - Project publication rules prohibit live secrets, kubeconfigs, keys, and
   credentials in Git or evidence.
-- No live project secret exists yet.
+- Phase 4 created a pre-existing subscriber Secret from ignored local files,
+  verified its content hash and project ownership without printing values,
+  and retained it independently of the Helm release.
+- Phase 5 committed only a synthetic non-secret identity/DNN plan. A local
+  mode-`0600` seed derives five K and OPc values with HMAC-SHA256 into ignored
+  files; repeated generation is byte-identical and rejects tampered or
+  unexpected output.
+- The five-UE StatefulSet mounts only its selected runtime configuration after
+  an init-container copy. Validation derives identity and DNN evidence from
+  that runtime configuration rather than reading or printing Secret data.
+- Static tests, ignored-path checks, publication scans, an invalid-UE runtime
+  test, and an idempotent partial-reprovision test passed without committing
+  subscriber authentication material.
 
 ## Consequences
 

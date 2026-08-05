@@ -25,6 +25,23 @@ targets, and support a dry-run or read-only mode where practical.
   mode-0700 directory containing only mode-0600 files. It validates consistency
   without printing subscriber identifiers or authentication values and refuses
   to overwrite existing material.
+- `generate-phase05-subscribers.py`: validates the tracked five-UE/two-DNN
+  plan, creates one ignored mode-0600 local seed, and deterministically derives
+  matching UERANSIM and Open5GS material without printing authentication
+  values. Check mode verifies permissions, the exact file set, and byte-level
+  reproducibility. Invalid identities or service selections fail before any
+  output is created.
+- `phase05-lab.sh`: owns the controlled Phase 4-to-Phase 5 transition. It
+  performs a resource and rendering preflight, creates or hash-verifies the
+  exact Phase 5 Secret, records Helm/PVC rollback identity, prevents duplicate
+  ordinal-zero execution during controller-kind migration, reconciles two
+  exact kind-node return routes, validates the five-UE topology, and restores
+  the accepted Phase 4 revision without deleting persistent storage.
+- `validate-phase05.sh`: reports each ordinal, Pod, DNN, tunnel address,
+  registration/session result, intended endpoint result, and cross-DNN denial.
+  It also verifies five database records, unique addresses and F-SEIDs,
+  per-UE counter deltas, PFCP peer/session-programming health, and effective
+  capability boundaries.
 - `helm-lab.sh`: owns the Phase 4 release lifecycle. It verifies accepted
   image identities and the file-backed Secret, loads only accepted images,
   performs server-side dry runs, installs and converges the namespace-scoped
@@ -117,6 +134,14 @@ server-side dry run. API acceptance is followed by ordered workload waits,
 nine-profile NRF convergence, deterministic UPF/SMF/gNB/UE session-chain
 reconciliation, and the exact kind-node N6 return route.
 
+The Phase 4 `validate` action remains fail-closed for general protocol,
+workload, persistence, routing, and user-plane errors. If and only if the
+validator reaches the specific stale UPF PFCP/GTP-U evidence gate, it performs
+one ordered UPF/SMF/gNB/UE session-chain reconciliation and repeats the full
+validator. This handles a long-running lab whose current UPF process no longer
+contains complete session-establishment evidence without masking unrelated
+failures.
+
 Read-only status and measurement operations are:
 
 ```bash
@@ -155,3 +180,53 @@ wildcard deletion, `docker system prune`, privileged Pods, or deletion of a
 bound PersistentVolumeClaim. Cluster deletion is a separate, explicitly
 confirmed operation because the local-path volume does not survive deletion
 of the kind node.
+
+## Phase 5 Multi-UE Lifecycle
+
+The Phase 5 workflow begins only from a currently validated Phase 4 release:
+
+```bash
+./scripts/generate-phase05-subscribers.py --generate
+sudo ./scripts/phase05-lab.sh preflight
+sudo ./scripts/phase05-lab.sh prepare-secret
+sudo ./scripts/phase05-lab.sh upgrade
+sudo ./scripts/phase05-lab.sh validate
+sudo ./scripts/phase05-lab.sh test-invalid-ue
+sudo ./scripts/phase05-lab.sh test-reprovision
+sudo ./scripts/phase05-lab.sh observe-resources
+```
+
+`upgrade` includes complete validation; the separate `validate` action is an
+idempotent repeat gate. The generator's output and Kubernetes Secret are
+ignored runtime material. The derivation seed is never inserted into the
+Secret. `test-invalid-ue` launches one temporary, deliberately unprovisioned
+identity and proves that its failed registration attempt leaves the five valid
+subscribers, Pods, and data paths intact; the exact temporary Pod and Secret
+are then removed. `test-reprovision` removes one exact Phase 5-managed record,
+runs the idempotent batch Job, reconciles the session chain, and repeats the
+complete validator. Session reconciliation first scales the UE StatefulSet to
+zero, preventing live UERANSIM processes from retaining a lost-cell state
+across gNB replacement, and then recreates all five UE Pods. The Job is
+retained on failure so its diagnostics remain
+available; rerunning the same action is the scoped recovery path. Its resource
+limit matches the accepted subscriber initialization Job, and its waiter
+reports terminal Kubernetes Job failures without waiting for the timeout.
+`observe-resources` first requires the full five-UE validator, then records a
+ten-second cgroup CPU average plus current/peak memory for every singleton
+workload and every UE ordinal alongside its declared requests and limits.
+
+Controlled rollback is:
+
+```bash
+sudo ./scripts/phase05-lab.sh rollback
+sudo ./scripts/phase05-lab.sh remove-secret --confirm
+```
+
+Rollback targets the recorded Phase 4 revision, preserves and identity-checks
+the MongoDB PVC, deletes only four records carrying the Phase 5 management
+marker, and runs `helm-lab.sh validate`. The Phase 5 Secret is removed only by
+the separate confirmed action after the release is no longer using it.
+The rollback waiter derives the restored subscriber Job from the active Helm
+manifest rather than assuming that its suffix equals the new rollback
+revision. Post-apply rollback and already-complete subscriber cleanup are both
+verified resumable states.

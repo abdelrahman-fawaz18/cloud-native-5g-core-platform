@@ -3,11 +3,20 @@
 For a system-level visual explanation of where this chart runs and how its
 objects, 5G interfaces, address domains, lifecycle, persistence, and validation
 fit together, see the
-[complete Phase 4 system guide](../../docs/README.md#23-phase-4-complete-system-and-operational-model).
+[complete Phase 4 system guide](../../docs/README.md#23-phase-4-complete-system-and-operational-model)
+and the [accepted Phase 5 multi-UE model](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model).
 
 This chart packages the verified Open5GS, MongoDB, UERANSIM, and controlled
 data-network images as one Kubernetes release. The baseline deliberately runs
 one replica of each 5G function, one gNodeB, and one synthetic UE.
+
+`values-phase05.yaml` is the accepted multi-UE overlay. It keeps the default
+Phase 4 render intact for controlled rollback
+while changing the UE controller to a five-replica StatefulSet and adding the
+`enterprise` DNN, `10.61.0.0/24` session pool, `ogstun2`, and a second
+controlled endpoint. The runtime gate in the
+[system guide](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
+passed on 2026-08-05.
 
 Non-sensitive configuration is rendered through ConfigMaps. The chart never
 templates subscriber authentication material; `subscriberSecret.existingSecret`
@@ -46,9 +55,11 @@ observed 12-22 mCPU and 6-40 MiB across its functions; its reservation is
 therefore 25 mCPU/64 MiB. The data endpoint observed 6-8 mCPU, 3 MiB current
 memory, and 7-8 MiB peak memory; its reservation is 10 mCPU/16 MiB. The
 existing UPF and UERANSIM reservations already exceeded their observed
-steady-state use and remain unchanged. These settings describe this
-single-node, single-UE baseline; later multi-UE measurements must reassess
-them rather than treating them as production capacity guidance.
+steady-state use and remain unchanged. A later five-UE observation measured
+each UE at 17-19 mCPU and 5-10 MiB current memory, both data endpoints at 8-9
+mCPU and 2-3 MiB, and MongoDB at 162 mCPU and 241 MiB current/691 MiB peak
+memory. These local observations are scheduling evidence, not production
+capacity guidance.
 
 `helm lint` and `helm template` validate package structure and deterministic
 rendering. They do not prove SCTP, NGAP, PFCP, GTP-U, TUN, N6 routing, UE
@@ -130,9 +141,35 @@ Role or RoleBinding is created.
 
 ## Accepted Scope
 
-The chart is accepted for a local, single-node, single-UE integration
-baseline. It proves Kubernetes packaging, real 5G signaling and user-plane
-operation, state persistence, and controlled release lifecycle. It does not
-claim multi-node scheduling, high availability, production storage,
-production security controls, multi-UE capacity, carrier-grade performance,
-or geographic redundancy.
+The default values are accepted as a local, single-node, single-UE integration
+baseline. The Phase 5 overlay is accepted for exactly five concurrent UEs and
+two differentiated DNN contracts. Together they prove Kubernetes packaging,
+real 5G signalling and user-plane operation, state persistence, controlled
+release lifecycle, deterministic identity mapping, and cross-DNN isolation.
+They do not claim general multi-UE capacity, multi-node scheduling, high
+availability, production storage or security controls, carrier-grade
+performance, or geographic redundancy.
+
+## Phase 5 Overlay Contract
+
+The overlay consumes the pre-existing `cn5g-subscribers-phase05` Secret. The
+chart neither generates nor owns its authentication values. StatefulSet Pod
+ordinal `N` selects `imsi-N`, `dnn-N`, and `ue-N.yaml`, and the subscriber Job
+consumes one batch provisioning script. The values schema fixes the replica
+count at five and fixes both DNN network contracts so an unreviewed values
+override cannot silently move a subscriber pool, gateway, TUN device,
+endpoint, or route-policy table.
+
+The UPF setup init container creates `ogstun` and `ogstun2`, then installs one
+source-policy table per DNN. Each table contains only the intended headless
+endpoint route plus an unreachable default. It receives only `NET_ADMIN` and
+the existing TUN device mount. Endpoint containers remain non-root with all
+capabilities dropped. The overlay does not add a host port, NodePort,
+LoadBalancer, host-network Pod, or RBAC grant.
+
+Phase 5 also adds the headless `cn5g-upf-pfcp` discovery Service for N4. The
+SMF resolves this name directly to the ready UPF Pod address. This deliberately
+bypasses ClusterIP UDP proxying for PFCP, whose association and session state
+is tied to the peer transport address. The normal `cn5g-upf` ClusterIP Service
+remains available for the other declared UPF ports and preserves the Phase 4
+object contract.

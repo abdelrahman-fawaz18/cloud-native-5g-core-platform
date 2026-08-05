@@ -1,8 +1,9 @@
 # Tests
 
-The current test suite covers repository, Compose, Phase 3 feasibility, and
-Phase 4 static contracts. Later phases extend it with multi-UE,
-observability, performance, reliability, and release automation.
+The current test suite covers repository, Compose, Phase 3 feasibility, Phase
+4 static contracts, and Phase 5 identity/chart/lifecycle contracts. Later
+phases extend it with observability, performance, reliability, and release
+automation.
 
 Current Phase 4 coverage includes:
 
@@ -22,8 +23,6 @@ Current Phase 4 coverage includes:
 
 Planned later-phase coverage includes:
 
-- multi-UE integration;
-- differentiated DNN or slice behavior;
 - observability and alert behavior;
 - performance methodology;
 - controlled failure and recovery;
@@ -31,3 +30,19 @@ Planned later-phase coverage includes:
 
 Tests that require privileged networking must be clearly separated from tests
 safe for hosted Continuous Integration runners.
+
+Current Phase 5 safe coverage includes deterministic/idempotent generation,
+duplicate and unsupported-DNN rejection, output-tamper detection, values-
+schema drift rejection, five-ordinal StatefulSet mapping, two-DNN Open5GS
+rendering, UPF policy-route isolation, Secret boundaries, controller-kind
+migration, exact route ownership, PVC-preserving rollback, per-UE acceptance
+markers, and capability checks. These tests validate code contracts; they do
+not replace the privileged local five-UE runtime gate.
+
+The privileged local Phase 5 gate passed on 2026-08-05. It validated five
+concurrent ordinal-bound UEs, two DNN address pools, unique F-SEIDs and session
+addresses, intended HTTP/ICMP paths, cross-DNN denial, per-UE bidirectional
+TUN counters, an isolated invalid UE, partial-subscriber reprovision recovery,
+PVC-preserving rollback, and repeat migration. Those runtime checks remain
+separate from hosted Continuous Integration because they require kind, SCTP,
+TUN devices, and narrowly scoped network capabilities.

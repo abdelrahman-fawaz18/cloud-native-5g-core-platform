@@ -303,6 +303,20 @@ class Phase04LifecycleStaticTests(unittest.TestCase):
             self.script,
         )
 
+    def test_validation_repairs_only_stale_upf_session_evidence(self):
+        self.assertIn(
+            "run_kubernetes_validation_with_session_repair", self.script
+        )
+        self.assertIn(
+            "error: UPF PFCP/GTP-U session evidence is incomplete",
+            self.script,
+        )
+        self.assertIn(
+            "phase04_session_evidence=stale repair=targeted-session-chain-reconciliation",
+            self.script,
+        )
+        self.assertIn("phase04_session_evidence_repair=pass", self.script)
+
     def test_persistence_upgrade_rollback_and_uninstall_have_identity_gates(self):
         self.assertIn("cn5g_phase04_evidence", self.script)
         self.assertIn("mongodb_pod_recreation_persistence=pass", self.script)

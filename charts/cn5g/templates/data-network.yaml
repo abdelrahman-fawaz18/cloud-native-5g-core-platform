@@ -1,30 +1,61 @@
+{{- $root := . -}}
+{{- $endpoints := list (dict "component" "data-network" "identity" "baseline") -}}
+{{- if .Values.phase05.enabled -}}
+{{- $endpoints = list
+      (dict "component" "data-internet" "identity" "internet")
+      (dict "component" "data-enterprise" "identity" "enterprise") -}}
+{{- end -}}
+{{- range $endpoint := $endpoints }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "cn5g.componentName" (dict "root" . "component" "data-network") }}
+  name: {{ include "cn5g.componentName" (dict "root" $root "component" $endpoint.component) }}
   labels:
-    {{- include "cn5g.componentLabels" (dict "root" . "component" "data-network") | nindent 4 }}
+    {{- include "cn5g.componentLabels" (dict "root" $root "component" $endpoint.component) | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 6 }}
+      {{- include "cn5g.selectorLabels" (dict "root" $root "component" $endpoint.component) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "cn5g.selectorLabels" (dict "root" . "component" "data-network") | nindent 8 }}
+        {{- include "cn5g.selectorLabels" (dict "root" $root "component" $endpoint.component) | nindent 8 }}
       annotations:
-        cn5g.io/rollout-token: {{ .Values.global.rolloutToken | quote }}
+        cn5g.io/rollout-token: {{ $root.Values.global.rolloutToken | quote }}
     spec:
-      serviceAccountName: {{ include "cn5g.serviceAccountName" . }}
+      serviceAccountName: {{ include "cn5g.serviceAccountName" $root }}
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 10
       securityContext:
         seccompProfile: {type: RuntimeDefault}
+      {{- if $root.Values.phase05.enabled }}
+      initContainers:
+        - name: render-content
+          image: {{ include "cn5g.image" $root.Values.images.dataNetwork }}
+          imagePullPolicy: {{ $root.Values.images.dataNetwork.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              printf '%s\n' 'cn5g-data-network-ok' > /rendered/healthz
+              printf '%s\n' 'cn5g-dnn={{ $endpoint.identity }}' > /rendered/index.html
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml $root.Values.dataNetwork.resources | nindent 12 }}
+          volumeMounts:
+            - {name: rendered-content, mountPath: /rendered}
+      {{- end }}
       containers:
         - name: data-network
-          image: {{ include "cn5g.image" .Values.images.dataNetwork }}
-          imagePullPolicy: {{ .Values.images.dataNetwork.pullPolicy }}
+          image: {{ include "cn5g.image" $root.Values.images.dataNetwork }}
+          imagePullPolicy: {{ $root.Values.images.dataNetwork.pullPolicy }}
           command: ["/bin/busybox-extras", "httpd"]
           args: ["-f", "-p", "8080", "-h", "/srv"]
           ports:
@@ -54,4 +85,14 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.dataNetwork.resources | nindent 12 }}
+            {{- toYaml $root.Values.dataNetwork.resources | nindent 12 }}
+          {{- if $root.Values.phase05.enabled }}
+          volumeMounts:
+            - {name: rendered-content, mountPath: /srv, readOnly: true}
+          {{- end }}
+      {{- if $root.Values.phase05.enabled }}
+      volumes:
+        - name: rendered-content
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+      {{- end }}
+{{- end }}

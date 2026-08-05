@@ -125,16 +125,23 @@ spec:
           emptyDir: {medium: Memory, sizeLimit: 16Mi}
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if .Values.phase05.enabled }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
   name: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
   labels:
     {{- include "cn5g.componentLabels" (dict "root" . "component" "ue") | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ if .Values.phase05.enabled }}{{ .Values.phase05.ueReplicas }}{{ else }}1{{ end }}
+  {{- if .Values.phase05.enabled }}
+  serviceName: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  {{- else }}
   strategy:
     type: Recreate
     rollingUpdate: null
+  {{- end }}
   selector:
     matchLabels:
       {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 6 }}
@@ -159,7 +166,15 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |-
+              {{- if .Values.phase05.enabled }}
+              case "$POD_NAME" in
+                {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}-[0-4]) ordinal=${POD_NAME##*-} ;;
+                *) echo "unexpected UE Pod identity" >&2; exit 2 ;;
+              esac
+              IMSI=$(cat "/secret/imsi-${ordinal}")
+              {{- else }}
               IMSI=$(cat /secret/{{ .Values.subscriberSecret.imsiKey }});
+              {{- end }}
               case "$IMSI" in (*[!0-9]*|'') exit 2;; esac;
               for attempt in $(seq 1 90); do
                 if mongosh --quiet \
@@ -170,6 +185,11 @@ spec:
                 sleep 2;
               done;
               exit 1
+          {{- if .Values.phase05.enabled }}
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 999
@@ -194,10 +214,24 @@ spec:
                 sleep 2;
               done;
               test -n "${GNB_IP:-}";
+              {{- if .Values.phase05.enabled }}
+              case "$POD_NAME" in
+                {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}-[0-4]) ordinal=${POD_NAME##*-} ;;
+                *) echo "unexpected UE Pod identity" >&2; exit 2 ;;
+              esac
+              ue_config="/secret/ue-${ordinal}.yaml"
+              {{- else }}
+              ue_config="/secret/{{ .Values.subscriberSecret.ueConfigKey }}"
+              {{- end }}
               sed "s/__GNB_IP__/${GNB_IP}/g" \
-                /secret/{{ .Values.subscriberSecret.ueConfigKey }} \
+                "$ue_config" \
                 > /etc/ueransim/ue.yaml;
               test -s /etc/ueransim/ue.yaml
+          {{- if .Values.phase05.enabled }}
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -232,7 +266,24 @@ spec:
             failureThreshold: 30
           readinessProbe:
             exec:
+              {{- if .Values.phase05.enabled }}
+              command:
+                - /bin/sh
+                - -ec
+                - |-
+                  grep -R -q 'Initial Registration is successful' /opt/ueransim/logs
+                  grep -R -q 'PDU Session establishment is successful' /opt/ueransim/logs
+                  grep -R -q 'Connection setup for PDU session.*is successful' /opt/ueransim/logs
+                  address=$(ip -o -4 address show dev uesimtun0 | awk '{print $4}')
+                  case "$address" in
+                    10.60.0.*/*|10.61.0.*/*) ;;
+                    *) exit 1 ;;
+                  esac
+                  ip -4 rule show | grep -q 'lookup rt_uesimtun0'
+                  ip -4 route show table rt_uesimtun0 | grep -q '^default dev uesimtun0'
+              {{- else }}
               command: ["ueransim-healthcheck", "ue"]
+              {{- end }}
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 36
@@ -255,10 +306,12 @@ spec:
           hostPath: {path: /dev/net/tun, type: CharDevice}
         - name: subscriber-secret
           secret:
-            secretName: {{ .Values.subscriberSecret.existingSecret }}
+            secretName: {{ if .Values.phase05.enabled }}{{ .Values.phase05.subscriberSecret.existingSecret }}{{ else }}{{ .Values.subscriberSecret.existingSecret }}{{ end }}
+            {{- if not .Values.phase05.enabled }}
             items:
               - {key: {{ .Values.subscriberSecret.ueConfigKey }}, path: {{ .Values.subscriberSecret.ueConfigKey }}}
               - {key: {{ .Values.subscriberSecret.imsiKey }}, path: {{ .Values.subscriberSecret.imsiKey }}}
+            {{- end }}
         - name: config-runtime
           emptyDir: {medium: Memory, sizeLimit: 8Mi}
         - name: iproute2

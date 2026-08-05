@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 | Phase | State | Current gate |
 | --- | --- | --- |
@@ -9,8 +9,9 @@ Last updated: 2026-08-04
 | 2 — Container and Compose baseline | Complete | Healthy deployment, protocol/data path, persistence, recreation, and scoped cleanup verified |
 | 3 — Kubernetes networking feasibility | Complete | kind transport, TUN, capability, synthetic N6, packet visibility, and scoped cleanup verified |
 | 4 — Helm-managed single-UE platform | Complete | Chart, real 5G path, persistence, resource baseline, upgrade, rollback, and scoped uninstall/reinstall verified |
-| 5 — Multi-UE, DNN, and slice automation | Ready to begin | Phase 4 single-UE release is the accepted Kubernetes baseline |
-| 6-10 | Not started | Each later phase remains gated by the preceding verified baseline |
+| 5 — Multi-UE and DNN automation | Complete | Five concurrent UEs, two isolated DNNs, negative/recovery behavior, rollback, resource observation, and clean rerun verified |
+| 6 — Observability and operational visibility | Ready to begin | Phase 5 concurrent-session baseline is accepted |
+| 7-10 | Not started | Each later phase remains gated by the preceding verified baseline |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -91,3 +92,41 @@ MiB for the shared Open5GS control-plane profile, 20 mCPU/64 MiB for UPF,
 10 mCPU/16 MiB for the controlled data endpoint, and 25 mCPU/96 MiB for each
 UERANSIM workload. These measurements do not establish multi-UE capacity,
 performance, high availability, or production sizing.
+
+Phase 5 is complete. A tracked non-secret plan defines five reserved synthetic
+identities: ordinals 0-2 request `internet` and ordinals 3-4 request
+`enterprise`. A permission-restricted local seed deterministically derives
+matching UERANSIM and Open5GS authentication material without committing or
+printing K, OPc, or the seed. A five-replica UE StatefulSet binds each stable
+ordinal to its exact configuration, while an idempotent Job converges exactly
+five managed subscriber records.
+
+The accepted Helm overlay runs 13 Deployments, two StatefulSets, one
+revision-scoped subscriber Job, and 16 internal Services. It adds two DNN
+pools (`10.60.0.0/24` and `10.61.0.0/24`), two UPF TUN interfaces, two
+headless controlled endpoints, a direct headless PFCP discovery Service, and
+fail-closed source-policy tables 1060 and 1061. Two ownership-marked routes in
+the disposable kind node provide the return path; no workload port or route
+is added to the Ubuntu host namespace.
+
+All five UEs concurrently passed authentication, NAS security, registration,
+PDU-session establishment, intended-endpoint HTTP/ICMP traffic, and positive
+bidirectional TUN counters. The validator correlated five unique UE addresses
+with five unique control-plane and user-plane F-SEIDs, verified healthy PFCP
+peer/session programming, and denied every cross-DNN request. UPF retained
+only `NET_ADMIN`, each UE retained only `NET_ADMIN` and `NET_RAW`, and both
+data endpoints had zero effective capabilities.
+
+The negative UE test denied an unprovisioned sixth identity without changing
+MongoDB or disrupting the accepted five. The partial-provisioning test removed
+one exact managed record, restored it through the idempotent Job, recreated
+the UE/session chain, and revalidated every data path. Controlled rollback
+created revision 7 from the recorded Phase 4 revision 1, preserved the exact
+MongoDB claim, removed only four Phase 5-managed records, and passed the full
+Phase 4 validator. A clean repeat migration then passed as revision 8.
+
+One ten-second five-UE steady-state cgroup observation recorded MongoDB at 162
+mCPU, 241 MiB current memory, and 691 MiB peak memory under its 500 mCPU/768
+MiB limit. Individual UEs averaged 17-19 mCPU, used 5-10 MiB current memory,
+and peaked at 11-15 MiB. These are local scheduling observations, not capacity,
+throughput, availability, or production-sizing claims.

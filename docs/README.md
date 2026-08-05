@@ -1,4 +1,4 @@
-# Kubernetes Foundations And Phase 4 System Guide
+# Kubernetes Foundations And Platform System Guide
 
 This document provides the conceptual and operational foundation for the
 Kubernetes implementation in this repository. It begins with the container
@@ -2051,10 +2051,10 @@ The Phase 4 exit gate is accepted because:
 - post-phase host state contains only the expected project-owned cluster,
   Docker-network, route/firewall, storage, and resource changes.
 
-Phase 5 can therefore treat this one-UE release as its stable starting point.
-Phase 5 will change subscriber/configuration generation and workload
-concurrency; it must not weaken the Phase 4 lifecycle, persistence, network,
-security, or validation gates.
+Phase 5 therefore used this one-UE release as its stable starting and rollback
+point. It changed subscriber/configuration generation and workload concurrency
+without weakening the Phase 4 lifecycle, persistence, network, security, or
+validation gates.
 
 ---
 
@@ -2279,6 +2279,9 @@ After this foundation, use the following review order:
     lifecycle commands, ownership boundaries, and cleanup behavior.
 12. [Architecture Decision Records](adr/README.md) — decisions, alternatives,
     evidence, consequences, and reversal boundaries.
+13. [Phase 5 implementation model](#31-phase-5-multi-ue-and-dnn-implementation-model)
+    — deterministic identity derivation, StatefulSet ordinals, two-DNN
+    topology, source-policy isolation, controlled migration, and runtime gate.
 
 Raw logs, host snapshots, runtime state, kubeconfigs, Secrets, keys, and packet
 captures remain local and ignored by default. Public reports contain only
@@ -2301,3 +2304,433 @@ recovery claims require their own reproducible phase evidence.
 - [kind documentation](https://kind.sigs.k8s.io/docs/user/quick-start/)
 - [Helm introduction](https://helm.sh/docs/intro/introduction/)
 - [Helm chart template guide](https://helm.sh/docs/chart_template_guide/)
+
+---
+
+## 31. Phase 5 Multi-UE And DNN Implementation Model
+
+Phase 5 was accepted on 2026-08-05 after five concurrent UEs, two Data Network
+Names (DNNs), negative behavior, partial-provisioning recovery, rollback,
+repeat migration, persistence, and resource observation passed on the named
+kind cluster. This section explains both the version-controlled design and the
+runtime evidence that established the phase exit gate.
+
+### 31.1 Why a single successful UE is not enough
+
+The Phase 4 UE proved that one internally consistent identity could register
+and establish one Protocol Data Unit (PDU) session. A concurrent topology adds
+three contracts that a single-UE test cannot expose:
+
+1. **Identity uniqueness:** every Subscriber Permanent Identifier (SUPI),
+   International Mobile Subscriber Identity (IMSI), authentication value, and
+   equipment identity must be unique while the simulator and database copies
+   remain identical.
+2. **Stable workload-to-identity mapping:** Pod replacement must not silently
+   assign one subscriber's credentials to a different logical UE.
+3. **Service selection:** each UE must request an authorized DNN, receive an
+   address from the corresponding pool, and reach only the corresponding
+   controlled endpoint.
+
+These are configuration-management and orchestration properties in addition
+to 5G protocol properties.
+
+```mermaid
+flowchart LR
+    PLAN["Tracked non-secret plan"] --> VALIDATE["Validate full batch"]
+    SEED["Ignored local seed<br/>mode 0600"] --> DERIVE["HMAC-SHA256 derivation"]
+    VALIDATE --> DERIVE
+    DERIVE --> UE["Five UERANSIM configs"]
+    DERIVE --> DB["One idempotent MongoDB script"]
+    UE --> SECRET["Pre-created Kubernetes Secret"]
+    DB --> SECRET
+    SECRET --> ORD["StatefulSet ordinal selects matching files"]
+    SECRET --> JOB["Revision-scoped provisioning Job"]
+    ORD --> RUN["Five concurrent UE Pods"]
+    JOB --> RUN
+```
+
+### 31.2 Deterministic does not mean public
+
+The tracked subscriber plan contains only reserved synthetic IMSIs, equipment
+identities, DNN assignments, and network contracts. Authentication K and OPc
+values are not tracked. The generator creates one random 32-byte local seed
+on its first run, stores it with mode `0600` below the ignored `artifacts/`
+tree, and derives per-IMSI values with keyed Hash-based Message
+Authentication Code using SHA-256 (HMAC-SHA256).
+
+For a fixed plan and seed:
+
+```text
+K(IMSI)   = first 16 bytes of HMAC-SHA256(seed, "cn5g-phase05:k:" + IMSI)
+OPc(IMSI) = first 16 bytes of HMAC-SHA256(seed, "cn5g-phase05:opc:" + IMSI)
+```
+
+The outputs are byte-identical on every rerun, but someone cloning the public
+repository cannot recover them without the ignored seed. The generator never
+prints K, OPc, or the seed. It also verifies directory mode `0700`, file mode
+`0600`, the exact expected file set, and every output byte.
+
+This design is **deterministic** because the same inputs produce the same
+outputs and **idempotent** because applying it repeatedly converges to the
+same intended state. Idempotence is important when a Job is retried after a
+partial failure: a retry must repair missing records without duplicating
+correct records or inventing new credentials.
+
+### 31.3 Batch validation is a transaction boundary
+
+The generator validates the entire public plan before creating or changing
+runtime material. It rejects a duplicate IMSI, IMEI, or IMEISV; a
+non-contiguous StatefulSet ordinal; an unsupported DNN; a changed synthetic
+Public Land Mobile Network (PLMN) or slice; an overlapping address pool; and
+an unsafe or unexpected file.
+
+This is a fail-closed boundary: one invalid subscriber prevents the whole
+batch from reaching MongoDB. The provisioning script then uses an upsert for
+each validated IMSI, verifies that exactly five Phase 5-managed records
+exist, and leaves unrelated database collections untouched.
+
+```mermaid
+flowchart TD
+    INPUT["Five-subscriber plan"] --> CHECK{"All batch checks pass?"}
+    CHECK -- No --> STOP["Stop before output or database mutation"]
+    CHECK -- Yes --> MATERIAL["Render matching UE and DB material"]
+    MATERIAL --> UPSERT["Upsert by unique IMSI"]
+    UPSERT --> VERIFY{"Exactly five managed records?"}
+    VERIFY -- No --> FAIL["Job fails visibly"]
+    VERIFY -- Yes --> READY["UE Pods may start"]
+```
+
+### 31.4 Why the UE controller changes to a StatefulSet
+
+A Deployment treats its Pods as interchangeable. That is appropriate for a
+stateless Network Function, but not for a five-entry identity mapping. A
+StatefulSet assigns stable ordinal names:
+
+| Ordinal | Pod identity | Secret files | DNN |
+| ---: | --- | --- | --- |
+| 0 | `cn5g-ue-0` | `imsi-0`, `ue-0.yaml`, `dnn-0` | `internet` |
+| 1 | `cn5g-ue-1` | `imsi-1`, `ue-1.yaml`, `dnn-1` | `internet` |
+| 2 | `cn5g-ue-2` | `imsi-2`, `ue-2.yaml`, `dnn-2` | `internet` |
+| 3 | `cn5g-ue-3` | `imsi-3`, `ue-3.yaml`, `dnn-3` | `enterprise` |
+| 4 | `cn5g-ue-4` | `imsi-4`, `ue-4.yaml`, `dnn-4` | `enterprise` |
+
+The ordinal is an index, not a credential. Each init container extracts it
+from the Kubernetes-assigned Pod name, accepts only `0` through `4`, selects
+the matching files, verifies that MongoDB contains exactly one matching IMSI,
+and then renders the runtime gNB address. The StatefulSet uses parallel Pod
+management because the five subscribers are independent after the Job has
+provisioned them. It does not create a PVC for each UE; stable identity is
+needed, persistent UE filesystems are not.
+
+```mermaid
+flowchart TB
+    SS["StatefulSet cn5g-ue replicas=5"] --> P0["cn5g-ue-0"]
+    SS --> P1["cn5g-ue-1"]
+    SS --> P2["cn5g-ue-2"]
+    SS --> P3["cn5g-ue-3"]
+    SS --> P4["cn5g-ue-4"]
+    P0 --> F0["files ending -0"]
+    P1 --> F1["files ending -1"]
+    P2 --> F2["files ending -2"]
+    P3 --> F3["files ending -3"]
+    P4 --> F4["files ending -4"]
+```
+
+### 31.5 DNN differentiation
+
+A DNN identifies the data network requested by a PDU session. It is similar
+in purpose to an Access Point Name (APN) in earlier mobile systems. Merely
+changing the DNN string would not prove differentiation. The design therefore
+binds each DNN to a separate session pool, UPF TUN interface, route-policy
+table, and controlled endpoint.
+
+| DNN | UE pool | UPF gateway | TUN | Allowed endpoint |
+| --- | --- | --- | --- | --- |
+| `internet` | `10.60.0.0/24` | `10.60.0.1` | `ogstun` | `data-internet` |
+| `enterprise` | `10.61.0.0/24` | `10.61.0.1` | `ogstun2` | `data-enterprise` |
+
+Both sessions use the already accepted slice with Slice/Service Type (SST) 1.
+This phase therefore demonstrates DNN differentiation, not differentiated
+network-slice treatment.
+
+```mermaid
+flowchart LR
+    subgraph UES["Five UE Pods"]
+      I["UE 0-2<br/>DNN internet"]
+      E["UE 3-4<br/>DNN enterprise"]
+    end
+    I -->|"10.60.0.x"| GNB["one gNB"]
+    E -->|"10.61.0.x"| GNB
+    GNB -->|"N3 GTP-U / UDP 2152"| UPF["one UPF Pod"]
+    UPF --> T1["ogstun<br/>10.60.0.1"]
+    UPF --> T2["ogstun2<br/>10.61.0.1"]
+    T1 --> A["data-internet"]
+    T2 --> B["data-enterprise"]
+```
+
+### 31.6 Source-policy isolation inside the UPF Pod
+
+After GTP-U decapsulation, the original UE address remains the packet source.
+Linux policy routing selects a routing table by that source prefix:
+
+```text
+from 10.60.0.0/24 -> table 1060 -> route only to data-internet -> unreachable default
+from 10.61.0.0/24 -> table 1061 -> route only to data-enterprise -> unreachable default
+```
+
+The endpoint Services are headless, so their DNS names resolve directly to
+the current endpoint Pod IPs. Each policy table contains one exact permitted
+endpoint route. Its `unreachable default` is deliberate: traffic to the other
+DNN's endpoint fails instead of falling through to the ordinary Pod default
+route. Only the UPF setup init container receives `NET_ADMIN`, matching the
+capability already required by the UPF. The endpoints keep zero effective
+capabilities.
+
+N4 uses the same direct-endpoint principle for a different reason. Phase 5
+creates a dedicated headless `cn5g-upf-pfcp` Service, and the SMF uses that
+name for PFCP on UDP/8805. CoreDNS therefore returns the ready UPF Pod address
+instead of a virtual ClusterIP. No kube-proxy destination/source translation
+is inserted into this N4 path. That distinction matters because Open5GS binds
+PFCP association state to the observed peer transport address and port. With
+several concurrent session procedures, a proxied UDP flow can otherwise be
+observed with a translated source port and rejected as an unknown PFCP peer.
+The ordinary `cn5g-upf` ClusterIP Service is retained for the general UPF
+service contract; the dedicated headless Service is narrowly scoped to N4.
+
+```mermaid
+flowchart LR
+    SMF["SMF Pod"] -->|"DNS lookup: cn5g-upf-pfcp"| DNS["CoreDNS"]
+    DNS -->|"A record: current UPF Pod IP"| SMF
+    SMF -->|"PFCP / UDP 8805<br/>direct Pod-to-Pod"| UPF["UPF Pod"]
+    X["No virtual ClusterIP<br/>No kube-proxy hop"] -.-> UPF
+```
+
+```mermaid
+flowchart TD
+    PKT["Decapsulated UE packet"] --> SRC{"Source pool?"}
+    SRC -->|"10.60.0.0/24"| R60["table 1060"]
+    SRC -->|"10.61.0.0/24"| R61["table 1061"]
+    R60 -->|"destination=data-internet"| OK60["forward"]
+    R60 -->|"any other destination"| NO60["unreachable"]
+    R61 -->|"destination=data-enterprise"| OK61["forward"]
+    R61 -->|"any other destination"| NO61["unreachable"]
+```
+
+The return direction still traverses the kind node. Two exact, ownership-
+checked routes return `10.60.0.0/24` and `10.61.0.0/24` through the current
+UPF Pod-side virtual Ethernet interface. The routes exist inside the
+disposable kind node, not in the Ubuntu host route table.
+
+### 31.7 Controlled migration and rollback
+
+The Phase 5 chart is an overlay. The default values still render the accepted
+Phase 4 single-UE Deployment, which remains the rollback target. Before the
+upgrade, the lifecycle helper records the Helm revision and MongoDB PVC
+identity, then scales the old UE Deployment to zero. This prevents the old UE
+and the new ordinal-zero UE from using the same synthetic identity
+concurrently while Helm changes the controller kind.
+
+The helper deliberately separates API submission from convergence. Helm first
+submits the rendered revision without waiting for every UE. The helper then
+waits for MongoDB, the subscriber Job, the control plane, both data endpoints,
+the UPF, and the gNB. Only after that foundation is ready does it restart the
+UPF, SMF, gNB, and UE StatefulSet in dependency order. This prevents a startup
+deadlock in which the first UE PDU-session request occurs before the UPF is
+available and Helm waits indefinitely for that UE to become ready. A missing
+policy-routing table is also treated as the UPF's valid first-start state; the
+table is created by the first route while subsequent route and validation
+steps remain fail-closed.
+
+The convergence boundary also quiesces the UE StatefulSet before rebuilding
+network-function state. NRF, SCP, UDR, UDM, AUSF, PCF, NSSF, UPF, SMF, AMF,
+and the gNB are restarted in dependency order, and the lifecycle requires nine
+NRF profiles before restoring five UE replicas. This prevents failed PDU-
+session retries from accumulating stale Subscription Data Management (SDM)
+subscriptions in UDM while PFCP or SBI peers are still changing.
+
+Rollback performs the inverse boundary: it scales the five-UE StatefulSet to
+zero, removes only the recognized enterprise return route, rolls back to the
+recorded Phase 4 revision, waits for the restored subscriber Job, deletes only
+the four records still marked as Phase 5-managed, verifies the unchanged PVC,
+and runs the complete Phase 4 validator. The restored Job name is read from
+the active Helm manifest because a rollback reuses the target revision's
+rendered object names even though Helm records the rollback itself as a new
+revision. If execution stops after Helm applies the target, rerunning the same
+action verifies the rollback description, PVC, Job ownership, route state,
+and subscriber counts before resuming. Subscriber cleanup also recognizes its
+already-complete state, so interruption after database cleanup remains safe.
+
+```mermaid
+sequenceDiagram
+    participant O as Lifecycle helper
+    participant H as Helm
+    participant K as Kubernetes
+    participant M as MongoDB PVC
+    O->>O: Record revision and PVC identity
+    O->>K: Scale Phase 4 UE Deployment to 0
+    O->>H: Server-side dry-run Phase 5 overlay
+    O->>H: Submit upgraded release
+    H->>K: Replace UE controller and endpoints
+    K->>M: Provision five records through Job
+    O->>K: Quiesce all UE replicas
+    O->>K: Wait for database, core, UPF, DNNs, and gNB
+    O->>K: Rebuild SBI, PFCP, and NGAP state in dependency order
+    O->>K: Require nine NRF profiles, then start five UEs
+    O->>K: Reconcile two return routes
+    O->>O: Run five-UE acceptance validator
+```
+
+### 31.8 Runtime acceptance matrix
+
+Static rendering proves that the intended objects are syntactically and
+structurally present. Runtime validation must additionally prove:
+
+| Layer | Required runtime evidence |
+| --- | --- |
+| Kubernetes | 13 Deployments, MongoDB StatefulSet, five-ready-replica UE StatefulSet, completed exact Job |
+| Database | exactly five Phase 5-managed records and no extra subscriber |
+| N2 | SCTP association and successful NG Setup |
+| Per UE | authentication, NAS security, registration, PDU-session success, matching ordinal/IMSI/DNN |
+| Addressing | three unique `10.60.0.x` and two unique `10.61.0.x` addresses |
+| Session identity | five unique UP and CP F-SEIDs correlated to the five UE addresses; no collision symptoms or PFCP peer/session-programming errors |
+| User plane | intended HTTP identity and ICMP pass from every UE through its TUN |
+| Isolation | cross-DNN HTTP fails for every UE |
+| Counters | receive and transmit counters increase on every UE TUN |
+| Security | UPF `NET_ADMIN`, UE `NET_ADMIN` + `NET_RAW`, endpoints zero; no privileged container |
+| Lifecycle | PVC identity survives upgrade and rollback; Phase 4 validator passes after rollback |
+| Negative behavior | duplicate identity and unsupported DNN/slice fail before generation; a non-provisioned live UE is denied without affecting five valid UEs; one removed managed record is restored by an idempotent Job |
+
+This matrix, repeat migration, resource observation, and scoped recovery all
+passed. Five Ready Pods alone would still have been insufficient: acceptance
+required protocol, traffic, isolation, security, persistence, and lifecycle
+evidence.
+
+Resource observation is deliberately ordinal-aware. It samples every
+singleton component, both DNN endpoints, and each of the five UE Pods over a
+ten-second cgroup window, then prints the measured CPU and current/peak memory
+beside the workload's declared requests and limits. These are local
+five-UE steady-state observations, not capacity or production-sizing claims.
+
+Open5GS INFO logs expose each session's user-plane and control-plane F-SEIDs,
+DNN, and UE address, but not the assigned numeric GTP-U TEID. The validator
+therefore does not label F-SEIDs as TEIDs. It demonstrates that five distinct
+F-SEID/address correlations carry simultaneous bidirectional traffic through
+five UE TUN devices and reports the narrower conclusion that no TEID collision
+symptom was observed. Direct numeric TEID evidence requires a packet-level
+capture and is reserved for the observability evidence phase.
+
+The two runtime negative actions are intentionally separate from normal
+validation. `test-invalid-ue` creates a temporary configuration Secret and a
+sixth, unprovisioned UE Pod, confirms that registration never succeeds, checks
+that the database still contains exactly five managed records, revalidates all
+five accepted data paths while the invalid UE exists, and removes the exact
+temporary objects. `test-reprovision` removes only ordinal 4's managed record,
+runs a separately owned batch Job, requires the record count to return to
+five, quiesces and recreates all UE Pods while reconciling the session chain,
+and repeats full validation. Quiescence is enforced inside the shared recovery
+primitive: replacing the gNB beneath still-running UERANSIM processes can
+leave container-ready UEs with no selected radio cell. A failed
+reprovision Job is retained for diagnosis; rerunning the same action is the
+documented repair path. The Job uses the same 256 MiB memory ceiling as the
+accepted subscriber initialization workload because `mongosh` can exceed a
+128 MiB limit while loading the five-record batch script. Its lifecycle waiter
+distinguishes `Complete`, `Failed`, and timeout states, so an out-of-memory or
+other terminal failure is reported immediately rather than appearing only as
+a generic timeout.
+
+### 31.9 Accepted runtime evidence
+
+The final accepted release was Helm revision 8. It used 13 Deployments, the
+MongoDB StatefulSet, the five-replica UE StatefulSet, one revision-scoped
+subscriber Job, and 16 cluster-internal Services. The exact Pod and session
+addresses are replaceable runtime values; the stable contracts are the
+Service names, StatefulSet ordinals, DNN pools, and ownership-marked routes.
+
+| Gate | Accepted result |
+| --- | --- |
+| Concurrent identities | five Ready UE Pods mapped ordinals 0-4 to five distinct synthetic subscribers |
+| DNN selection | ordinals 0-2 selected `internet`; ordinals 3-4 selected `enterprise` |
+| Session addressing | three unique `10.60.0.x/24` and two unique `10.61.0.x/24` addresses |
+| Control plane | N2 SCTP, NG Setup, nine NRF profiles, and PFCP health passed |
+| Session uniqueness | five distinct user-plane and control-plane F-SEIDs; no concurrent collision symptom |
+| Intended traffic | HTTP, ICMP, and bidirectional per-UE TUN counters passed for every UE |
+| Isolation | every cross-DNN HTTP attempt was denied by source-policy routing |
+| Least privilege | UPF used `NET_ADMIN`; UEs used `NET_ADMIN` and `NET_RAW`; both endpoints had zero effective capabilities |
+| Invalid subscriber | a temporary sixth, unprovisioned UE was denied while all five accepted paths remained healthy |
+| Partial provisioning | one deliberately removed managed record was restored by the idempotent Job, followed by full revalidation |
+| Lifecycle | rollback restored the accepted Phase 4 topology with the same MongoDB claim; a repeat Phase 5 migration passed as revision 8 |
+
+The accepted per-UE relationship is easier to read as a path than as a list of
+objects:
+
+```mermaid
+flowchart LR
+    subgraph I["internet contract"]
+      IUE["UE ordinals 0-2"] --> IP["10.60.0.0/24"]
+      IP --> ITUN["UPF ogstun / table 1060"]
+      ITUN --> IE["data-internet only"]
+    end
+    subgraph E["enterprise contract"]
+      EUE["UE ordinals 3-4"] --> EP["10.61.0.0/24"]
+      EP --> ETUN["UPF ogstun2 / table 1061"]
+      ETUN --> EE["data-enterprise only"]
+    end
+    IE -. "denied" .-> EE
+    EE -. "denied" .-> IE
+```
+
+The ten-second five-UE steady-state observation recorded MongoDB at 162 mCPU,
+241 MiB current memory, and 691 MiB peak memory. Each UE averaged 17-19 mCPU,
+used 5-10 MiB current memory, and reached 11-15 MiB peak memory. Open5GS
+functions averaged 15-22 mCPU except the UPF at 15 mCPU; current memory stayed
+between 5 and 20 MiB for the control plane and was 7 MiB for the UPF. The two
+data endpoints averaged 8-9 mCPU and used 2-3 MiB current memory. These are
+observations from one local five-UE run, not throughput, capacity, availability,
+or production-sizing results.
+
+### 31.10 Operational mental model and engineering lessons
+
+The complete Phase 5 control loop is:
+
+```mermaid
+flowchart TD
+    PLAN["Tracked synthetic identity and DNN plan"] --> GEN["Validate and derive ignored secret material"]
+    GEN --> SECRET["Pre-created Kubernetes Secret"]
+    SECRET --> JOB["Idempotent five-record MongoDB Job"]
+    JOB --> CORE["Converge NRF and core functions"]
+    CORE --> SESSION["Rebuild PFCP, NGAP, and GTP-U state"]
+    SESSION --> UES["Start five ordinal-bound UE Pods"]
+    UES --> VALIDATE{"All identity, session, traffic, isolation, and security gates pass?"}
+    VALIDATE -- No --> QUIESCE["Quiesce UEs and perform scoped dependency-order recovery"]
+    QUIESCE --> CORE
+    VALIDATE -- Yes --> ACCEPT["Accepted Phase 5 runtime"]
+```
+
+Several implementation details carry broader operational lessons:
+
+- A StatefulSet ordinal is a stable identity index, not the subscriber secret
+  itself. Recreated Pod `cn5g-ue-3` deterministically selects ordinal 3's
+  configuration.
+- Kubernetes readiness proves that a process can serve its probe. It does not
+  prove that cached NRF, PFCP, NGAP, or GTP-U state has converged after peer
+  Pod addresses change.
+- PFCP uses the dedicated headless `cn5g-upf-pfcp` Service so the SMF reaches
+  the current UPF Pod address without ClusterIP UDP translation changing the
+  observed peer transport tuple.
+- A route check must include the UE source address. `ip route get` without
+  `from <UE-address>` does not exercise the UPF's source-policy rule and can
+  report the wrong table.
+- UEs are stopped while gNB and core session state is rebuilt. A container can
+  remain Ready even when its simulated UE no longer has a selected radio cell.
+- Recovery Jobs are evaluated as `Complete`, `Failed`, or timed out. A terminal
+  failure is retained for diagnosis, and rerunning the idempotent operation is
+  the documented repair path.
+- Helm rollback creates a new release revision but reuses resources rendered
+  by the target revision. Automation therefore discovers the active subscriber
+  Job from the restored manifest instead of guessing its name.
+
+Phase 5 establishes a reproducible multi-identity and service-selection
+baseline for Phase 6 observability. It does not establish high availability,
+multi-node behavior, production storage, numeric GTP-U Tunnel Endpoint
+Identifier capture, carrier throughput, or general capacity beyond the five
+accepted concurrent UEs.

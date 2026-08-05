@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted on 2026-08-02 for feasibility; real single-UE protocol behavior
-confirmed on 2026-08-04
+Accepted on 2026-08-02 for feasibility; real single-UE protocol behavior was
+confirmed on 2026-08-04 and five-UE/two-DNN behavior on 2026-08-05
 
 ## Context
 
@@ -40,6 +40,14 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   where the upstream data-network router logically belongs. Discover the
   router Pod's node-side `veth` dynamically; Pod addresses and interface names
   are not stable configuration inputs.
+- Use a dedicated headless PFCP Service so the SMF resolves the current UPF
+  Pod address directly. Keep the ordinary UPF ClusterIP Service for its wider
+  stable Service contract, but do not place kube-proxy UDP translation in the
+  N4 association path.
+- For differentiated DNNs, select one policy-routing table by each UE source
+  pool, permit only that DNN's headless endpoint, and terminate the table with
+  an unreachable default. Reconcile one ownership-marked kind-node return
+  route per session pool.
 
 ## Alternatives Considered
 
@@ -95,6 +103,16 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
 - UPF required only `NET_ADMIN`, UE required `NET_ADMIN` and `NET_RAW`, and
   the data endpoint required no effective capabilities. No Phase 4 workload
   used privileged mode.
+- Phase 5 ran five simultaneous UEs through one gNB and one UPF. Three unique
+  `10.60.0.x` sessions selected `internet`; two unique `10.61.0.x` sessions
+  selected `enterprise`; five unique UP/CP F-SEID correlations and all five
+  bidirectional TUN-counter checks passed.
+- Every intended DNN endpoint was reachable and every cross-DNN HTTP attempt
+  was denied. Source-aware route lookups confirmed tables 1060 and 1061, and
+  two exact kind-node return routes covered the two session pools.
+- Direct Pod-address PFCP through `cn5g-upf-pfcp` removed ClusterIP UDP
+  translation from N4 and allowed five concurrent PFCP/GTP-U sessions to
+  converge without an unknown-peer symptom.
 
 ## Consequences
 

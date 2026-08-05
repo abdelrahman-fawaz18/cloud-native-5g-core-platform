@@ -41,6 +41,31 @@ subscriberSecret:
   subscriberScriptKey: subscriber-init.js
   imsiKey: imsi
 
+# Phase 5 is an explicit overlay so the accepted single-UE Phase 4 release can
+# still be rendered and restored without reconstructing historical values.
+phase05:
+  enabled: false
+  ueReplicas: 5
+  subscriberSecret:
+    existingSecret: cn5g-subscribers-phase05
+    planKey: plan.json
+    subscriberScriptKey: subscriber-init.js
+  sessions:
+    - name: internet
+      pool: 10.60.0.0/24
+      gateway: 10.60.0.1
+      tunDevice: ogstun
+      endpoint: data-internet
+      routeTable: 1060
+      rulePriority: 1060
+    - name: enterprise
+      pool: 10.61.0.0/24
+      gateway: 10.61.0.1
+      tunDevice: ogstun2
+      endpoint: data-enterprise
+      routeTable: 1061
+      rulePriority: 1061
+
 mongodb:
   storageClassName: standard
   storageSize: 2Gi
