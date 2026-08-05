@@ -1,5 +1,10 @@
 # CN5G Helm Chart
 
+For a system-level visual explanation of where this chart runs and how its
+objects, 5G interfaces, address domains, lifecycle, persistence, and validation
+fit together, see the
+[complete Phase 4 system guide](../../docs/README.md#23-phase-4-complete-system-and-operational-model).
+
 This chart packages the verified Open5GS, MongoDB, UERANSIM, and controlled
 data-network images as one Kubernetes release. The baseline deliberately runs
 one replica of each 5G function, one gNodeB, and one synthetic UE.

@@ -11,6 +11,12 @@ and whether the tested gate passed or failed.
 
 - [Host preflight](01_host_preflight.md)
 - [Phase 2 container baseline](02_container_baseline.md)
+- [Phase 4 single-UE Kubernetes validation summary](#phase-4-single-ue-kubernetes-validation-summary)
+
+The validation evidence below is paired with the
+[complete Phase 4 visual system guide](../docs/README.md#23-phase-4-complete-system-and-operational-model),
+which explains how the accepted objects, networks, protocols, storage,
+security controls, and lifecycle operations connect.
 
 ## Phase 4 Single-UE Kubernetes Validation Summary
 

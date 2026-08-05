@@ -179,6 +179,12 @@ for MongoDB, 25 mCPU/64 MiB for the shared Open5GS control-plane profile,
 headroom. These figures are a local single-UE scheduling baseline, not a
 production-capacity result.
 
+The [complete Phase 4 system guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
+provides layered deployment, object-ownership, component-connectivity,
+address-domain, signalling-sequence, user-plane, security, persistence,
+lifecycle, recovery, validation, and resource visuals for this accepted
+architecture.
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -274,6 +280,7 @@ machine-readable measurements, and concise reports.
 - [Compose build, operation, validation, and cleanup runbook](docs/runbooks/compose-baseline.md)
 - [Phase 2 validation and host-safety report](reports/02_container_baseline.md)
 - [Phase 4 single-UE Kubernetes validation summary](reports/README.md#phase-4-single-ue-kubernetes-validation-summary)
+- [Complete Phase 4 visual system and operational guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)
