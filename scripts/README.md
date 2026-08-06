@@ -45,6 +45,16 @@ targets, and support a dry-run or read-only mode where practical.
   Grafana only on loopback, records and verifies the explicit 30-minute
   Grafana stability gate, provides an identity-checked observability-only
   hardening rollback, and performs exact retained-data cleanup.
+- `phase07-lab.sh`: owns the gated performance-experiment lifecycle. It
+  validates the accepted Phase 5/6 baseline, builds and identity-records one
+  exact project-owned iperf3 image, loads only that image into kind, applies
+  zero-capability benchmark sidecars, rejects any traffic route that bypasses
+  `uesimtun0`, preserves ignored raw failures, enforces host/restart abort
+  thresholds, restores five UEs after every condition, and can roll back to
+  the recorded pre-Phase-7 Helm revision without deleting persistent data.
+  After the accepted pilot, its resumable matrix runner executes three
+  repetitions at 1, 3, and 5 concurrent UEs with separate per-UE server ports
+  and aligned Prometheus evidence.
 - `validate-phase05.sh`: reports each ordinal, Pod, DNN, tunnel address,
   registration/session result, intended endpoint result, and cross-DNN denial.
   It also verifies five database records, unique addresses and F-SEIDs,
@@ -295,3 +305,49 @@ and revalidates the Phase 5 service. Normal uninstall restores the Phase 5 core
 overlay and preserves Phase 6 PVCs/credential. A separate confirmed `destroy`
 action removes only those verified retained objects after the release is
 absent.
+
+## Phase 7 Controlled Benchmark Experiment
+
+Phase 7 begins from the accepted Phase 5/6 runtime. Run each command from the
+repository root, in order, and stop if any command lacks its final `pass` line:
+
+```bash
+sudo ./scripts/phase07-lab.sh preflight
+sudo ./scripts/phase07-lab.sh build-image
+sudo ./scripts/phase07-lab.sh load-image
+sudo ./scripts/phase07-lab.sh install
+sudo ./scripts/phase07-lab.sh pilot
+sudo ./scripts/phase07-lab.sh run-matrix
+./scripts/phase07-lab.sh analyze
+```
+
+`build-image` changes only the named local `cn5g/benchmark:0.1.0` image.
+`load-image` imports only that verified image into `cn5g-control-plane`.
+`install` changes the `cn5g` Helm release by adding idle client/server
+sidecars and five internal TCP/UDP ports (5201-5205); it publishes no host
+port. `pilot`
+temporarily scales the UE StatefulSet to one, runs bounded low-load tests
+through the real UE tunnel, restores five replicas, and validates the accepted
+service. `run-matrix` performs or resumes the three-repetition 1/3/5-UE
+campaign. It keeps failed attempts, skips already accepted conditions, and
+restores five UEs after every condition. Before every measurement it restarts
+both DNN benchmark servers and then performs the dependency-ordered Phase 5
+session repair so the UPF policy tables contain the current endpoint addresses.
+The matrix leaves forward TCP unbounded but applies a declared 10 Mbit/s
+per-UE offered rate to reverse TCP; the latter is a service-load check, not a
+maximum downlink-capacity claim.
+This reset prevents stale session or traffic-process state from contaminating
+the next condition. Raw evidence is permission-restricted and ignored.
+The unprivileged `analyze` action requires an exact `raw_complete` campaign,
+validates all nine accepted attempts and their restart snapshots, and writes
+deterministic reviewed CSV, JSON, SVG plots, and the Phase 7 report.
+
+The scoped recovery is:
+
+```bash
+sudo ./scripts/phase07-lab.sh rollback --confirm
+```
+
+It restores the exact recorded Helm revision and MongoDB claim identity, then
+runs the Phase 5 and Phase 6 validators. It does not delete benchmark images,
+subscriber state, telemetry state, the kind cluster, or unrelated resources.

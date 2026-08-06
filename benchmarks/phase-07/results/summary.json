@@ -1,0 +1,1019 @@
+{
+  "campaign": {
+    "accepted_attempt_count": 9,
+    "accepted_attempts": [
+      "repetition-1/level-1/attempt-001",
+      "repetition-1/level-3/attempt-001",
+      "repetition-1/level-5/attempt-001",
+      "repetition-2/level-1/attempt-001",
+      "repetition-2/level-3/attempt-001",
+      "repetition-2/level-5/attempt-001",
+      "repetition-3/level-1/attempt-001",
+      "repetition-3/level-3/attempt-001",
+      "repetition-3/level-5/attempt-001"
+    ],
+    "benchmark_image_id": "sha256:38920debb5e1adc1a6d26f01b9bb520701556c92391359e256855df15ef3526d",
+    "campaign_id": "20260806T223341Z-matrix",
+    "completed_at": "2026-08-06T23:07:53Z",
+    "created_at": "2026-08-06T22:33:41Z",
+    "experiment_sha256": "4bebb4cadfe442ce02e36923d69454119237cac85add51392325a04f695e7d4e",
+    "helm_revision": 15,
+    "idle_baseline_seconds": 30,
+    "status": "reviewed_complete"
+  },
+  "contract": {
+    "measurement_seconds": 15,
+    "repetitions": 3,
+    "tcp_forward_offered_rate": "unbounded",
+    "tcp_reverse_offered_rate_per_ue_bits_per_second": 10000000,
+    "udp_offered_rate_per_ue_bits_per_second": 1000000,
+    "ue_levels": [
+      1,
+      3,
+      5
+    ],
+    "warm_up_seconds": 3
+  },
+  "excluded_failed_exploratory_attempts": [
+    {
+      "campaign_id": "20260806T213402Z-matrix",
+      "classification": "reverse_tcp_timeout",
+      "included_in_summary": false,
+      "repetition": 2,
+      "ue_level": 1
+    },
+    {
+      "campaign_id": "20260806T220418Z-matrix",
+      "classification": "reverse_tcp_timeout",
+      "included_in_summary": false,
+      "repetition": 1,
+      "ue_level": 1
+    }
+  ],
+  "limitations": [
+    "Single Ubuntu host and single-node kind cluster; results are not carrier capacity or production sizing.",
+    "UERANSIM models the radio link in user space and does not implement a complete 5G NR physical layer.",
+    "Reverse TCP is a fixed 10 Mbit/s per-UE service-load check, not a maximum downlink-capacity test.",
+    "The accepted matrix contains three repetitions per load level; nearest-rank p95 therefore equals the maximum repetition-level observation.",
+    "Idle telemetry proves a timestamped baseline exists, but component comparisons use condition telemetry filtered by runtime Pod identity to exclude terminated-container series."
+  ],
+  "per_level": {
+    "1": {
+      "metrics": {
+        "icmp_rtt_average_ms": {
+          "count": 3,
+          "maximum": 2.197,
+          "median": 2.089,
+          "minimum": 2.024,
+          "p95_nearest_rank": 2.197,
+          "sample_standard_deviation": 0.08738611636486278
+        },
+        "pdu_session_latency_median_ms": {
+          "count": 3,
+          "maximum": 219.0,
+          "median": 216.0,
+          "minimum": 212.0,
+          "p95_nearest_rank": 219.0,
+          "sample_standard_deviation": 3.511884584284246
+        },
+        "pdu_session_latency_p95_ms": {
+          "count": 3,
+          "maximum": 219.0,
+          "median": 216.0,
+          "minimum": 212.0,
+          "p95_nearest_rank": 219.0,
+          "sample_standard_deviation": 3.511884584284246
+        },
+        "registration_latency_median_ms": {
+          "count": 3,
+          "maximum": 62.0,
+          "median": 60.0,
+          "minimum": 34.0,
+          "p95_nearest_rank": 62.0,
+          "sample_standard_deviation": 15.620499351813308
+        },
+        "registration_latency_p95_ms": {
+          "count": 3,
+          "maximum": 62.0,
+          "median": 60.0,
+          "minimum": 34.0,
+          "p95_nearest_rank": 62.0,
+          "sample_standard_deviation": 15.620499351813308
+        },
+        "tcp_forward_aggregate_mbps": {
+          "count": 3,
+          "maximum": 121.6107938145285,
+          "median": 114.69984633258272,
+          "minimum": 100.15592578962948,
+          "p95_nearest_rank": 121.6107938145285,
+          "sample_standard_deviation": 10.951393989075735
+        },
+        "tcp_forward_jain_fairness": {
+          "count": 3,
+          "maximum": 1.0,
+          "median": 1.0,
+          "minimum": 1.0,
+          "p95_nearest_rank": 1.0,
+          "sample_standard_deviation": 0.0
+        },
+        "tcp_forward_per_ue_median_mbps": {
+          "count": 3,
+          "maximum": 121.6107938145285,
+          "median": 114.69984633258272,
+          "minimum": 100.15592578962948,
+          "p95_nearest_rank": 121.6107938145285,
+          "sample_standard_deviation": 10.951393989075735
+        },
+        "tcp_forward_retransmits": {
+          "count": 3,
+          "maximum": 293,
+          "median": 233,
+          "minimum": 179,
+          "p95_nearest_rank": 293,
+          "sample_standard_deviation": 57.02630971753301
+        },
+        "tcp_reverse_aggregate_mbps": {
+          "count": 3,
+          "maximum": 9.996861729419633,
+          "median": 9.99648517867675,
+          "minimum": 9.996470517097709,
+          "p95_nearest_rank": 9.996861729419633,
+          "sample_standard_deviation": 0.00022175530985422818
+        },
+        "tcp_reverse_retransmits": {
+          "count": 3,
+          "maximum": 1,
+          "median": 1,
+          "minimum": 0,
+          "p95_nearest_rank": 1,
+          "sample_standard_deviation": 0.5773502691896257
+        },
+        "tcp_reverse_target_attainment_percent": {
+          "count": 3,
+          "maximum": 99.96861729419632,
+          "median": 99.9648517867675,
+          "minimum": 99.96470517097708,
+          "p95_nearest_rank": 99.96861729419632,
+          "sample_standard_deviation": 0.002217553098538299
+        },
+        "udp_aggregate_mbps": {
+          "count": 3,
+          "maximum": 0.9999674022448988,
+          "median": 0.999934606648324,
+          "minimum": 0.9998934152274112,
+          "p95_nearest_rank": 0.9999674022448988,
+          "sample_standard_deviation": 3.7072818138154676e-05
+        },
+        "udp_jitter_ms_p95": {
+          "count": 3,
+          "maximum": 0.2302128749569018,
+          "median": 0.2056140672272503,
+          "minimum": 0.16627166912961963,
+          "p95_nearest_rank": 0.2302128749569018,
+          "sample_standard_deviation": 0.032252657338684716
+        },
+        "udp_loss_percent_max": {
+          "count": 3,
+          "maximum": 0.0,
+          "median": 0.0,
+          "minimum": 0.0,
+          "p95_nearest_rank": 0.0,
+          "sample_standard_deviation": 0.0
+        },
+        "udp_target_attainment_percent": {
+          "count": 3,
+          "maximum": 99.99674022448988,
+          "median": 99.9934606648324,
+          "minimum": 99.98934152274111,
+          "p95_nearest_rank": 99.99674022448988,
+          "sample_standard_deviation": 0.0037072818138190245
+        }
+      },
+      "new_restarts": 0,
+      "pdu_session_success_rate_percent": 100.0,
+      "registration_success_rate_percent": 100.0,
+      "repetitions": 3
+    },
+    "3": {
+      "metrics": {
+        "icmp_rtt_average_ms": {
+          "count": 3,
+          "maximum": 1.729,
+          "median": 1.4913333333333334,
+          "minimum": 1.3343333333333334,
+          "p95_nearest_rank": 1.729,
+          "sample_standard_deviation": 0.1987025508233443
+        },
+        "pdu_session_latency_median_ms": {
+          "count": 3,
+          "maximum": 229.0,
+          "median": 68.0,
+          "minimum": 26.0,
+          "p95_nearest_rank": 229.0,
+          "sample_standard_deviation": 107.15565002991364
+        },
+        "pdu_session_latency_p95_ms": {
+          "count": 3,
+          "maximum": 248.0,
+          "median": 232.0,
+          "minimum": 220.0,
+          "p95_nearest_rank": 248.0,
+          "sample_standard_deviation": 14.047538337136984
+        },
+        "registration_latency_median_ms": {
+          "count": 3,
+          "maximum": 95.0,
+          "median": 54.0,
+          "minimum": 30.0,
+          "p95_nearest_rank": 95.0,
+          "sample_standard_deviation": 32.86842456421259
+        },
+        "registration_latency_p95_ms": {
+          "count": 3,
+          "maximum": 152.0,
+          "median": 55.0,
+          "minimum": 47.0,
+          "p95_nearest_rank": 152.0,
+          "sample_standard_deviation": 58.44940832321002
+        },
+        "tcp_forward_aggregate_mbps": {
+          "count": 3,
+          "maximum": 94.80731613331938,
+          "median": 79.38427891193076,
+          "minimum": 76.07020984276666,
+          "p95_nearest_rank": 94.80731613331938,
+          "sample_standard_deviation": 9.999435676335265
+        },
+        "tcp_forward_jain_fairness": {
+          "count": 3,
+          "maximum": 0.9999684167450732,
+          "median": 0.9996520741760014,
+          "minimum": 0.9987302239652728,
+          "p95_nearest_rank": 0.9999684167450732,
+          "sample_standard_deviation": 0.0006432990222254446
+        },
+        "tcp_forward_per_ue_median_mbps": {
+          "count": 3,
+          "maximum": 30.841078051577274,
+          "median": 26.193811664032072,
+          "minimum": 25.346922524469875,
+          "p95_nearest_rank": 30.841078051577274,
+          "sample_standard_deviation": 2.9580413296515595
+        },
+        "tcp_forward_retransmits": {
+          "count": 3,
+          "maximum": 1026,
+          "median": 729,
+          "minimum": 679,
+          "p95_nearest_rank": 1026,
+          "sample_standard_deviation": 187.58020506794776
+        },
+        "tcp_reverse_aggregate_mbps": {
+          "count": 3,
+          "maximum": 29.989756776796277,
+          "median": 29.989557502333383,
+          "minimum": 29.98886376019886,
+          "p95_nearest_rank": 29.989756776796277,
+          "sample_standard_deviation": 0.0004687691514371877
+        },
+        "tcp_reverse_retransmits": {
+          "count": 3,
+          "maximum": 3,
+          "median": 2,
+          "minimum": 2,
+          "p95_nearest_rank": 3,
+          "sample_standard_deviation": 0.5773502691896257
+        },
+        "tcp_reverse_target_attainment_percent": {
+          "count": 3,
+          "maximum": 99.96585592265426,
+          "median": 99.96519167444461,
+          "minimum": 99.96287920066287,
+          "p95_nearest_rank": 99.96585592265426,
+          "sample_standard_deviation": 0.001562563838123959
+        },
+        "udp_aggregate_mbps": {
+          "count": 3,
+          "maximum": 3.0000137330078562,
+          "median": 2.999859145286535,
+          "minimum": 2.9997536306915564,
+          "p95_nearest_rank": 3.0000137330078562,
+          "sample_standard_deviation": 0.00013082042926679973
+        },
+        "udp_jitter_ms_p95": {
+          "count": 3,
+          "maximum": 0.2914126066610559,
+          "median": 0.2627809814481267,
+          "minimum": 0.1844643327566853,
+          "p95_nearest_rank": 0.2914126066610559,
+          "sample_standard_deviation": 0.05536424946918449
+        },
+        "udp_loss_percent_max": {
+          "count": 3,
+          "maximum": 0.0,
+          "median": 0.0,
+          "minimum": 0.0,
+          "p95_nearest_rank": 0.0,
+          "sample_standard_deviation": 0.0
+        },
+        "udp_target_attainment_percent": {
+          "count": 3,
+          "maximum": 100.00045776692855,
+          "median": 99.99530484288451,
+          "minimum": 99.99178768971855,
+          "p95_nearest_rank": 100.00045776692855,
+          "sample_standard_deviation": 0.004360680975562584
+        }
+      },
+      "new_restarts": 0,
+      "pdu_session_success_rate_percent": 100.0,
+      "registration_success_rate_percent": 100.0,
+      "repetitions": 3
+    },
+    "5": {
+      "metrics": {
+        "icmp_rtt_average_ms": {
+          "count": 3,
+          "maximum": 1.6964,
+          "median": 1.2662,
+          "minimum": 0.9782,
+          "p95_nearest_rank": 1.6964,
+          "sample_standard_deviation": 0.3614386254953944
+        },
+        "pdu_session_latency_median_ms": {
+          "count": 3,
+          "maximum": 205.0,
+          "median": 88.0,
+          "minimum": 20.0,
+          "p95_nearest_rank": 205.0,
+          "sample_standard_deviation": 93.57528163640937
+        },
+        "pdu_session_latency_p95_ms": {
+          "count": 3,
+          "maximum": 221.0,
+          "median": 93.0,
+          "minimum": 27.0,
+          "p95_nearest_rank": 221.0,
+          "sample_standard_deviation": 98.6373830417927
+        },
+        "registration_latency_median_ms": {
+          "count": 3,
+          "maximum": 136.0,
+          "median": 83.0,
+          "minimum": 40.0,
+          "p95_nearest_rank": 136.0,
+          "sample_standard_deviation": 48.08672720547047
+        },
+        "registration_latency_p95_ms": {
+          "count": 3,
+          "maximum": 234.0,
+          "median": 90.0,
+          "minimum": 43.0,
+          "p95_nearest_rank": 234.0,
+          "sample_standard_deviation": 99.52051714763812
+        },
+        "tcp_forward_aggregate_mbps": {
+          "count": 3,
+          "maximum": 94.36020762862182,
+          "median": 91.70229154736886,
+          "minimum": 83.41807799816881,
+          "p95_nearest_rank": 94.36020762862182,
+          "sample_standard_deviation": 5.707055762728719
+        },
+        "tcp_forward_jain_fairness": {
+          "count": 3,
+          "maximum": 0.9989317558551919,
+          "median": 0.9927905000993102,
+          "minimum": 0.9798145680042823,
+          "p95_nearest_rank": 0.9989317558551919,
+          "sample_standard_deviation": 0.00976009483663699
+        },
+        "tcp_forward_per_ue_median_mbps": {
+          "count": 3,
+          "maximum": 19.15077476666082,
+          "median": 17.614073492708098,
+          "minimum": 16.450045232584024,
+          "p95_nearest_rank": 19.15077476666082,
+          "sample_standard_deviation": 1.354643410149578
+        },
+        "tcp_forward_retransmits": {
+          "count": 3,
+          "maximum": 2052,
+          "median": 1919,
+          "minimum": 1599,
+          "p95_nearest_rank": 2052,
+          "sample_standard_deviation": 232.84401073107577
+        },
+        "tcp_reverse_aggregate_mbps": {
+          "count": 3,
+          "maximum": 49.98291040566728,
+          "median": 49.98253654403898,
+          "minimum": 49.98206869168827,
+          "p95_nearest_rank": 49.98291040566728,
+          "sample_standard_deviation": 0.00042173071219489815
+        },
+        "tcp_reverse_retransmits": {
+          "count": 3,
+          "maximum": 199,
+          "median": 120,
+          "minimum": 17,
+          "p95_nearest_rank": 199,
+          "sample_standard_deviation": 91.2633551870629
+        },
+        "tcp_reverse_target_attainment_percent": {
+          "count": 3,
+          "maximum": 99.96582081133457,
+          "median": 99.96507308807796,
+          "minimum": 99.96413738337654,
+          "p95_nearest_rank": 99.96582081133457,
+          "sample_standard_deviation": 0.0008434614243897963
+        },
+        "udp_aggregate_mbps": {
+          "count": 3,
+          "maximum": 4.999947613523034,
+          "median": 4.999875876439959,
+          "minimum": 4.999691767825297,
+          "p95_nearest_rank": 4.999947613523034,
+          "sample_standard_deviation": 0.00013197172180138124
+        },
+        "udp_jitter_ms_p95": {
+          "count": 3,
+          "maximum": 0.2466004137410987,
+          "median": 0.22942250733953584,
+          "minimum": 0.202718979632432,
+          "p95_nearest_rank": 0.2466004137410987,
+          "sample_standard_deviation": 0.022112361248022096
+        },
+        "udp_loss_percent_max": {
+          "count": 3,
+          "maximum": 0.0,
+          "median": 0.0,
+          "minimum": 0.0,
+          "p95_nearest_rank": 0.0,
+          "sample_standard_deviation": 0.0
+        },
+        "udp_target_attainment_percent": {
+          "count": 3,
+          "maximum": 99.99895227046068,
+          "median": 99.99751752879918,
+          "minimum": 99.99383535650594,
+          "p95_nearest_rank": 99.99895227046068,
+          "sample_standard_deviation": 0.0026394344360271206
+        }
+      },
+      "new_restarts": 0,
+      "pdu_session_success_rate_percent": 100.0,
+      "registration_success_rate_percent": 100.0,
+      "repetitions": 3
+    }
+  },
+  "resources": {
+    "1": {
+      "amf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 15.680902586681343,
+          "median": 15.101369332752693,
+          "minimum": 10.962935418865753,
+          "p95_nearest_rank": 15.680902586681343,
+          "sample_standard_deviation": 2.57299139293173
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 18.27734375,
+          "median": 17.6875,
+          "minimum": 17.60546875,
+          "p95_nearest_rank": 18.27734375,
+          "sample_standard_deviation": 0.36652894178941836
+        }
+      },
+      "data-enterprise/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 21.267663660546297,
+          "median": 18.37244220336312,
+          "minimum": 15.493915047967718,
+          "p95_nearest_rank": 21.267663660546297,
+          "sample_standard_deviation": 2.886878328798996
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 4.6875,
+          "median": 4.59765625,
+          "minimum": 4.06640625,
+          "p95_nearest_rank": 4.6875,
+          "sample_standard_deviation": 0.3356724366112309
+        }
+      },
+      "data-enterprise/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 6.0251734959996455,
+          "median": 5.8550780546768495,
+          "minimum": 5.261861026069208,
+          "p95_nearest_rank": 6.0251734959996455,
+          "sample_standard_deviation": 0.40072534836638873
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 5.86328125,
+          "median": 0.44921875,
+          "minimum": 0.35546875,
+          "p95_nearest_rank": 5.86328125,
+          "sample_standard_deviation": 3.1532221708268118
+        }
+      },
+      "data-internet/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 53.80744356021445,
+          "median": 52.437965885879514,
+          "minimum": 52.16103987176919,
+          "p95_nearest_rank": 53.80744356021445,
+          "sample_standard_deviation": 0.8815518724687562
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 5.91796875,
+          "median": 5.4140625,
+          "minimum": 5.19921875,
+          "p95_nearest_rank": 5.91796875,
+          "sample_standard_deviation": 0.36893561050747165
+        }
+      },
+      "data-internet/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 6.210287125943878,
+          "median": 4.960321715817693,
+          "minimum": 4.4767985329963995,
+          "p95_nearest_rank": 6.210287125943878,
+          "sample_standard_deviation": 0.8945381393691927
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 1.24609375,
+          "median": 0.546875,
+          "minimum": 0.5390625,
+          "p95_nearest_rank": 1.24609375,
+          "sample_standard_deviation": 0.4059682015430057
+        }
+      },
+      "gnb": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 224.5905216549155,
+          "median": 220.92556476446342,
+          "minimum": 216.37110516567196,
+          "p95_nearest_rank": 224.5905216549155,
+          "sample_standard_deviation": 4.11772223989478
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 11.03515625,
+          "median": 7.078125,
+          "minimum": 6.67578125,
+          "p95_nearest_rank": 11.03515625,
+          "sample_standard_deviation": 2.409153627219375
+        }
+      },
+      "smf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 16.195804856539947,
+          "median": 15.73431956623603,
+          "minimum": 15.070418931883594,
+          "p95_nearest_rank": 16.195804856539947,
+          "sample_standard_deviation": 0.5657187470930367
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 7.640625,
+          "median": 7.3203125,
+          "minimum": 6.86328125,
+          "p95_nearest_rank": 7.640625,
+          "sample_standard_deviation": 0.3906705702585566
+        }
+      },
+      "ue/benchmark-client": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 16.401817475263808,
+          "median": 16.085510640464314,
+          "minimum": 15.666468039003252,
+          "p95_nearest_rank": 16.401817475263808,
+          "sample_standard_deviation": 0.3688688811734341
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 6.9296875,
+          "median": 6.546875,
+          "minimum": 5.08984375,
+          "p95_nearest_rank": 6.9296875,
+          "sample_standard_deviation": 0.9707823733160517
+        }
+      },
+      "ue/ue": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 193.4058922369254,
+          "median": 185.57325388809468,
+          "minimum": 181.29746819041696,
+          "p95_nearest_rank": 193.4058922369254,
+          "sample_standard_deviation": 6.140663641199582
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 12.640625,
+          "median": 9.97265625,
+          "minimum": 9.4765625,
+          "p95_nearest_rank": 12.640625,
+          "sample_standard_deviation": 1.7017372380243214
+        }
+      },
+      "upf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 105.56898555908259,
+          "median": 101.75750097526993,
+          "minimum": 99.51757959861172,
+          "p95_nearest_rank": 105.56898555908259,
+          "sample_standard_deviation": 3.059525469869317
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 6.01953125,
+          "median": 5.59375,
+          "minimum": 5.15625,
+          "p95_nearest_rank": 6.01953125,
+          "sample_standard_deviation": 0.4316538813009649
+        }
+      }
+    },
+    "3": {
+      "amf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 15.830604061570298,
+          "median": 14.521700873314412,
+          "minimum": 12.445379187842306,
+          "p95_nearest_rank": 15.830604061570298,
+          "sample_standard_deviation": 1.7070484636497998
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 17.88671875,
+          "median": 17.59765625,
+          "minimum": 17.03125,
+          "p95_nearest_rank": 17.88671875,
+          "sample_standard_deviation": 0.4351627954325207
+        }
+      },
+      "data-enterprise/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 20.796464477720743,
+          "median": 15.107971521200179,
+          "minimum": 14.65856974714883,
+          "p95_nearest_rank": 20.796464477720743,
+          "sample_standard_deviation": 3.4213707242002442
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 4.5546875,
+          "median": 4.08984375,
+          "minimum": 4.08984375,
+          "p95_nearest_rank": 4.5546875,
+          "sample_standard_deviation": 0.2683776641936151
+        }
+      },
+      "data-enterprise/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 6.624468085106382,
+          "median": 6.283157914627464,
+          "minimum": 5.9020308102055035,
+          "p95_nearest_rank": 6.624468085106382,
+          "sample_standard_deviation": 0.36140146613879487
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 0.82421875,
+          "median": 0.328125,
+          "minimum": 0.30859375,
+          "p95_nearest_rank": 0.82421875,
+          "sample_standard_deviation": 0.2922212686591632
+        }
+      },
+      "data-internet/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 74.8152695543783,
+          "median": 68.53020851383354,
+          "minimum": 67.73673795570438,
+          "p95_nearest_rank": 74.8152695543783,
+          "sample_standard_deviation": 3.8780836634308735
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 7.30078125,
+          "median": 7.1484375,
+          "minimum": 6.265625,
+          "p95_nearest_rank": 7.30078125,
+          "sample_standard_deviation": 0.5588850493369776
+        }
+      },
+      "data-internet/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 5.978561567115579,
+          "median": 5.494511079487701,
+          "minimum": 4.927121071699386,
+          "p95_nearest_rank": 5.978561567115579,
+          "sample_standard_deviation": 0.5262704328435243
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 0.453125,
+          "median": 0.34765625,
+          "minimum": 0.29296875,
+          "p95_nearest_rank": 0.453125,
+          "sample_standard_deviation": 0.08140884912677389
+        }
+      },
+      "gnb": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 326.36711800560505,
+          "median": 326.127472106882,
+          "minimum": 271.7982712875078,
+          "p95_nearest_rank": 326.36711800560505,
+          "sample_standard_deviation": 31.43638688943079
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 10.578125,
+          "median": 7.14453125,
+          "minimum": 5.4375,
+          "p95_nearest_rank": 10.578125,
+          "sample_standard_deviation": 2.6181910777971824
+        }
+      },
+      "smf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 19.379717974771374,
+          "median": 16.053372900673075,
+          "minimum": 12.889285714285714,
+          "p95_nearest_rank": 19.379717974771374,
+          "sample_standard_deviation": 3.245554143824844
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 6.91796875,
+          "median": 6.79296875,
+          "minimum": 6.62109375,
+          "p95_nearest_rank": 6.91796875,
+          "sample_standard_deviation": 0.14905300022139775
+        }
+      },
+      "ue/benchmark-client": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 47.09930862518841,
+          "median": 41.72811232190334,
+          "minimum": 41.48582397034814,
+          "p95_nearest_rank": 47.09930862518841,
+          "sample_standard_deviation": 3.17331748973241
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 14.46484375,
+          "median": 12.6171875,
+          "minimum": 11.1953125,
+          "p95_nearest_rank": 14.46484375,
+          "sample_standard_deviation": 1.639379797795273
+        }
+      },
+      "ue/ue": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 364.4826280032764,
+          "median": 325.5108285753841,
+          "minimum": 316.052259010386,
+          "p95_nearest_rank": 364.4826280032764,
+          "sample_standard_deviation": 25.670236752743076
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 40.58203125,
+          "median": 32.6796875,
+          "minimum": 31.03515625,
+          "p95_nearest_rank": 40.58203125,
+          "sample_standard_deviation": 5.103827681930096
+        }
+      },
+      "upf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 128.4277931034483,
+          "median": 128.17581841513422,
+          "minimum": 118.41230833333337,
+          "p95_nearest_rank": 128.4277931034483,
+          "sample_standard_deviation": 5.711093817319961
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 5.640625,
+          "median": 5.578125,
+          "minimum": 4.98046875,
+          "p95_nearest_rank": 5.640625,
+          "sample_standard_deviation": 0.36444147165631524
+        }
+      }
+    },
+    "5": {
+      "amf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 15.339519951844698,
+          "median": 13.509719647171194,
+          "minimum": 12.273827222616132,
+          "p95_nearest_rank": 15.339519951844698,
+          "sample_standard_deviation": 1.542404570257143
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 18.05859375,
+          "median": 17.12109375,
+          "minimum": 17.09765625,
+          "p95_nearest_rank": 18.05859375,
+          "sample_standard_deviation": 0.5481569795403046
+        }
+      },
+      "data-enterprise/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 45.34176322418136,
+          "median": 44.31152296042989,
+          "minimum": 32.43090155532777,
+          "p95_nearest_rank": 45.34176322418136,
+          "sample_standard_deviation": 7.175199288808387
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 7.21875,
+          "median": 6.28515625,
+          "minimum": 6.09765625,
+          "p95_nearest_rank": 7.21875,
+          "sample_standard_deviation": 0.6005004491155863
+        }
+      },
+      "data-enterprise/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 4.92771632428291,
+          "median": 4.067580366594239,
+          "minimum": 2.72653349001175,
+          "p95_nearest_rank": 4.92771632428291,
+          "sample_standard_deviation": 1.1093125845007703
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 1.390625,
+          "median": 0.38671875,
+          "minimum": 0.29296875,
+          "p95_nearest_rank": 1.390625,
+          "sample_standard_deviation": 0.6084770694738799
+        }
+      },
+      "data-internet/benchmark-server": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 58.18531921250955,
+          "median": 53.802857285329594,
+          "minimum": 49.65822684129592,
+          "p95_nearest_rank": 58.18531921250955,
+          "sample_standard_deviation": 4.2640989350624094
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 6.50390625,
+          "median": 5.83203125,
+          "minimum": 5.5,
+          "p95_nearest_rank": 6.50390625,
+          "sample_standard_deviation": 0.5114503112702519
+        }
+      },
+      "data-internet/data-network": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 6.1135358301386,
+          "median": 5.493499406880191,
+          "minimum": 4.193163502865329,
+          "p95_nearest_rank": 6.1135358301386,
+          "sample_standard_deviation": 0.9800636463000918
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 4.63671875,
+          "median": 0.59375,
+          "minimum": 0.31640625,
+          "p95_nearest_rank": 4.63671875,
+          "sample_standard_deviation": 2.418250606216433
+        }
+      },
+      "gnb": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 361.7838119690694,
+          "median": 334.7368485012417,
+          "minimum": 302.39808656332383,
+          "p95_nearest_rank": 361.7838119690694,
+          "sample_standard_deviation": 29.732132277145176
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 7.12109375,
+          "median": 6.82421875,
+          "minimum": 6.81640625,
+          "p95_nearest_rank": 7.12109375,
+          "sample_standard_deviation": 0.1737000640172114
+        }
+      },
+      "smf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 19.02196732284662,
+          "median": 14.918978815860946,
+          "minimum": 13.919673704414585,
+          "p95_nearest_rank": 19.02196732284662,
+          "sample_standard_deviation": 2.703902289991006
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 8.0625,
+          "median": 7.88671875,
+          "minimum": 6.69921875,
+          "p95_nearest_rank": 8.0625,
+          "sample_standard_deviation": 0.7415738965710166
+        }
+      },
+      "ue/benchmark-client": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 78.68397380065859,
+          "median": 72.9232394935313,
+          "minimum": 61.33875030677667,
+          "p95_nearest_rank": 78.68397380065859,
+          "sample_standard_deviation": 8.83405557608416
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 25.55078125,
+          "median": 18.71875,
+          "minimum": 17.46875,
+          "p95_nearest_rank": 25.55078125,
+          "sample_standard_deviation": 4.350447872096105
+        }
+      },
+      "ue/ue": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 520.6924152342027,
+          "median": 515.7129758526669,
+          "minimum": 474.365582114699,
+          "p95_nearest_rank": 520.6924152342027,
+          "sample_standard_deviation": 25.43153309167997
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 58.1953125,
+          "median": 47.31640625,
+          "minimum": 46.96875,
+          "p95_nearest_rank": 58.1953125,
+          "sample_standard_deviation": 6.383666287628912
+        }
+      },
+      "upf": {
+        "cpu_peak_millicores": {
+          "count": 3,
+          "maximum": 150.42196973155646,
+          "median": 147.6963111760409,
+          "minimum": 139.90624620098814,
+          "p95_nearest_rank": 150.42196973155646,
+          "sample_standard_deviation": 5.457330975366182
+        },
+        "memory_peak_mib": {
+          "count": 3,
+          "maximum": 5.55078125,
+          "median": 5.38671875,
+          "minimum": 4.96484375,
+          "p95_nearest_rank": 5.55078125,
+          "sample_standard_deviation": 0.3022740956586422
+        }
+      }
+    }
+  },
+  "schema_version": 1
+}

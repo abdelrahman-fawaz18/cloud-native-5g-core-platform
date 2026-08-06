@@ -90,9 +90,83 @@ spec:
           volumeMounts:
             - {name: rendered-content, mountPath: /srv, readOnly: true}
           {{- end }}
+        {{- if $root.Values.phase07.enabled }}
+        - name: benchmark-server
+          image: {{ include "cn5g.image" $root.Values.images.benchmark }}
+          imagePullPolicy: {{ $root.Values.images.benchmark.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |-
+              pids=""
+              cleanup() {
+                trap - TERM INT EXIT
+                test -z "$pids" || kill $pids 2>/dev/null || true
+                test -z "$pids" || wait $pids 2>/dev/null || true
+              }
+              trap cleanup TERM INT EXIT
+              {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
+              iperf3 --server --port {{ add ($root.Values.phase07.iperfPort | int) $ordinal }} &
+              pids="$pids $!"
+              {{- end }}
+              while sleep 5; do
+                for pid in $pids; do
+                  kill -0 "$pid" 2>/dev/null || exit 1
+                done
+              done
+          env:
+            - {name: TMPDIR, value: /tmp}
+          ports:
+            {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
+            - {name: iperf-tcp-{{ $ordinal }}, containerPort: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, protocol: TCP}
+            - {name: iperf-udp-{{ $ordinal }}, containerPort: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, protocol: UDP}
+            {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |-
+                  {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
+                  ss -H -lnt | grep -q ':{{ add ($root.Values.phase07.iperfPort | int) $ordinal }} '
+                  {{- end }}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |-
+                  {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
+                  ss -H -lnt | grep -q ':{{ add ($root.Values.phase07.iperfPort | int) $ordinal }} '
+                  {{- end }}
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "kill -0 1"]
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            {{- toYaml $root.Values.phase07.resources | nindent 12 }}
+          volumeMounts:
+            - {name: benchmark-tmp, mountPath: /tmp}
+        {{- end }}
       {{- if $root.Values.phase05.enabled }}
       volumes:
         - name: rendered-content
           emptyDir: {medium: Memory, sizeLimit: 1Mi}
+        {{- if $root.Values.phase07.enabled }}
+        - name: benchmark-tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        {{- end }}
       {{- end }}
 {{- end }}

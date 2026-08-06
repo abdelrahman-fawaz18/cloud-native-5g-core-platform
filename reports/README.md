@@ -14,6 +14,7 @@ and whether the tested gate passed or failed.
 - [Phase 4 single-UE Kubernetes validation summary](#phase-4-single-ue-kubernetes-validation-summary)
 - [Phase 5 multi-UE and DNN validation summary](#phase-5-multi-ue-and-dnn-validation-summary)
 - [Phase 6 observability validation summary](#phase-6-observability-validation-summary)
+- [Phase 7 performance and capacity experiment report](07_phase07_performance.md)
 
 The validation evidence below is paired with the
 [complete Phase 4 visual system guide](../docs/README.md#23-phase-4-complete-system-and-operational-model),

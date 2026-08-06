@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 | Phase | State | Current gate |
 | --- | --- | --- |
@@ -11,7 +11,8 @@ Last updated: 2026-08-05
 | 4 — Helm-managed single-UE platform | Complete | Chart, real 5G path, persistence, resource baseline, upgrade, rollback, and scoped uninstall/reinstall verified |
 | 5 — Multi-UE and DNN automation | Complete | Five concurrent UEs, two isolated DNNs, negative/recovery behavior, rollback, resource observation, and clean rerun verified |
 | 6 — Observability and operational visibility | Complete | Metrics, logs, dashboards, bounded cardinality, persistence, and three alert firing/resolution lifecycles verified |
-| 7-10 | Not started | Each later phase remains gated by the preceding verified baseline |
+| 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
+| 8-10 | Not started | Each later phase remains gated by the preceding verified baseline |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -165,3 +166,56 @@ The 2,568-second interactive gate kept the same Grafana Pod with zero restart
 increase and measured a 473.2 MiB peak, below the 80% acceptance ceiling. Full
 Phase 5/6 validation, all alert lifecycles, 149 repository tests, deterministic
 rendering, and privacy checks passed before the post-change snapshot.
+
+Phase 7 defined a controlled local performance experiment without making a
+carrier-capacity or production-sizing claim.
+The tracked experiment contract defines 1/3/5-UE levels, three repetitions,
+warm-up, measurement/cool-down windows, ICMP plus forward/reverse TCP and UDP
+traffic, procedure timing, aligned Prometheus resources, abort thresholds,
+raw-evidence handling, and prohibited claims. The Helm mechanism adds only
+zero-capability benchmark sidecars and five per-ordinal internal DNN ports.
+The exact image build/load, full Phase 5/6 regression, route-enforced one-UE
+pilot, and clean restoration of the five-UE baseline passed. Runtime
+acceptance required the resumable repeated matrix, deterministic analysis,
+reviewed evidence, and final rollback gate.
+
+An initial matrix campaign passed its first three conditions, then exposed a
+repeatable reverse-TCP stall after session state had accumulated across scale
+cycles. Its raw data is retained but excluded from performance summaries. The
+corrected experiment contract now restarts both benchmark servers and then
+resets the dependency-ordered 5G session chain before every condition. The
+ordering ensures that the restarted UPF installs current DNN Pod addresses in
+its fail-closed policy tables and removes accumulated session state as a hidden
+confounding variable.
+
+A subsequent clean one-UE condition proved that unbounded forward TCP could
+complete the full 15-second interval, while unbounded reverse TCP delivered an
+initial burst, collapsed to the minimum congestion window, and stopped making
+progress. The failed attempt remains retained and excluded from performance
+summaries. The controlled matrix now keeps forward TCP unbounded but declares
+a 10 Mbit/s per-UE reverse offered load. This is a repeatable downlink
+service-load test, not a claim of maximum downlink capacity.
+
+The corrected one-UE pilot then completed the full 15-second interval in every
+traffic stage. Reverse TCP delivered 9.997 Mbit/s against its declared
+10 Mbit/s target with zero retransmissions; fixed-rate UDP delivered
+0.9999 Mbit/s with zero loss; unbounded forward TCP delivered 88.6 Mbit/s in
+that mechanism check. The route used `uesimtun0`, no container restarted, and
+the five-UE baseline recovered. These pilot values validate the mechanism but
+are not accepted performance results by themselves.
+
+The accepted campaign then completed nine conditions: three repetitions at
+1, 3, and 5 concurrent UEs. Deterministic analysis produced three CSV files,
+one JSON summary, three SVG plots, and a sanitized report. Median unbounded
+forward aggregate throughput was 114.7, 79.4, and 91.7 Mbit/s at 1, 3, and 5
+UEs respectively; the decreasing per-UE share and rising retransmissions show
+contention without supporting a commercial-capacity claim. Fixed reverse TCP
+delivered 99.96% of its 10 Mbit/s-per-UE target, UDP delivered approximately
+100% of its 1 Mbit/s-per-UE target with zero loss, and every registration and
+PDU session succeeded. The analyzer reproduced byte-identical outputs across
+two runs, and the repository passed 161 tests. The final scoped rollback
+restored Helm revision 12, removed the benchmark overlay, preserved the exact
+MongoDB claim identity, repaired all five sessions, and passed the complete
+Phase 5 and Phase 6 regression gates. The post-Phase-7 host-state snapshot was
+captured locally. Phase 7 is complete; Phase 8 remains gated on its own design
+and preflight review.

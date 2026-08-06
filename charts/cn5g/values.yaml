@@ -40,6 +40,12 @@ images:
     digest: sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844
     pullPolicy: IfNotPresent
     expectedImageID: sha256:527c28b29498575b851ad88e7522ac7201bbd9e920d2c11b00ff2b39b315f5f8
+  benchmark:
+    repository: cn5g/benchmark
+    tag: 0.1.0
+    pullPolicy: Never
+    # Replaced at install time with the locally built and verified image ID.
+    expectedImageID: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 subscriberSecret:
   existingSecret: cn5g-subscriber
@@ -83,6 +89,17 @@ phase06:
   resources:
     requests: {cpu: 5m, memory: 8Mi}
     limits: {cpu: 50m, memory: 32Mi}
+
+# Phase 7 adds an idle benchmark client to each UE network namespace and one
+# iperf3 server to each controlled DNN endpoint. The lifecycle helper starts
+# traffic only inside explicit, bounded experiment windows.
+phase07:
+  enabled: false
+  iperfPort: 5201
+  iperfPortCount: 5
+  resources:
+    requests: {cpu: 5m, memory: 8Mi}
+    limits: {cpu: "1", memory: 64Mi}
 
 mongodb:
   storageClassName: standard

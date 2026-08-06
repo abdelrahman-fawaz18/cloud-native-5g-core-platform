@@ -25,6 +25,9 @@ Phase-specific extensions:
 - [Phase 6 observability runbook](runbooks/phase-06-observability.md)
 - [Observability dashboard evolution plan](architecture/observability-dashboard-evolution-plan.md)
 - [ADR-0005 observability stack decision](adr/0005-observability-stack.md)
+- [Phase 7 controlled performance methodology](architecture/phase-07-performance-methodology.md)
+- [Phase 7 reviewed performance report](../reports/07_phase07_performance.md)
+- [ADR-0009 benchmark traffic-path decision](adr/0009-phase-07-benchmark-path.md)
 
 Because this is a long-form reference, it can be read in parts:
 

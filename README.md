@@ -6,8 +6,8 @@ This repository implements a reproducible, containerized 5G Standalone (5G
 SA) Core platform. It deploys Open5GS, MongoDB, and UERANSIM on a local
 Kubernetes environment, exercises multiple synthetic User Equipments (UEs),
 and preserves measured evidence for signalling, user-plane traffic, lifecycle,
-isolation, recovery, metrics, logs, dashboards, and alert behavior. Controlled
-load and failure-recovery experiments remain in later roadmap phases.
+isolation, recovery, metrics, logs, dashboards, alert behavior, and controlled
+load. Controlled component-failure experiments remain in later roadmap phases.
 
 The project extends the validated protocol baseline documented in the
 [5G SA Core Protocol Lab](https://github.com/abdelrahman-fawaz18/5g-sa-core-protocol-lab).
@@ -16,7 +16,12 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-Phases 0-6 are complete. The accepted release runs Open5GS, MongoDB, one
+Phases 0-7 are complete. Phase 7 retained its exploratory failures, passed a
+route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
+produced deterministic reviewed summaries and plots, and passed its scoped
+rollback with the Phase 5/6 regression gates intact. The accepted runtime has
+therefore returned to the non-benchmark Phase 6 configuration: Open5GS,
+MongoDB, one
 UERANSIM gNodeB, five concurrent UERANSIM UEs, and two isolated controlled
 data endpoints in a disposable single-node kind cluster. A separate
 observability release provides Prometheus metrics and alert evaluation,
@@ -287,6 +292,63 @@ the signal model, limits, lifecycle, recovery, and accepted evidence. These
 results do not claim throughput, packet loss, high availability, long-term
 retention, or production monitoring scale.
 
+## Verified Phase 7 Controlled Performance Experiment
+
+Phase 7 measured this exact single-host platform under 1, 3, and 5 concurrent
+UEs, with three independent repetitions at every level. A restricted iperf3
+sidecar in each active UE Pod bound traffic to the UE session address. Route
+checks rejected any condition that did not traverse `uesimtun0`, the simulated
+radio path, N3 GTP-U, the UPF, and the UE's intended DNN endpoint.
+
+```mermaid
+flowchart LR
+    RUNNER["Resumable experiment runner\n1, 3, 5 UEs x 3 repetitions"]
+    CLIENT["UE benchmark sidecar\nzero Linux capabilities"]
+    TUN["uesimtun0\n10.60/10.61 session address"]
+    GNB["UERANSIM gNB"]
+    UPF["Open5GS UPF"]
+    DNN["Intended DNN server\ndedicated per-UE port"]
+    PROM["Prometheus\ntime-aligned resources"]
+    RAW["Ignored raw evidence"]
+    REVIEW["Deterministic analyzer\nCSV + JSON + SVG + report"]
+
+    RUNNER --> CLIENT --> TUN --> GNB -->|"N3 GTP-U"| UPF --> DNN
+    RUNNER --> PROM
+    CLIENT --> RAW
+    PROM --> RAW
+    RAW --> REVIEW
+```
+
+The accepted medians describe local contention, not commercial 5G capacity:
+
+| Concurrent UEs | Forward TCP aggregate | Forward TCP per-UE median | Jain fairness | Reverse target delivered | UDP loss | Registration / PDU success |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 114.70 Mbit/s | 114.70 Mbit/s | 1.0000 | 99.96% | 0% | 100% / 100% |
+| 3 | 79.38 Mbit/s | 26.19 Mbit/s | 0.9997 | 99.96% | 0% | 100% / 100% |
+| 5 | 91.70 Mbit/s | 17.61 Mbit/s | 0.9928 | 99.96% | 0% | 100% / 100% |
+
+![Phase 7 throughput and fairness results](benchmarks/phase-07/results/plots/throughput.svg)
+
+![Phase 7 procedure results](benchmarks/phase-07/results/plots/procedures.svg)
+
+![Phase 7 resource results](benchmarks/phase-07/results/plots/resources.svg)
+
+Forward TCP was intentionally unbounded to expose local saturation behavior.
+Reverse TCP was a declared 10 Mbit/s per-UE service-load check, and UDP was a
+declared 1 Mbit/s per-UE check; neither is a maximum downlink-capacity claim.
+All accepted conditions completed with unique sessions, zero new container
+restarts, and recovery of the five-UE baseline. Median five-UE peak CPU was
+515.7 millicores across the UE runtime containers, 334.7 millicores at the
+single gNB, and 147.7 millicores at the UPF. The UE/gNB side is therefore the
+leading bottleneck candidate, not a proven isolated cause.
+
+The final lifecycle gate rolled Helm back to revision 12, removed the benchmark
+overlay, preserved the MongoDB claim, and reran the complete Phase 5 and Phase
+6 validators. See the [methodology](docs/architecture/phase-07-performance-methodology.md),
+[reviewed report](reports/07_phase07_performance.md), and
+[machine-readable summary](benchmarks/phase-07/results/summary.json) for the
+statistics, retained failures, limitations, and reproduction contract.
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -341,7 +403,9 @@ flowchart LR
 
 The target topology builds on the accepted kind, Helm, and five-UE/two-DNN
 baseline. Phase 6 added operational metrics, dashboards, alerts, and correlated
-logs without changing the accepted subscriber or user-plane contracts.
+logs without changing the accepted subscriber or user-plane contracts. Phase
+7 added a temporary, route-enforced benchmark overlay, preserved reviewed
+results, and then rolled that overlay back to the accepted Phase 6 runtime.
 
 ## Repository Structure
 
@@ -389,6 +453,9 @@ machine-readable measurements, and concise reports.
 - [Phase 6 observability runbook](docs/runbooks/phase-06-observability.md)
 - [Phase 6 sanitized validation summary](reports/README.md#phase-6-observability-validation-summary)
 - [Phase 6 visual and operational model](docs/README.md#32-phase-6-observability-and-operational-mental-model)
+- [Phase 7 controlled performance methodology](docs/architecture/phase-07-performance-methodology.md)
+- [Phase 7 machine-readable experiment contract](benchmarks/phase-07/experiment.json)
+- [Phase 7 reviewed performance report](reports/07_phase07_performance.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

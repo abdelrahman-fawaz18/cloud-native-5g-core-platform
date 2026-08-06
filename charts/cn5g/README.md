@@ -30,6 +30,15 @@ The Phase 6 overlay passed the complete Phase 5 regression validator plus
 live target, telecom-metric, user-plane probe, cardinality, log-ingestion,
 dashboard-provisioning, and alert-lifecycle gates on 2026-08-05.
 
+`values-phase07.yaml` composes with both accepted overlays and adds an idle
+`benchmark-client` sidecar to each UE plus a listening `benchmark-server`
+sidecar to each DNN endpoint. All benchmark containers run as UID/GID 65532,
+drop every capability, use a read-only root filesystem, and receive bounded
+resources. Each DNN Service exposes TCP and UDP ports 5201-5205 only inside
+the cluster, one independent server port per UE ordinal. This overlay is an
+experiment mechanism; it is not accepted until
+the gated runtime pilot and later repeated matrix pass.
+
 Non-sensitive configuration is rendered through ConfigMaps. The chart never
 templates subscriber authentication material; `subscriberSecret.existingSecret`
 must name a Secret created from the ignored files produced by

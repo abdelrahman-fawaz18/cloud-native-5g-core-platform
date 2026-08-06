@@ -112,6 +112,12 @@ spec:
     {{- include "cn5g.selectorLabels" (dict "root" $root "component" $session.endpoint) | nindent 4 }}
   ports:
     - {name: http, protocol: TCP, port: 8080, targetPort: http}
+    {{- if $root.Values.phase07.enabled }}
+    {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
+    - {name: iperf-tcp-{{ $ordinal }}, protocol: TCP, port: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, targetPort: iperf-tcp-{{ $ordinal }}}
+    - {name: iperf-udp-{{ $ordinal }}, protocol: UDP, port: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, targetPort: iperf-udp-{{ $ordinal }}}
+    {{- end }}
+    {{- end }}
 {{- end }}
 {{- else }}
 ---

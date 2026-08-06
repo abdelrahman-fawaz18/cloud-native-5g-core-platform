@@ -336,6 +336,37 @@ spec:
           volumeMounts:
             - {name: ue-probe, mountPath: /opt/cn5g, readOnly: true}
         {{- end }}
+        {{- if .Values.phase07.enabled }}
+        - name: benchmark-client
+          image: {{ include "cn5g.image" .Values.images.benchmark }}
+          imagePullPolicy: {{ .Values.images.benchmark.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args: ["exec sleep infinity"]
+          env:
+            - {name: TMPDIR, value: /tmp}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "test -d /sys/class/net/uesimtun0"]
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "kill -0 1"]
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.phase07.resources | nindent 12 }}
+          volumeMounts:
+            - {name: benchmark-tmp, mountPath: /tmp}
+        {{- end }}
       volumes:
         - name: tun-device
           hostPath: {path: /dev/net/tun, type: CharDevice}
@@ -360,4 +391,8 @@ spec:
           configMap:
             name: {{ include "cn5g.fullname" . }}-ue-probe
             defaultMode: 0444
+        {{- end }}
+        {{- if .Values.phase07.enabled }}
+        - name: benchmark-tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
         {{- end }}

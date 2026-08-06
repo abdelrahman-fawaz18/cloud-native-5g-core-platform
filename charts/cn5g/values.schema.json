@@ -3,7 +3,7 @@
   "title": "CN5G Helm values",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "images", "subscriberSecret", "phase05", "phase06", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
+  "required": ["global", "images", "subscriberSecret", "phase05", "phase06", "phase07", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
   "properties": {
     "global": {
       "type": "object",
@@ -37,13 +37,14 @@
     "images": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["open5gs", "ueransim", "dataNetwork", "mongodb", "ueProbe"],
+      "required": ["open5gs", "ueransim", "dataNetwork", "mongodb", "ueProbe", "benchmark"],
       "properties": {
         "open5gs": {"$ref": "#/$defs/localImage"},
         "ueransim": {"$ref": "#/$defs/localImage"},
         "dataNetwork": {"$ref": "#/$defs/localImage"},
         "mongodb": {"$ref": "#/$defs/registryImage"},
-        "ueProbe": {"$ref": "#/$defs/pullableRegistryImage"}
+        "ueProbe": {"$ref": "#/$defs/pullableRegistryImage"},
+        "benchmark": {"$ref": "#/$defs/localImage"}
       }
     },
     "subscriberSecret": {
@@ -97,6 +98,17 @@
         "resources": {"$ref": "#/$defs/resources"}
       }
     },
+    "phase07": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "iperfPort", "iperfPortCount", "resources"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "iperfPort": {"const": 5201},
+        "iperfPortCount": {"const": 5},
+        "resources": {"$ref": "#/$defs/resources"}
+      }
+    },
     "mongodb": {"$ref": "#/$defs/storageWorkload"},
     "open5gs": {
       "type": "object",
@@ -111,6 +123,24 @@
     "dataNetwork": {"$ref": "#/$defs/workload"},
     "subscriberJob": {"$ref": "#/$defs/workload"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase07": {
+            "properties": {"enabled": {"const": true}},
+            "required": ["enabled"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "phase05": {"properties": {"enabled": {"const": true}}},
+          "phase06": {"properties": {"enabled": {"const": true}}}
+        }
+      }
+    }
+  ],
   "$defs": {
     "pullPolicy": {"type": "string", "enum": ["Never", "IfNotPresent", "Always"]},
     "localImage": {
