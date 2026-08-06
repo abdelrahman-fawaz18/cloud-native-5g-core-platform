@@ -19,6 +19,13 @@ Prometheus and Loki retain 24 hours of local data. Grafana is a ClusterIP-only
 Service and is opened only through the loopback-bound port-forward in
 `scripts/phase06-lab.sh`.
 
+Grafana's accepted pre-Phase-7 hardening disables runtime plugin
+preinstallation/update paths, preserves the read-only root filesystem, raises
+the measured test memory boundary to a 192 MiB request and 768 MiB limit, and
+caps Loki data-source results at 500 lines. The 2,568-second interactive soak
+passed with zero restart increase and a 473.2 MiB peak. These values are not
+sizing guidance for a different topology.
+
 ## Security And Scope
 
 Collectors receive read-only access only where the required signal demands
@@ -35,7 +42,9 @@ The chart passed strict linting, deterministic rendering, Kubernetes
 server-side dry-run, live installation and upgrade, target-health checks,
 five-session telecom metric checks, five user-plane probes, Loki ingestion,
 Grafana provisioning, a 20-series cardinality result under the limit of 30,
-and three alert firing/resolution lifecycles on 2026-08-05.
+and three alert firing/resolution lifecycles on 2026-08-05. The enhanced
+dashboard and Grafana hardening upgrade passed complete regression and alert
+validation plus the interactive stability gate on 2026-08-06.
 
 See the [architecture](../../docs/architecture/phase-06-observability.md),
 [runbook](../../docs/runbooks/phase-06-observability.md), and [sanitized

@@ -38,8 +38,8 @@ images:
 grafana:
   existingAdminSecret: cn5g-grafana-admin
   resources:
-    requests: {cpu: 25m, memory: 96Mi}
-    limits: {cpu: 300m, memory: 384Mi}
+    requests: {cpu: 25m, memory: 192Mi}
+    limits: {cpu: 300m, memory: 768Mi}
 
 prometheus:
   storageSize: 2Gi

@@ -154,3 +154,14 @@ Bound, the complete Phase 5 validation still passed, and the post-Phase-6 host
 snapshot was captured. These results establish operational visibility for the
 five-UE local baseline; they do not establish throughput, packet-loss,
 long-duration retention, high availability, or production monitoring scale.
+
+The pre-Phase-7 Stage A dashboard hardening is also complete. A scoped upgrade
+to observability revision 3 left the core overlay and both telemetry claims in
+place, disabled Grafana runtime plugin preinstallation/update paths, bounded
+Loki results at 500 lines, and adopted a measured 192 MiB request/768 MiB
+limit. Four Git-controlled dashboards now provide 48 panels across service
+overview, 5G UE/DNN behavior, Kubernetes resources, and troubleshooting logs.
+The 2,568-second interactive gate kept the same Grafana Pod with zero restart
+increase and measured a 473.2 MiB peak, below the 80% acceptance ceiling. Full
+Phase 5/6 validation, all alert lifecycles, 149 repository tests, deterministic
+rendering, and privacy checks passed before the post-change snapshot.

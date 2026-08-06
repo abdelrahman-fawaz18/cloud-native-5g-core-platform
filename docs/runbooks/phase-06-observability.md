@@ -64,7 +64,91 @@ sudo ./scripts/phase06-lab.sh grafana
 Keep that terminal open and browse to `http://127.0.0.1:13000`. The username
 is printed; the password remains in the ignored mode-0600 file
 `artifacts/secrets/phase-06/admin-password`. Press `Ctrl-C` to close the
-port-forward. No persistent host port is created.
+port-forward. No persistent host port is created. The command also records the
+Grafana Pod identity, restart count, and start time for the Stage A stability
+soak; opening Grafana again deliberately replaces that baseline.
+
+## Pre-Phase-7 Dashboard Hardening Gate
+
+This bounded change updates only the `cn5g-observability` Helm release when
+the Phase 6 UE-probe overlay is already active. It does not install a host
+package, modify a host route, recreate the kind cluster, change subscriber
+records, or replace MongoDB/Prometheus/Loki claims.
+
+From a normal Ubuntu terminal in the repository root, first capture the host
+boundary and run the static/runtime preconditions:
+
+```bash
+cd /path/to/cloud-native-5g-core-platform
+
+sudo -v
+./scripts/capture-host-state.sh before-pre-phase-07-dashboard-hardening
+
+sudo ./scripts/phase06-lab.sh preflight
+sudo ./scripts/phase06-lab.sh install
+sudo ./scripts/phase06-lab.sh validate
+sudo ./scripts/phase06-lab.sh test-alerts
+```
+
+Expected terminal gates include:
+
+```text
+dashboard_hardening_rollback_state=recorded observability_revision=<number>
+phase06_core_overlay=already-active upgrade=skipped
+grafana_runtime_hardening=pass request_memory=192Mi limit_memory=768Mi runtime_plugin_installation=disabled
+phase06_validation=pass
+phase06_alert_lifecycle=pass tested=3
+```
+
+If the preflight reports stale Phase 5 session evidence, stop and use only the
+documented `phase05-lab.sh repair-sessions` action before retrying. Do not
+weaken a dashboard query to hide a failed user-plane contract.
+
+Start the interactive soak in one terminal:
+
+```bash
+sudo ./scripts/phase06-lab.sh grafana
+```
+
+For at least 30 minutes, open every dashboard, change the UE/DNN/component
+variables, and inspect the bounded log panels. Leave that port-forward running.
+After 30 minutes, open a second terminal in the repository root and run:
+
+```bash
+sudo ./scripts/phase06-lab.sh verify-grafana-soak
+```
+
+The accepted result is:
+
+```text
+grafana_interactive_soak=pass duration_seconds=<at-least-1800> restarts_delta=0 peak_memory_mib=<measured> limit_memory_mib=768 headroom=pass
+```
+
+The accepted 2026-08-06 run reported `duration_seconds=2568`,
+`restarts_delta=0`, and `peak_memory_mib=473.2` under the 768 MiB limit.
+
+The gate fails if the Pod changes, the restart count increases, runtime plugin
+installation appears, the duration is short, or the 30-minute peak reaches
+80% of the limit. A pass consumes both temporary acceptance-state files so a
+future phase cannot accidentally reuse the old rollback checkpoint. After a
+pass, close the first terminal with `Ctrl-C` and capture the post-state:
+
+```bash
+./scripts/capture-host-state.sh after-pre-phase-07-dashboard-hardening
+```
+
+If runtime acceptance fails, preserve scoped diagnostics and roll back only
+the observability release:
+
+```bash
+sudo ./scripts/phase06-lab.sh rollback-hardening --confirm
+```
+
+The rollback uses the exact locally recorded pre-change Helm revision, checks
+that both telemetry PersistentVolumeClaim (PVC) identities were preserved,
+and reruns the complete Phase 5 validator. It does not delete telemetry data,
+subscriber material, the MongoDB claim, the cluster, images, or host network
+state.
 
 ## Status And Repeat Validation
 

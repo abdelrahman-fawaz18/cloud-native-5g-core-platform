@@ -1,9 +1,79 @@
 {
-  "uid":"cn5g-logs","title":"CN5G Project Logs","tags":["cn5g","logs","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
-  "time":{"from":"now-30m","to":"now"},
-  "panels":[
-    {"id":1,"type":"logs","title":"Core workload logs","gridPos":{"h":12,"w":24,"x":0,"y":0},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{namespace=\"cn5g\"}","queryType":"range"}],"options":{"showTime":true,"showLabels":true,"wrapLogMessage":true,"sortOrder":"Descending"}},
-    {"id":2,"type":"timeseries","title":"Log volume by component","gridPos":{"h":9,"w":12,"x":0,"y":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"sum by (component) (count_over_time({namespace=\"cn5g\"}[1m]))","queryType":"range","legendFormat":"{{component}}"}]},
-    {"id":3,"type":"logs","title":"Warning and error signals","gridPos":{"h":9,"w":12,"x":12,"y":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{namespace=\"cn5g\"} |~ `(?i)warn|error|fail|reject|denied`","queryType":"range"}],"options":{"showTime":true,"showLabels":true,"wrapLogMessage":true,"sortOrder":"Descending"}}
+  "uid": "cn5g-logs",
+  "title": "CN5G Logs And Troubleshooting",
+  "description": "Bounded, variable-driven Loki views for component logs, telecom procedure signals, observability components, and Kubernetes Events.",
+  "tags": ["cn5g", "logs", "phase-06", "operations"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 2,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-15m", "to": "now"},
+  "links": [
+    {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false}
+  ],
+  "templating": {"list": [
+    {"name": "component", "label": "Core component", "type": "query", "datasource": {"type": "loki", "uid": "loki"}, "query": "label_values({namespace=\"cn5g\"}, component)", "refresh": 1, "sort": 1, "includeAll": true, "allValue": ".*", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}},
+    {"name": "severity", "label": "Message filter", "type": "custom", "query": "All : .*,Warnings : (?i)warn,Errors and failures : (?i)error|fail|reject|denied", "includeAll": false, "multi": false, "current": {"selected": true, "text": "All", "value": ".*"}, "options": []}
+  ]},
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "Troubleshooting workflow", "gridPos": {"h": 5, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "### Start with the symptom, then narrow time and component\n1. Use **Service Overview** to identify the failed contract. 2. Keep the same time range and select a component here. 3. Compare procedure logs, Kubernetes Events, and restart timing. Queries default to 15 minutes and are capped at 500 lines by the provisioned Loki data source; widen time only when necessary. Raw logs remain local and may contain synthetic subscriber identifiers, so sanitize any screenshot or excerpt before publication."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Core log entries / 5m", "description": "Total core log lines ingested during the last five minutes.", "gridPos": {"h": 5, "w": 8, "x": 0, "y": 5},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "sum(count_over_time({namespace=\"cn5g\"}[5m]))", "queryType": "instant"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []}, "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Warning/error entries / 5m", "description": "Five-minute count of warning, error, failure, rejection, or denial terms. A nonzero value is an investigation signal, not automatically an incident.", "gridPos": {"h": 5, "w": 8, "x": 8, "y": 5},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "sum(count_over_time({namespace=\"cn5g\"} |~ `(?i)warn|error|fail|reject|denied` [5m]))", "queryType": "instant"}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 20}]}}, "overrides": []}, "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Restarts / 1h", "description": "Container restart-counter increase in both project namespaces during the last hour.", "gridPos": {"h": 5, "w": 8, "x": 16, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"cn5g|cn5g-observability\"}[1h])) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []}, "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Warning and error rate by component", "description": "Per-second rate of matching warning/error/failure/rejection/denial lines over a five-minute window.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 10},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "sum by (component) (rate({namespace=\"cn5g\",component=~\"$component\"} |~ `(?i)warn|error|fail|reject|denied` [5m]))", "queryType": "range", "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}, "overrides": []}, "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Log volume by component", "description": "Per-second log ingestion rate for selected core components.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 10},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "sum by (component) (rate({namespace=\"cn5g\",component=~\"$component\"}[5m]))", "queryType": "range", "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "ops", "min": 0}, "overrides": []}, "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 7, "type": "logs", "title": "Selected core logs", "description": "Bounded core workload logs filtered by component and message class.", "gridPos": {"h": 13, "w": 24, "x": 0, "y": 19},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "{namespace=\"cn5g\",component=~\"$component\"} |~ `$severity`", "queryType": "range", "maxLines": 500}],
+      "options": {"showTime": true, "showLabels": true, "wrapLogMessage": true, "prettifyLogMessage": false, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"}
+    },
+    {
+      "id": 8, "type": "logs", "title": "Registration, authentication, and NAS security signals", "description": "Bounded control-plane and UERANSIM messages associated with registration, authentication, rejection, and security-mode procedures.", "gridPos": {"h": 12, "w": 12, "x": 0, "y": 32},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "{namespace=\"cn5g\",component=~\"amf|ausf|udm|udr|gnb|ue\"} |~ `(?i)registration|authentication|security mode|reject|denied`", "queryType": "range", "maxLines": 300}],
+      "options": {"showTime": true, "showLabels": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"}
+    },
+    {
+      "id": 9, "type": "logs", "title": "PFCP, PDU-session, and GTP-U signals", "description": "Bounded SMF, UPF, gNB, and UE messages associated with session and user-plane setup.", "gridPos": {"h": 12, "w": 12, "x": 12, "y": 32},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "{namespace=\"cn5g\",component=~\"smf|upf|gnb|ue\"} |~ `(?i)PFCP|PDU session|GTP|tunnel|session establishment`", "queryType": "range", "maxLines": 300}],
+      "options": {"showTime": true, "showLabels": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"}
+    },
+    {
+      "id": 10, "type": "logs", "title": "Kubernetes Events", "description": "Events collected through the Kubernetes API by Alloy. An empty view means no Event was emitted in the selected time range; widen the range only as needed.", "gridPos": {"h": 12, "w": 12, "x": 0, "y": 44},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "{namespace=~\"cn5g|cn5g-observability\",job=\"integrations/kubernetes/eventhandler\"} | logfmt", "queryType": "range", "maxLines": 300}],
+      "options": {"showTime": true, "showLabels": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"}
+    },
+    {
+      "id": 11, "type": "logs", "title": "Observability pipeline logs", "description": "Bounded logs from Prometheus, Grafana, Loki, Alloy, and kube-state-metrics for telemetry-pipeline diagnosis.", "gridPos": {"h": 12, "w": 12, "x": 12, "y": 44},
+      "datasource": {"type": "loki", "uid": "loki"}, "targets": [{"refId": "A", "expr": "{namespace=\"cn5g-observability\",component=~\"prometheus|grafana|loki|alloy|kube-state-metrics\"} |~ `(?i)warn|error|fail|oom|plugin|ready`", "queryType": "range", "maxLines": 300}],
+      "options": {"showTime": true, "showLabels": true, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending", "dedupStrategy": "none"}
+    }
   ]
 }

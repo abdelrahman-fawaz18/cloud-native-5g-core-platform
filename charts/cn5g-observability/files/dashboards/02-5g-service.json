@@ -1,13 +1,125 @@
 {
-  "uid":"cn5g-5g-service","title":"CN5G Control and User Plane","tags":["cn5g","5g","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
-  "time":{"from":"now-30m","to":"now"},
-  "panels":[
-    {"id":1,"type":"stat","title":"AMF sessions","gridPos":{"h":8,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(amf_session)","legendFormat":"sessions"}]},
-    {"id":2,"type":"stat","title":"RAN UEs","gridPos":{"h":8,"w":6,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(ran_ue)","legendFormat":"UEs"}]},
-    {"id":3,"type":"stat","title":"PFCP sessions","gridPos":{"h":8,"w":6,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(pfcp_sessions_active)","legendFormat":"sessions"}]},
-    {"id":4,"type":"stat","title":"PFCP peers","gridPos":{"h":8,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"max(pfcp_peers_active)","legendFormat":"peers"}]},
-    {"id":5,"type":"timeseries","title":"Per-UE synthetic user-plane status","gridPos":{"h":9,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_user_plane_probe_success","legendFormat":"UE {{ordinal}} / {{dnn}}"}]},
-    {"id":6,"type":"timeseries","title":"Synthetic user-plane latency","gridPos":{"h":9,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_user_plane_probe_duration_seconds","legendFormat":"UE {{ordinal}} / {{dnn}}"}]},
-    {"id":7,"type":"timeseries","title":"UE TUN packet counters","gridPos":{"h":9,"w":24,"x":0,"y":17},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"cn5g_ue_tun_packets_total","legendFormat":"UE {{ordinal}} {{dnn}} {{direction}}"}]}
+  "uid": "cn5g-5g-service",
+  "title": "CN5G Control, Sessions, UEs, And DNNs",
+  "description": "Live control-plane, PFCP session, bounded per-UE, and Data Network Name views for the accepted five-UE topology.",
+  "tags": ["cn5g", "5g", "phase-06", "operations"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 2,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-30m", "to": "now"},
+  "links": [
+    {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false}
+  ],
+  "templating": {"list": [
+    {"name": "ue_ordinal", "label": "UE ordinal", "type": "custom", "query": "0,1,2,3,4", "includeAll": true, "allValue": ".*", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}, "options": []},
+    {"name": "dnn", "label": "DNN", "type": "custom", "query": "internet,enterprise", "includeAll": true, "allValue": ".*", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}, "options": []}
+  ]},
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "Signal model and limits", "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "### From registration to user plane\n**AMF/RAN gauges** show control-plane state, **PFCP** shows the SMF-to-UPF session contract, and the five fixed **UE ordinals** show source-bound N6 probes through `internet` or `enterprise`. Ordinal and DNN are deliberately bounded labels; subscriber identities and credentials never enter telemetry. Cross-DNN denial is proven by the acceptance test, not continuously generated traffic."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "AMF sessions", "description": "Current Access and Mobility Management Function session gauge; expected value is five.", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max(amf_session)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "RAN UEs", "description": "Current Radio Access Network UE gauge reported by the AMF.", "gridPos": {"h": 5, "w": 6, "x": 6, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max(ran_ue)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "PFCP sessions", "description": "Active Packet Forwarding Control Protocol sessions reported by the User Plane Function.", "gridPos": {"h": 5, "w": 6, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max(pfcp_sessions_active)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "PFCP peers", "description": "Active PFCP peers. The accepted topology has one SMF/UPF association.", "gridPos": {"h": 5, "w": 6, "x": 18, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max(pfcp_peers_active)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 6, "type": "table", "title": "Per-UE operational contract", "description": "One row per selected fixed UE ordinal. Success is the current source-bound probe result; RX/TX are rates on the UE TUN interface.", "gridPos": {"h": 10, "w": 24, "x": 0, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "cn5g_ue_user_plane_probe_success{ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}", "format": "table", "instant": true},
+        {"refId": "B", "expr": "max by (ordinal) (cn5g_ue_user_plane_probe_duration_seconds{ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"})", "format": "table", "instant": true},
+        {"refId": "C", "expr": "sum by (ordinal) (rate(cn5g_ue_tun_packets_total{direction=\"rx\",ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}[2m]))", "format": "table", "instant": true},
+        {"refId": "D", "expr": "sum by (ordinal) (rate(cn5g_ue_tun_packets_total{direction=\"tx\",ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}[2m]))", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "joinByField", "options": {"byField": "ordinal", "mode": "outer"}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "instance": true, "job": true}, "indexByName": {"ordinal": 0, "dnn": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5}, "renameByName": {"ordinal": "UE ordinal", "dnn": "DNN", "Value #A": "Probe", "Value #B": "Duration", "Value #C": "TUN RX", "Value #D": "TUN TX"}}}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Probe"}, "properties": [{"id": "mappings", "value": [{"type": "value", "options": {"0": {"text": "FAILED", "color": "red"}, "1": {"text": "PASS", "color": "green"}}}]}]},
+        {"matcher": {"id": "byName", "options": "Duration"}, "properties": [{"id": "unit", "value": "s"}, {"id": "decimals", "value": 3}]},
+        {"matcher": {"id": "byRegexp", "options": "TUN (RX|TX)"}, "properties": [{"id": "unit", "value": "pps"}, {"id": "decimals", "value": 2}]}
+      ]},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false}}
+    },
+    {
+      "id": 7, "type": "table", "title": "DNN comparison", "description": "Compares target count, successful probes, mean probe duration, and aggregate TUN rates for internet and enterprise.", "gridPos": {"h": 9, "w": 24, "x": 0, "y": 19},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "count by (dnn) (cn5g_ue_user_plane_probe_success{dnn=~\"$dnn\"})", "format": "table", "instant": true},
+        {"refId": "B", "expr": "sum by (dnn) (cn5g_ue_user_plane_probe_success{dnn=~\"$dnn\"})", "format": "table", "instant": true},
+        {"refId": "C", "expr": "avg by (dnn) (cn5g_ue_user_plane_probe_duration_seconds{dnn=~\"$dnn\"})", "format": "table", "instant": true},
+        {"refId": "D", "expr": "sum by (dnn) (rate(cn5g_ue_tun_packets_total{dnn=~\"$dnn\",direction=\"rx\"}[2m]))", "format": "table", "instant": true},
+        {"refId": "E", "expr": "sum by (dnn) (rate(cn5g_ue_tun_packets_total{dnn=~\"$dnn\",direction=\"tx\"}[2m]))", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "joinByField", "options": {"byField": "dnn", "mode": "outer"}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true}, "indexByName": {"dnn": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4, "Value #E": 5}, "renameByName": {"dnn": "DNN", "Value #A": "Expected targets", "Value #B": "Successful probes", "Value #C": "Mean duration", "Value #D": "TUN RX", "Value #E": "TUN TX"}}}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Mean duration"}, "properties": [{"id": "unit", "value": "s"}, {"id": "decimals", "value": 3}]},
+        {"matcher": {"id": "byRegexp", "options": "TUN (RX|TX)"}, "properties": [{"id": "unit", "value": "pps"}, {"id": "decimals", "value": 2}]}
+      ]},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false}}
+    },
+    {
+      "id": 8, "type": "state-timeline", "title": "Per-UE user-plane state", "description": "Timeline of successful (1) or failed (0) source-bound endpoint probes for selected ordinals and DNNs.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "cn5g_ue_user_plane_probe_success{ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}", "legendFormat": "UE {{ordinal}} / {{dnn}}"}],
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "FAILED", "color": "red"}, "1": {"text": "PASS", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"mergeValues": true, "showValue": "always", "rowHeight": 0.8, "legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Probe duration", "description": "End-to-end synthetic HTTP probe duration, not registration or PDU-session establishment latency.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "cn5g_ue_user_plane_probe_duration_seconds{ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}", "legendFormat": "UE {{ordinal}} / {{dnn}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "decimals": 3}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "UE TUN packet rate", "description": "Receive and transmit packet rates derived from monotonic TUN counters. This is packet activity, not throughput in bits per second.", "gridPos": {"h": 10, "w": 16, "x": 0, "y": 37},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "rate(cn5g_ue_tun_packets_total{ordinal=~\"$ue_ordinal\",dnn=~\"$dnn\"}[2m])", "legendFormat": "UE {{ordinal}} / {{dnn}} / {{direction}}"}],
+      "fieldConfig": {"defaults": {"unit": "pps", "min": 0}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Control and session gauges", "description": "AMF, RAN, and PFCP session state on one shared count axis.", "gridPos": {"h": 10, "w": 8, "x": 16, "y": 37},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "max(amf_session)", "legendFormat": "AMF sessions"},
+        {"refId": "B", "expr": "max(ran_ue)", "legendFormat": "RAN UEs"},
+        {"refId": "C", "expr": "max(pfcp_sessions_active)", "legendFormat": "PFCP sessions"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 0}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    }
   ]
 }

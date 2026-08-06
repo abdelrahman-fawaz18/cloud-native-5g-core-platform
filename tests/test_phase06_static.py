@@ -187,22 +187,118 @@ class Phase06StaticTests(unittest.TestCase):
         dashboard_paths = sorted((OBS_CHART / "files" / "dashboards").glob("*.json"))
         self.assertEqual(len(dashboard_paths), 4)
         uids = set()
+        titles = set()
         for path in dashboard_paths:
             dashboard = json.loads(path.read_text(encoding="utf-8"))
             uids.add(dashboard["uid"])
+            titles.add(dashboard["title"])
             self.assertIn("phase-06", dashboard["tags"])
-            self.assertGreaterEqual(len(dashboard["panels"]), 2)
+            self.assertFalse(dashboard["editable"])
+            self.assertEqual(dashboard["refresh"], "30s")
+            self.assertGreaterEqual(len(dashboard["panels"]), 10)
+            self.assertEqual(len(dashboard["links"]), 4)
+            self.assertEqual(dashboard["panels"][0]["type"], "text")
+            serialized = json.dumps(dashboard).lower()
+            self.assertNotIn("imsi", serialized)
+            self.assertNotIn("supi", serialized)
+            for panel in dashboard["panels"]:
+                self.assertTrue(panel.get("title"))
+                if panel["type"] != "text":
+                    self.assertTrue(panel.get("description"), panel["title"])
+                for target in panel.get("targets", []):
+                    if panel.get("datasource", {}).get("type") == "loki":
+                        self.assertLessEqual(target.get("maxLines", 500), 500)
         self.assertEqual(len(uids), 4)
+        self.assertEqual(titles, {
+            "CN5G Service Overview",
+            "CN5G Control, Sessions, UEs, And DNNs",
+            "CN5G Kubernetes Resources",
+            "CN5G Logs And Troubleshooting",
+        })
         grafana = self.object_named(
             self.obs, "ConfigMap", "cn5g-observability-grafana-provisioning"
         )["data"]
         self.assertIn("uid: prometheus", grafana["datasources.yaml"])
         self.assertIn("uid: loki", grafana["datasources.yaml"])
+        self.assertIn("maxLines: 500", grafana["datasources.yaml"])
         loki = self.object_named(
             self.obs, "ConfigMap", "cn5g-observability-loki-config"
         )["data"]["loki.yaml"]
         self.assertIn("retention_period: 24h", loki)
         self.assertIn("reporting_enabled: false", loki)
+
+    def test_stage_a_dashboards_cover_the_accepted_operational_contract(self):
+        dashboards = {
+            json.loads(path.read_text(encoding="utf-8"))["uid"]:
+                json.loads(path.read_text(encoding="utf-8"))
+            for path in (OBS_CHART / "files" / "dashboards").glob("*.json")
+        }
+        required_panels = {
+            "cn5g-platform": {
+                "Core workload readiness", "Telemetry targets", "Active alerts",
+                "Registered UEs", "PFCP sessions", "User-plane paths",
+                "Network-function health matrix",
+                "Memory pressure relative to limits", "CPU relative to requests",
+                "Last OOM terminations", "Recent warnings and errors by component",
+            },
+            "cn5g-5g-service": {
+                "Per-UE operational contract", "DNN comparison",
+                "Per-UE user-plane state", "Probe duration", "UE TUN packet rate",
+            },
+            "cn5g-kubernetes": {
+                "Workload replica contract", "Memory / limit", "CPU / request",
+                "CPU / limit", "Working-set memory",
+                "Required Prometheus targets", "Prometheus scrape duration",
+            },
+            "cn5g-logs": {
+                "Warning and error rate by component", "Selected core logs",
+                "Registration, authentication, and NAS security signals",
+                "PFCP, PDU-session, and GTP-U signals", "Kubernetes Events",
+                "Observability pipeline logs",
+            },
+        }
+        for uid, panel_titles in required_panels.items():
+            observed = {panel["title"] for panel in dashboards[uid]["panels"]}
+            self.assertTrue(panel_titles <= observed, uid)
+        variables = {
+            uid: {item["name"] for item in dashboard["templating"]["list"]}
+            for uid, dashboard in dashboards.items()
+        }
+        self.assertEqual(variables["cn5g-5g-service"], {"ue_ordinal", "dnn"})
+        self.assertEqual(variables["cn5g-kubernetes"], {"namespace", "component"})
+        self.assertEqual(variables["cn5g-logs"], {"component", "severity"})
+        service_json = json.dumps(dashboards["cn5g-5g-service"])
+        self.assertIn('ordinal=~\\"$ue_ordinal\\"', service_json)
+        self.assertIn('dnn=~\\"$dnn\\"', service_json)
+        self.assertIn("Cross-DNN", service_json)
+        resource_json = json.dumps(dashboards["cn5g-kubernetes"])
+        self.assertIn("kube_pod_container_resource_limits", resource_json)
+        self.assertIn("kube_pod_container_resource_requests", resource_json)
+        self.assertIn("scrape_duration_seconds", resource_json)
+
+    def test_grafana_runtime_is_hardened_for_interactive_dashboard_use(self):
+        deployment = self.object_named(
+            self.obs, "Deployment", "cn5g-observability-grafana"
+        )
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["resources"]["requests"]["memory"], "192Mi")
+        self.assertEqual(container["resources"]["limits"]["memory"], "768Mi")
+        env = {item["name"]: item["value"] for item in container["env"]}
+        self.assertEqual(env["GF_PLUGINS_PREINSTALL_DISABLED"], "true")
+        for setting in (
+            "GF_ANALYTICS_REPORTING_ENABLED",
+            "GF_ANALYTICS_CHECK_FOR_UPDATES",
+            "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES",
+            "GF_PLUGINS_PREINSTALL_AUTO_UPDATE",
+            "GF_PLUGINS_PLUGIN_ADMIN_ENABLED",
+        ):
+            self.assertEqual(env[setting], "false")
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        self.assertEqual(
+            deployment["spec"]["template"]["metadata"]["annotations"]
+            ["cn5g.io/config-revision"],
+            "2",
+        )
 
     def test_alloy_is_api_based_and_strictly_project_scoped(self):
         alloy = self.object_named(
@@ -229,9 +325,19 @@ class Phase06StaticTests(unittest.TestCase):
             "phase06_uninstall=pass", "phase06_destroy=pass",
             "--address 127.0.0.1", "phase05-lab.sh repair-sessions",
             "--rollback-on-failure", "alert-exercise|open5gs-",
+            "verify-grafana-soak", "grafana_soak_baseline=recorded",
+            "grafana_interactive_soak=pass", "minimum_duration_seconds=1800",
+            "runtime_plugin_installation=disabled",
+            "rollback-hardening", "dashboard_hardening_rollback=pass",
+            "telemetry_pvc_identity=preserved",
+            "phase06_core_overlay=already-active upgrade=skipped",
+            "Grafana soak state target is unsafe",
+            'rm -f -- "$grafana_soak_state_file" "$hardening_state_file"',
+            'count({__name__=~"cn5g_ue_.*"})',
         ):
             self.assertIn(expected, self.lifecycle)
         self.assertNotIn("--atomic", self.lifecycle)
+        self.assertNotIn("/api/v1/series", self.lifecycle)
         for forbidden in (
             "docker system prune", "docker network prune", "docker volume prune",
             "kubectl delete namespace --all", "helm uninstall --all", "rm -rf /",

@@ -23,6 +23,7 @@ Phase-specific extensions:
 
 - [Phase 6 observability architecture](architecture/phase-06-observability.md)
 - [Phase 6 observability runbook](runbooks/phase-06-observability.md)
+- [Observability dashboard evolution plan](architecture/observability-dashboard-evolution-plan.md)
 - [ADR-0005 observability stack decision](adr/0005-observability-stack.md)
 
 Because this is a long-form reference, it can be read in parts:
@@ -2944,11 +2945,12 @@ until it can identify the exact release-owned boundary.
 
 ### 32.7 Accepted runtime evidence
 
-The final 2026-08-05 acceptance state was:
+The original 2026-08-05 Phase 6 acceptance and the 2026-08-06 Stage A
+hardening acceptance produced this final state:
 
 | Check | Result |
 | --- | --- |
-| Helm | core revision 12 deployed; observability revision 2 deployed |
+| Helm | core Phase 6 overlay active; observability revision 3 deployed |
 | Kubernetes | four observability Deployments and two StatefulSets Ready; zero final restarts |
 | Storage | Prometheus and Loki PVCs Bound at 2 GiB each |
 | Scraping | 14 active targets; 13/13 required targets healthy; five UE targets |
@@ -2956,7 +2958,8 @@ The final 2026-08-05 acceptance state was:
 | End-to-end probe | five of five UE probes successful |
 | Cardinality | 20 custom UE series, maximum 30 |
 | Logs | recent project streams returned from Loki |
-| Grafana | two data sources and four dashboards provisioned |
+| Grafana | two data sources; four Git-controlled dashboards with 48 panels; 192 MiB request and 768 MiB limit |
+| Interactive stability | 2,568 seconds; same Pod; zero restart increase; 473.2 MiB peak below the 80% ceiling |
 | Alerts | target-down, UE mismatch, and user-plane failure each fired and resolved |
 | Regression | full Phase 5 five-UE/two-DNN validator passed |
 
@@ -2973,6 +2976,8 @@ captured after acceptance; its raw local data remains ignored by Git.
 | kube-state-metrics never became Ready | health paths were assigned to the wrong listener ports | startup uses `/healthz` on metrics; readiness uses `/readyz` on telemetry |
 | Prometheus rejected the exercise target | Prometheus 3 required an explicit protocol for the intentionally minimal text endpoint | declare the Prometheus text fallback scrape protocol |
 | first observability install rolled back | readiness failure was correctly enforced by rollback-on-failure | preserve the exact failed workload evidence, fix the chart, and rerun without deleting PVCs |
+| dashboard port-forward lost its backend | Grafana was OOMKilled at the original 384 MiB limit while serving interactive queries | bound log results, disable runtime plugin work, adopt the measured 192/768 MiB contract, and require an identity/restart/memory soak |
+| cardinality check reported 40 after session repair | the unbounded Prometheus series inventory included retained historical UE Pod identities | gate the currently active UE telemetry vector while retaining history for investigation |
 
 These are useful Kubernetes lessons: longer timeouts do not repair a wrong
 endpoint; retained logs require current-state correlation; and automatic Helm

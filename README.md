@@ -270,6 +270,15 @@ Runtime acceptance verified:
 - two Bound 2 GiB telemetry claims, zero final observability restarts, and the
   complete Phase 5 regression gate still passing.
 
+The accepted pre-Phase-7 hardening upgrade reorganizes those four dashboards
+into 48 operational panels with bounded UE/DNN filters, normalized Kubernetes
+pressure, OOM/restart and scrape evidence, procedure-focused logs, Events, and
+cross-dashboard navigation. Grafana now uses a measured 192 MiB request and
+768 MiB limit with runtime plugin preinstallation/update behavior disabled.
+A 2,568-second interactive soak kept the same Pod with zero restart increase
+and peaked at 473.2 MiB, below the enforced 80% ceiling. These figures describe
+this local topology and are not production sizing guidance.
+
 Grafana remains cluster-internal and is exposed only by an explicit loopback
 port-forward. The [Phase 6 architecture](docs/architecture/phase-06-observability.md),
 [runbook](docs/runbooks/phase-06-observability.md), and [sanitized validation

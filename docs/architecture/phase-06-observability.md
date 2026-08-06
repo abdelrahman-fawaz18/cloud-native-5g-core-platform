@@ -103,6 +103,66 @@ same views without manual UI configuration.
 Grafana remains a ClusterIP Service. It is exposed only through an explicit
 temporary port-forward bound to `127.0.0.1:13000`.
 
+### Pre-Phase-7 Grafana Hardening And Dashboard Model
+
+Interactive use after the original Phase 6 acceptance exposed a real resource
+boundary: the Grafana container was terminated as `OOMKilled` (Out Of Memory)
+at its original 384 MiB limit. Retained cAdvisor samples showed a working-set
+peak of approximately 341 MiB before termination and approximately 153 MiB
+after restart. The port-forward then exited because its backend process had
+stopped; the port-forward itself did not cause the failure.
+
+The accepted Stage A change raises the Grafana scheduling request from
+96 MiB to 192 MiB and the test limit from 384 MiB to 768 MiB. It also disables
+default plugin preinstallation, automatic preinstalled-plugin updates, plugin
+administration in the user interface, version checks, and anonymous reporting.
+This keeps the runtime aligned with the immutable, provisioned deployment
+model. Loki-backed dashboard queries are capped at 500 lines and default to a
+short time range to limit interactive query load.
+
+The values were not accepted merely because they rendered and deployed. The
+lifecycle recorded the exact Grafana Pod identity and restart count when the
+dashboard was opened. The separate acceptance gate required:
+
+- the same Grafana Pod identity;
+- zero restart-count increase;
+- no runtime plugin installation/update activity;
+- a 30-minute peak below 80% of the 768 MiB limit; and
+- the complete Phase 5, Phase 6, and alert-lifecycle validations.
+
+The accepted run lasted 2,568 seconds. Grafana kept the same Pod identity,
+added zero restarts, attempted no runtime plugin installation/update, and
+peaked at 473.2 MiB—61.6% of its 768 MiB limit and below the 80% ceiling. The
+complete Phase 5 and Phase 6 validators and all three alert lifecycles passed.
+
+The cardinality gate evaluates the currently active UE telemetry vector. It
+does not mistake retained time-series history from a replaced UE Pod for live
+label growth; historical series remain available for post-event investigation.
+
+The four dashboards now follow a general-to-specific investigation path:
+
+```mermaid
+flowchart TD
+    O["CN5G Service Overview\nIs the service operating?"]
+    F["Control, Sessions, UEs, And DNNs\nWhich 5G contract is affected?"]
+    K["Kubernetes Resources\nIs desired state or pressure the cause?"]
+    L["Logs And Troubleshooting\nWhat happened and when?"]
+    O --> F
+    O --> K
+    F --> L
+    K --> L
+```
+
+The Service Overview correlates workload availability, telemetry targets,
+active alerts, AMF sessions, PFCP sessions, user-plane probes, resource
+pressure, restarts, and recent warning/error volume. The 5G dashboard adds a
+bounded table for ordinals `0` through `4` and compares the `internet` and
+`enterprise` Data Network Names (DNNs). The Kubernetes dashboard normalizes
+CPU and memory against declared requests and limits. The log dashboard uses
+component and message filters, bounded procedure views, and Kubernetes Event
+correlation. No Phase 7 performance or Phase 8 recovery number is inserted
+before its experiment produces real evidence.
+
 ### Loki And LogQL
 
 Loki is a log store optimized around a small label index. It indexes stream
@@ -224,8 +284,8 @@ or security certification.
 ## Runtime Acceptance Results
 
 Phase 6 was accepted on 2026-08-05 against the five-UE, two-DNN Phase 5
-baseline. The final state was the core Helm release at revision 12 and the
-independent observability release at revision 2.
+baseline. That original acceptance state was core Helm revision 12 and
+independent observability revision 2.
 
 | Acceptance area | Measured result |
 | --- | --- |
@@ -238,6 +298,11 @@ independent observability release at revision 2.
 | Logs | Loki returned recent entries from the project namespaces during acceptance |
 | Grafana | Exactly two provisioned data sources and four provisioned dashboards |
 | Alerts | Three scenarios each fired and resolved; zero exercise alerts remained firing |
+
+The scoped Stage A upgrade was accepted on 2026-08-06 as observability
+revision 3 without reapplying the already-active core overlay. It preserved
+both telemetry claims, passed the same functional and alert gates, and added
+the measured 2,568-second Grafana stability result documented above.
 | Regression boundary | The complete five-UE/two-DNN Phase 5 validator passed after the telemetry overlay |
 
 ```mermaid

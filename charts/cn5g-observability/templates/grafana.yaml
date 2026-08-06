@@ -26,6 +26,8 @@ data:
         access: proxy
         url: http://{{ include "cn5g-observability.componentName" (dict "root" . "component" "loki") }}:3100
         editable: false
+        jsonData:
+          maxLines: 500
   dashboards.yaml: |-
     apiVersion: 1
     providers:
@@ -81,7 +83,7 @@ spec:
       labels:
         {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "grafana") | nindent 8 }}
       annotations:
-        cn5g.io/config-revision: "1"
+        cn5g.io/config-revision: "2"
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
@@ -100,6 +102,10 @@ spec:
             - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "false"}
             - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
             - {name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false"}
+            - {name: GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES, value: "false"}
+            - {name: GF_PLUGINS_PREINSTALL_DISABLED, value: "true"}
+            - {name: GF_PLUGINS_PREINSTALL_AUTO_UPDATE, value: "false"}
+            - {name: GF_PLUGINS_PLUGIN_ADMIN_ENABLED, value: "false"}
             - {name: GF_SECURITY_ADMIN_USER__FILE, value: /run/secrets/admin-user}
             - {name: GF_SECURITY_ADMIN_PASSWORD__FILE, value: /run/secrets/admin-password}
           ports:

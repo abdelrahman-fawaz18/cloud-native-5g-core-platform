@@ -1,11 +1,104 @@
 {
-  "uid":"cn5g-kubernetes","title":"CN5G Kubernetes Resources","tags":["cn5g","kubernetes","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
-  "time":{"from":"now-30m","to":"now"},
-  "panels":[
-    {"id":1,"type":"stat","title":"Ready pods","gridPos":{"h":8,"w":8,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_pod_status_ready{namespace=~\"cn5g|cn5g-observability\",condition=\"true\"})","legendFormat":"pods"}]},
-    {"id":2,"type":"stat","title":"Pod restarts","gridPos":{"h":8,"w":8,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_pod_container_status_restarts_total{namespace=~\"cn5g|cn5g-observability\"})","legendFormat":"restarts"}]},
-    {"id":3,"type":"stat","title":"Bound PVCs","gridPos":{"h":8,"w":8,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_persistentvolumeclaim_status_phase{namespace=~\"cn5g|cn5g-observability\",phase=\"Bound\"})","legendFormat":"PVCs"}]},
-    {"id":4,"type":"timeseries","title":"Container CPU by component","gridPos":{"h":10,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (namespace,container) (rate(container_cpu_usage_seconds_total{namespace=~\"cn5g|cn5g-observability\",container!=\"\"}[2m]))","legendFormat":"{{namespace}} / {{container}}"}]},
-    {"id":5,"type":"timeseries","title":"Container memory by component","gridPos":{"h":10,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (namespace,container) (container_memory_working_set_bytes{namespace=~\"cn5g|cn5g-observability\",container!=\"\"})","legendFormat":"{{namespace}} / {{container}}"}]}
+  "uid": "cn5g-kubernetes",
+  "title": "CN5G Kubernetes Resources",
+  "description": "Kubernetes desired state, restarts, termination reasons, resource pressure, persistent claims, and Prometheus scrape health for both project namespaces.",
+  "tags": ["cn5g", "kubernetes", "phase-06", "operations"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 2,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-30m", "to": "now"},
+  "links": [
+    {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false}
+  ],
+  "templating": {"list": [
+    {"name": "namespace", "label": "Namespace", "type": "custom", "query": "cn5g,cn5g-observability", "includeAll": true, "allValue": "cn5g|cn5g-observability", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}, "options": []},
+    {"name": "component", "label": "Container", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": {"query": "label_values(kube_pod_container_info{namespace=~\"$namespace\",container!=\"\"}, container)", "refId": "StandardVariableQuery"}, "refresh": 1, "sort": 1, "includeAll": true, "allValue": ".*", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}}
+  ]},
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "Desired state and pressure", "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "### Kubernetes explains *where* a service symptom lives\nUse readiness and replica panels to identify unavailable workloads, then compare current use with declared **requests** (scheduler reservation) and **limits** (enforced ceiling). A value above 100% of a CPU request is allowed; approaching a memory limit is dangerous because memory cannot be throttled and may end in `OOMKilled`. This single-node kind lab demonstrates orchestration behavior, not high availability."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Ready Pods", "description": "Pods whose Ready condition is true in the selected project namespaces.", "gridPos": {"h": 5, "w": 5, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kube_pod_status_ready{namespace=~\"$namespace\",condition=\"true\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "continuous-GrYlRd"}}, "overrides": []}, "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Unavailable replicas", "description": "Desired Deployment replicas minus available replicas. Healthy value is zero.", "gridPos": {"h": 5, "w": 5, "x": 5, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kube_deployment_spec_replicas{namespace=~\"$namespace\"} - kube_deployment_status_replicas_available{namespace=~\"$namespace\"}) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []}, "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Restarts in 1 hour", "description": "Increase in container restart counters over the last hour; healthy steady state is zero.", "gridPos": {"h": 5, "w": 5, "x": 10, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\",container=~\"$component\"}[1h])) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []}, "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Latest OOM terminations", "description": "Selected containers whose latest termination reason is Out Of Memory (OOMKilled).", "gridPos": {"h": 5, "w": 4, "x": 15, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kube_pod_container_status_last_terminated_reason{namespace=~\"$namespace\",container=~\"$component\",reason=\"OOMKilled\"}) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []}, "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 6, "type": "stat", "title": "Bound PVCs", "description": "PersistentVolumeClaims in Bound state. This reports claim state, not filesystem utilization.", "gridPos": {"h": 5, "w": 5, "x": 19, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(kube_persistentvolumeclaim_status_phase{namespace=~\"$namespace\",phase=\"Bound\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "continuous-GrYlRd"}}, "overrides": []}, "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 7, "type": "table", "title": "Workload replica contract", "description": "Desired and ready/available replica state for Deployments and StatefulSets in the selected namespaces.", "gridPos": {"h": 11, "w": 24, "x": 0, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "label_replace(kube_deployment_spec_replicas{namespace=~\"$namespace\"},\"workload\",\"$1\",\"deployment\",\"(.*)\") or label_replace(kube_statefulset_replicas{namespace=~\"$namespace\"},\"workload\",\"$1\",\"statefulset\",\"(.*)\")", "format": "table", "instant": true},
+        {"refId": "B", "expr": "label_replace(kube_deployment_status_replicas_available{namespace=~\"$namespace\"},\"workload\",\"$1\",\"deployment\",\"(.*)\") or label_replace(kube_statefulset_status_replicas_ready{namespace=~\"$namespace\"},\"workload\",\"$1\",\"statefulset\",\"(.*)\")", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "joinByField", "options": {"byField": "workload", "mode": "outer"}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true, "deployment": true, "statefulset": true}, "indexByName": {"namespace": 0, "workload": 1, "Value #A": 2, "Value #B": 3}, "renameByName": {"namespace": "Namespace", "workload": "Workload", "Value #A": "Desired", "Value #B": "Ready"}}}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false}}
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Memory / limit", "description": "Working-set bytes divided by the declared memory limit for selected containers. Series without a limit are intentionally absent.", "gridPos": {"h": 10, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (namespace,container) (container_memory_working_set_bytes{namespace=~\"$namespace\",container=~\"$component\"}) / sum by (namespace,container) (kube_pod_container_resource_limits{namespace=~\"$namespace\",container=~\"$component\",resource=\"memory\",unit=\"byte\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.7}, {"color": "red", "value": 0.85}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "CPU / request", "description": "Observed CPU cores divided by scheduler requests. Values above 100% mean the workload is bursting above its reserved CPU.", "gridPos": {"h": 10, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (namespace,container) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container=~\"$component\"}[2m])) / sum by (namespace,container) (kube_pod_container_resource_requests{namespace=~\"$namespace\",container=~\"$component\",resource=\"cpu\",unit=\"core\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "CPU / limit", "description": "Observed CPU cores divided by the enforced CPU limit. CPU is throttled near the ceiling rather than OOM-killed.", "gridPos": {"h": 10, "w": 12, "x": 0, "y": 30},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (namespace,container) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container=~\"$component\"}[2m])) / sum by (namespace,container) (kube_pod_container_resource_limits{namespace=~\"$namespace\",container=~\"$component\",resource=\"cpu\",unit=\"core\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.7}, {"color": "red", "value": 0.9}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "Working-set memory", "description": "Raw current memory by selected namespace and container, retained for capacity context alongside normalized pressure.", "gridPos": {"h": 10, "w": 12, "x": 12, "y": 30},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum by (namespace,container) (container_memory_working_set_bytes{namespace=~\"$namespace\",container=~\"$component\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 12, "type": "state-timeline", "title": "Required Prometheus targets", "description": "Scrape state for the metrics pipeline, four native Open5GS endpoints, five UE probes, and Kubernetes exporters.", "gridPos": {"h": 11, "w": 12, "x": 0, "y": 40},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "up{job=~\"prometheus|open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor\"}", "legendFormat": "{{job}} / {{instance}}"}],
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}, "overrides": []},
+      "options": {"mergeValues": true, "showValue": "always", "rowHeight": 0.7, "legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 13, "type": "timeseries", "title": "Prometheus scrape duration", "description": "Maximum scrape duration by job. Rising values can indicate target, API, or collector pressure before a target becomes Down.", "gridPos": {"h": 11, "w": 12, "x": 12, "y": 40},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "max by (job) (scrape_duration_seconds{job=~\"prometheus|open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor\"})", "legendFormat": "{{job}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "decimals": 3}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "mean", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    }
   ]
 }

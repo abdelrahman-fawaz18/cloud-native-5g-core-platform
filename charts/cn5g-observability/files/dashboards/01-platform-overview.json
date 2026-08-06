@@ -1,12 +1,135 @@
 {
-  "uid":"cn5g-platform","title":"CN5G Platform Overview","tags":["cn5g","phase-06"],"timezone":"browser","schemaVersion":42,"version":1,"refresh":"15s",
-  "time":{"from":"now-30m","to":"now"},
-  "panels":[
-    {"id":1,"type":"stat","title":"Prometheus targets up","gridPos":{"h":8,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(up)","legendFormat":"targets"}]},
-    {"id":2,"type":"stat","title":"CN5G deployments available","gridPos":{"h":8,"w":6,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(kube_deployment_status_replicas_available{namespace=\"cn5g\"})","legendFormat":"replicas"}]},
-    {"id":3,"type":"stat","title":"Active alerts","gridPos":{"h":8,"w":6,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(ALERTS{alertstate=\"firing\"}) or vector(0)","legendFormat":"alerts"}]},
-    {"id":4,"type":"stat","title":"Ready UE probes","gridPos":{"h":8,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum(cn5g_ue_user_plane_probe_success)","legendFormat":"UEs"}]},
-    {"id":5,"type":"timeseries","title":"CN5G container CPU","gridPos":{"h":9,"w":12,"x":0,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"cn5g\",container!=\"\"}[2m]))","legendFormat":"{{pod}}"}]},
-    {"id":6,"type":"timeseries","title":"CN5G container memory","gridPos":{"h":9,"w":12,"x":12,"y":8},"datasource":{"type":"prometheus","uid":"prometheus"},"targets":[{"refId":"A","expr":"sum by (pod) (container_memory_working_set_bytes{namespace=\"cn5g\",container!=\"\"})","legendFormat":"{{pod}}"}]}
+  "uid": "cn5g-platform",
+  "title": "CN5G Service Overview",
+  "description": "Operational entry point for the local five-UE, two-DNN CN5G platform. Status is derived from live Kubernetes, Open5GS, Prometheus, UE-probe, and Loki telemetry.",
+  "tags": ["cn5g", "phase-06", "operations"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 2,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-30m", "to": "now"},
+  "links": [
+    {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false}
+  ],
+  "templating": {"list": []},
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "How to read this dashboard", "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "### Service first, infrastructure second\nThe top row answers whether the **local five-UE/two-DNN service contract** is operating. Continue downward to locate workload, resource, scrape, or log symptoms. Green means the measured contract is currently satisfied; it is not a production availability claim. Performance and recovery results remain intentionally absent until Phases 7 and 8 measure them."}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Core workload readiness", "description": "Available Deployment replicas plus Ready StatefulSet replicas divided by their desired replicas in namespace cn5g.", "gridPos": {"h": 5, "w": 4, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "(sum(kube_deployment_status_replicas_available{namespace=\"cn5g\"}) + sum(kube_statefulset_status_replicas_ready{namespace=\"cn5g\"})) / (sum(kube_deployment_spec_replicas{namespace=\"cn5g\"}) + sum(kube_statefulset_replicas{namespace=\"cn5g\"}))", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.8}, {"color": "green", "value": 1}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Telemetry targets", "description": "Fraction of required Prometheus targets that are currently scrapeable.", "gridPos": {"h": 5, "w": 4, "x": 4, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(up{job=~\"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor|prometheus\"}) / count(up{job=~\"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor|prometheus\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.9}, {"color": "green", "value": 1}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Active alerts", "description": "Prometheus alerts currently in the firing state.", "gridPos": {"h": 5, "w": 4, "x": 8, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(ALERTS{alertstate=\"firing\"}) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Registered UEs", "description": "Current AMF session gauge. The accepted Phase 5 contract is five concurrent UEs.", "gridPos": {"h": 5, "w": 4, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "max(amf_session)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 6, "type": "stat", "title": "PFCP sessions", "description": "Active Packet Forwarding Control Protocol sessions reported by the UPF; expected value is five.", "gridPos": {"h": 5, "w": 4, "x": 16, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "max(pfcp_sessions_active)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 7, "type": "stat", "title": "User-plane paths", "description": "Successful source-bound UE probes across both DNNs; expected value is five.", "gridPos": {"h": 5, "w": 4, "x": 20, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(cn5g_ue_user_plane_probe_success)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 8, "type": "table", "title": "Network-function health matrix", "description": "Correlates desired/ready replicas, restarts, native scrape state, CPU, and memory. Components without a native metrics endpoint intentionally have an empty scrape field.", "gridPos": {"h": 13, "w": 24, "x": 0, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "label_replace(kube_deployment_spec_replicas{namespace=\"cn5g\"},\"component\",\"$1\",\"deployment\",\"cn5g-(.*)\") or label_replace(kube_statefulset_replicas{namespace=\"cn5g\"},\"component\",\"$1\",\"statefulset\",\"cn5g-(.*)\")", "format": "table", "instant": true},
+        {"refId": "B", "expr": "label_replace(kube_deployment_status_replicas_available{namespace=\"cn5g\"},\"component\",\"$1\",\"deployment\",\"cn5g-(.*)\") or label_replace(kube_statefulset_status_replicas_ready{namespace=\"cn5g\"},\"component\",\"$1\",\"statefulset\",\"cn5g-(.*)\")", "format": "table", "instant": true},
+        {"refId": "C", "expr": "sum by (component) (label_replace(kube_pod_container_status_restarts_total{namespace=\"cn5g\",container!~\"POD|user-plane-metrics|subscriber-init\"},\"component\",\"$1\",\"container\",\"(.*)\"))", "format": "table", "instant": true},
+        {"refId": "D", "expr": "max by (component) (label_replace(up{job=~\"open5gs-(amf|pcf|smf|upf)\"},\"component\",\"$1\",\"job\",\"open5gs-(.*)\"))", "format": "table", "instant": true},
+        {"refId": "E", "expr": "sum by (component) (label_replace(container_memory_working_set_bytes{namespace=\"cn5g\",container!=\"\",container!~\"POD|user-plane-metrics|subscriber-init\"},\"component\",\"$1\",\"container\",\"(.*)\"))", "format": "table", "instant": true},
+        {"refId": "F", "expr": "sum by (component) (label_replace(rate(container_cpu_usage_seconds_total{namespace=\"cn5g\",container!=\"\",container!~\"POD|user-plane-metrics|subscriber-init\"}[2m]),\"component\",\"$1\",\"container\",\"(.*)\"))", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "joinByField", "options": {"byField": "component", "mode": "outer"}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true, "deployment": true, "namespace": true, "statefulset": true, "job": true}, "indexByName": {"component": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4, "Value #F": 5, "Value #E": 6}, "renameByName": {"component": "Component", "Value #A": "Desired", "Value #B": "Ready", "Value #C": "Restarts", "Value #D": "Scrape", "Value #E": "Memory", "Value #F": "CPU"}}}
+      ],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": [
+        {"matcher": {"id": "byName", "options": "Memory"}, "properties": [{"id": "unit", "value": "bytes"}]},
+        {"matcher": {"id": "byName", "options": "CPU"}, "properties": [{"id": "unit", "value": "cores"}]},
+        {
+          "matcher": {"id": "byName", "options": "Scrape"},
+          "properties": [
+            {
+              "id": "mappings",
+              "value": [
+                {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}
+              ]
+            }
+          ]
+        }
+      ]},
+      "options": {"showHeader": true, "cellHeight": "sm", "footer": {"show": false}}
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Memory pressure relative to limits", "description": "Working-set memory divided by declared container memory limits. Only containers with a declared limit are included.", "gridPos": {"h": 10, "w": 12, "x": 0, "y": 22},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (namespace,container) (container_memory_working_set_bytes{namespace=~\"cn5g|cn5g-observability\",container!=\"\"}) / sum by (namespace,container) (kube_pod_container_resource_limits{namespace=~\"cn5g|cn5g-observability\",resource=\"memory\",unit=\"byte\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.7}, {"color": "red", "value": 0.85}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "CPU relative to requests", "description": "Observed CPU cores divided by the Kubernetes scheduling request; values above 100% are allowed and show burst above the reserved baseline.", "gridPos": {"h": 10, "w": 12, "x": 12, "y": 22},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum by (namespace,container) (rate(container_cpu_usage_seconds_total{namespace=~\"cn5g|cn5g-observability\",container!=\"\"}[2m])) / sum by (namespace,container) (kube_pod_container_resource_requests{namespace=~\"cn5g|cn5g-observability\",resource=\"cpu\",unit=\"core\"})", "legendFormat": "{{namespace}} / {{container}}"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 11, "type": "stat", "title": "Container restarts", "description": "Total restart count in both project namespaces. Investigate any increase in Kubernetes Resources and Logs.", "gridPos": {"h": 7, "w": 6, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(kube_pod_container_status_restarts_total{namespace=~\"cn5g|cn5g-observability\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 12, "type": "stat", "title": "Last OOM terminations", "description": "Containers whose latest recorded termination reason is Out Of Memory (OOMKilled). This remains visible until that Pod identity is replaced.", "gridPos": {"h": 7, "w": 6, "x": 6, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(kube_pod_container_status_last_terminated_reason{namespace=~\"cn5g|cn5g-observability\",reason=\"OOMKilled\"}) or vector(0)", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 13, "type": "timeseries", "title": "Recent warnings and errors by component", "description": "Five-minute rolling count of warning, error, failure, rejection, or denial terms in core logs. Use the Logs dashboard for context.", "gridPos": {"h": 7, "w": 12, "x": 12, "y": 32},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [{"refId": "A", "expr": "sum by (component) (count_over_time({namespace=\"cn5g\"} |~ `(?i)warn|error|fail|reject|denied` [5m]))", "queryType": "range", "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"]}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    }
   ]
 }

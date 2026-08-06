@@ -42,7 +42,9 @@ targets, and support a dry-run or read-only mode where practical.
   Grafana Secret, applies the bounded UE probe overlay, installs Prometheus,
   Grafana, Loki, Alloy, and kube-state-metrics, validates live metrics/logs/
   dashboards/cardinality, tests three alert firing-resolution cycles, exposes
-  Grafana only on loopback, and performs exact retained-data cleanup.
+  Grafana only on loopback, records and verifies the explicit 30-minute
+  Grafana stability gate, provides an identity-checked observability-only
+  hardening rollback, and performs exact retained-data cleanup.
 - `validate-phase05.sh`: reports each ordinal, Pod, DNN, tunnel address,
   registration/session result, intended endpoint result, and cross-DNN denial.
   It also verifies five database records, unique addresses and F-SEIDs,
@@ -262,8 +264,34 @@ healthy Prometheus targets, five UE targets, five AMF and PFCP sessions, five
 successful user-plane probes, 20 bounded custom series, recent Loki data, two
 Grafana data sources, and four dashboards.
 
+The 2026-08-06 Stage A upgrade retained the active core overlay, upgraded only
+the observability release to revision 3, and passed a 2,568-second interactive
+Grafana gate with zero restart increase and a 473.2 MiB peak under the 768 MiB
+limit.
+
 Use `sudo ./scripts/phase06-lab.sh grafana` for a temporary
-`127.0.0.1:13000` port-forward. Normal uninstall restores the Phase 5 core
+`127.0.0.1:13000` port-forward. That command also records the exact Grafana Pod
+identity, restart count, and start time for the Stage A stability gate. Keep
+the terminal open for at least 30 minutes while inspecting the four dashboards,
+then stop the forward with `Ctrl+C` and run:
+
+```bash
+sudo ./scripts/phase06-lab.sh verify-grafana-soak
+```
+
+The verifier rejects a shorter observation, a replaced Pod, any restart
+increase, memory use at or above 80% of the 768 MiB limit, and runtime plugin
+installation/update activity. A pass consumes the temporary soak and rollback
+checkpoints. If a future hardening attempt is unhealthy, the scoped recovery
+is:
+
+```bash
+sudo ./scripts/phase06-lab.sh rollback-hardening --confirm
+```
+
+That action rolls back only the observability release to its recorded prior
+revision, checks that the Prometheus and Loki PVC identities were preserved,
+and revalidates the Phase 5 service. Normal uninstall restores the Phase 5 core
 overlay and preserves Phase 6 PVCs/credential. A separate confirmed `destroy`
 action removes only those verified retained objects after the release is
 absent.

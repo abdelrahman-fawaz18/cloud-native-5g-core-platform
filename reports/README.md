@@ -147,10 +147,11 @@ session-collision symptom.
 
 ## Phase 6 Observability Validation Summary
 
-Validated on 2026-08-05 against the accepted five-UE/two-DNN release. The
-accepted state was core Helm revision 12 and independent
-`cn5g-observability` revision 2. Component images and immutable registry
-identities are recorded in `versions/phase-06.env`.
+The original Phase 6 release was validated on 2026-08-05 against the accepted
+five-UE/two-DNN release. The pre-Phase-7 dashboard and Grafana hardening was
+then accepted on 2026-08-06 as independent `cn5g-observability` revision 3;
+the already-active core overlay was not upgraded. Component images and
+immutable registry identities are recorded in `versions/phase-06.env`.
 
 ### Method
 
@@ -167,7 +168,7 @@ probe counts, cardinality, and remaining alerts.
 
 | Gate | Accepted evidence |
 | --- | --- |
-| Releases | Core revision 12 and observability revision 2 both `deployed` |
+| Releases | Core Phase 6 overlay remained active; observability revision 3 `deployed` after the scoped hardening upgrade |
 | Workloads | Four observability Deployments and two StatefulSets Ready with zero restarts |
 | Storage | Prometheus and Loki each retained one Bound 2 GiB claim |
 | Scraping | 14 active targets; all 13 required non-exercise targets healthy; five UE targets |
@@ -175,7 +176,7 @@ probe counts, cardinality, and remaining alerts.
 | User plane | five source-bound UE probes successful through the accepted session paths |
 | Cardinality | 20 custom UE series, below the enforced limit of 30 |
 | Logs | recent project log entries queryable from Loki |
-| Dashboards | exactly two provisioned data sources and four provisioned dashboards |
+| Dashboards | exactly two provisioned data sources and four enhanced Git-controlled dashboards containing 48 panels total |
 | Alerts | target-down, UE-count mismatch, and user-plane failure each fired and resolved |
 | Steady state | zero exercise alerts firing after the lifecycle test |
 | Regression | complete Phase 5 registration, session, DNN isolation, and user-plane validation passed |
@@ -184,9 +185,31 @@ The install ended with `phase06_install=pass`; the repeated validator ended
 with `phase06_validation=pass`; and the alert exercise ended with
 `phase06_alert_lifecycle=pass tested=3`.
 
+### Pre-Phase-7 Dashboard Hardening Result
+
+The change disabled default runtime plugin preinstallation/update behavior,
+retained the read-only root filesystem, bounded Loki results at 500 lines, and
+raised Grafana from a 96 MiB request/384 MiB limit to a 192 MiB request/768
+MiB limit. The four dashboards were reorganized into Service Overview; Control,
+Sessions, UEs, And DNNs; Kubernetes Resources; and Logs And Troubleshooting.
+They add bounded per-UE and DNN tables, component health, normalized resource
+pressure, OOM/restart evidence, scrape behavior, procedure logs, Events,
+variables, descriptions, and cross-dashboard navigation without adding a
+subscriber identifier label.
+
+The automated interactive gate ran for 2,568 seconds with the same Grafana Pod
+identity, zero restart increase, no runtime plugin-install/update activity, and
+a 473.2 MiB peak. The peak was 61.6% of the 768 MiB limit, below the enforced
+80% ceiling. The Phase 5 and Phase 6 validators, current 20-series cardinality
+gate, and all three alert firing-resolution cycles passed. Repository-wide
+regression finished with 149 tests passing, strict Helm lint, deterministic
+rendering, valid dashboard JSON, and a clean privacy scan.
+
 ### Limitations
 
 This is a 24-hour, single-node, single-replica local observability baseline.
+The accepted 192/768 MiB Grafana settings are evidence for this topology, not
+general sizing guidance.
 It does not prove backend high availability, external alert delivery,
 long-term retention, production access control, throughput, packet loss, or
 capacity. The UE probe duration is an operational reachability signal, not a

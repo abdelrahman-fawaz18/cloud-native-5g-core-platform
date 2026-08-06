@@ -2,7 +2,7 @@
 
 ## Status And Purpose
 
-Status: planned; implementation requires explicit approval.
+Status: Stage A accepted on 2026-08-06; Stage B awaits measured Phase 7 data.
 
 This document defines how the CN5G dashboards will evolve from the accepted
 Phase 6 operational baseline into a realistic monitoring, performance, and
@@ -43,10 +43,10 @@ Phase 6 currently provisions four dashboards:
 
 | Dashboard | Current purpose | Current panel count |
 | --- | --- | ---: |
-| CN5G Platform Overview | release and target health plus aggregate CPU/memory | 6 |
-| CN5G Control and User Plane | AMF/PFCP state and UE probe behavior | 7 |
-| CN5G Kubernetes Resources | readiness, restarts, claims, CPU, and memory | 5 |
-| CN5G Project Logs | recent logs, log volume, and warnings/errors | 3 |
+| CN5G Service Overview | service contract, telemetry, alerts, NF health, pressure, and errors | 13 |
+| CN5G Control, Sessions, UEs, And DNNs | AMF/PFCP state, bounded per-UE evidence, and DNN comparison | 11 |
+| CN5G Kubernetes Resources | workload contract, normalized pressure, OOMs, targets, and scrape cost | 13 |
+| CN5G Logs And Troubleshooting | bounded procedure, component, severity, Event, and pipeline views | 11 |
 
 The accepted data path is:
 
@@ -75,8 +75,8 @@ dashboard load:
 | --- | --- |
 | Symptom | the loopback `kubectl port-forward` exited while a dashboard was open |
 | Kubernetes cause | Grafana container terminated as `OOMKilled`, exit code 137 |
-| Current memory limit | 384 MiB |
-| Current state | Kubernetes restarted Grafana; the Pod became Ready with restart count 1 |
+| Original memory limit | 384 MiB |
+| State before remediation | Kubernetes restarted Grafana; the Pod became Ready with restart count 1 |
 | Last activity before termination | project-log dashboard queries were being processed |
 
 The port-forward did not cause the failure. It lost its backend when the
@@ -125,9 +125,11 @@ Planned work:
    the soak; and
 8. record the accepted request, limit, peak, query scope, and limitations.
 
-The candidate memory values are not accepted until measured. If the soak peak
-is too close to the limit, the values or query design must be revised before
-acceptance.
+The candidate was accepted on 2026-08-06. The 2,568-second interactive soak
+kept the same Grafana Pod with zero restart increase and measured a 473.2 MiB
+peak under the 768 MiB limit. That is 61.6% of the limit and remains below the
+80% acceptance ceiling. The complete Phase 5/6 validators and all three alert
+firing-resolution cycles also passed.
 
 ### A.2 Create A Strong Service Overview
 
@@ -384,7 +386,7 @@ stack could hide an individual failure.
 
 ## Implementation Sequence For Stage A
 
-After explicit approval, implement Stage A in this order:
+After explicit approval, Stage A was implemented in this order:
 
 1. capture the current Grafana Pod identity, restart/OOM state, resources, and
    relevant Prometheus memory history;
@@ -408,7 +410,7 @@ After explicit approval, implement Stage A in this order:
 
 ## Stage A Acceptance Gate
 
-Stage A is accepted only when all of the following pass:
+Stage A passed the following acceptance gate on 2026-08-06:
 
 - Grafana remains Ready with zero new restarts during the interactive soak;
 - background plugin installation/update activity is disabled or explicitly
@@ -459,6 +461,6 @@ rollback.
 
 ## Approval Boundary
 
-Creating this plan does not authorize a Helm change, Grafana configuration
-change, dashboard JSON modification, cluster mutation, or resource-limit
-change. Explicit approval is required before Stage A implementation begins.
+Stage A was implemented only after explicit approval and is now accepted.
+Stage B remains blocked until Phase 7 defines and executes its traffic model,
+measurement windows, repetitions, failure criteria, and reviewed evidence.

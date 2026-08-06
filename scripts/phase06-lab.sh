@@ -18,7 +18,15 @@ Actions:
                   Kubernetes metrics, telecom metrics, and cardinality.
   test-alerts     Prove firing and resolution for three actionable alert
                   rules using the bounded controlled exercise metric.
-  grafana         Expose Grafana only at http://127.0.0.1:13000 until Ctrl-C.
+  grafana         Record a stability-soak baseline, then expose Grafana only
+                  at http://127.0.0.1:13000 until Ctrl-C.
+  verify-grafana-soak
+                  After at least 30 minutes of interactive dashboard use,
+                  verify no Grafana restart/OOM and at least 20% memory
+                  headroom under the accepted 768 MiB limit.
+  rollback-hardening --confirm
+                  Roll back only the observability release to the revision
+                  recorded before Stage A, preserving both telemetry PVCs.
   status          Show only the two project releases and their scoped objects.
   uninstall --confirm
                   Remove the observability release and UE probe sidecars while
@@ -34,8 +42,8 @@ EOF
 
 action=${1:-}
 case "$action" in
-  preflight|prepare-secret|install|validate|test-alerts|grafana|status) ;;
-  uninstall|destroy)
+  preflight|prepare-secret|install|validate|test-alerts|grafana|verify-grafana-soak|status) ;;
+  rollback-hardening|uninstall|destroy)
     if [[ ${2:-} != "--confirm" ]]; then
       printf 'error: %s requires --confirm\n' "$action" >&2
       exit 2
@@ -57,8 +65,8 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
   exit 3
 fi
 
-for required_command in awk base64 chmod cmp curl df docker helm jq kubectl \
-  mktemp openssl python3 rm sed sha256sum sleep stat; do
+for required_command in awk base64 chmod cmp curl date df docker grep helm jq \
+  kubectl mktemp openssl python3 rm sed sha256sum sleep stat; do
   command -v "$required_command" >/dev/null 2>&1 || {
     printf 'error: required command is unavailable: %s\n' "$required_command" >&2
     exit 4
@@ -87,6 +95,8 @@ credential_dir="$project_root/artifacts/secrets/phase-06"
 admin_user_file="$credential_dir/admin-user"
 admin_password_file="$credential_dir/admin-password"
 state_file="$project_root/artifacts/kubernetes/phase-06.state"
+grafana_soak_state_file="$project_root/artifacts/kubernetes/phase-06-grafana-soak.json"
+hardening_state_file="$project_root/artifacts/kubernetes/phase-06-dashboard-hardening.json"
 
 core_kubectl=(kubectl --kubeconfig "$kubeconfig" --namespace "$core_namespace")
 obs_kubectl=(kubectl --kubeconfig "$kubeconfig" --namespace "$namespace")
@@ -291,8 +301,51 @@ server_dry_run() {
   printf 'server_side_phase06_dry_run=pass\n'
 }
 
+capture_hardening_rollback_state() {
+  local mode revision prometheus_uid loki_uid
+  if [[ -e $hardening_state_file || -L $hardening_state_file ]]; then
+    [[ -f $hardening_state_file && ! -L $hardening_state_file ]] || {
+      printf 'error: dashboard-hardening rollback state is unsafe\n' >&2
+      return 1
+    }
+    mode=$(stat -c '%a' "$hardening_state_file")
+    [[ $mode == 600 ]] || {
+      printf 'error: dashboard-hardening rollback state must use mode 600\n' >&2
+      return 1
+    }
+    jq -e '
+      (.observability_revision | type == "number") and
+      (.prometheus_pvc_uid | type == "string" and length > 0) and
+      (.loki_pvc_uid | type == "string" and length > 0)
+    ' "$hardening_state_file" >/dev/null || {
+      printf 'error: dashboard-hardening rollback state is invalid\n' >&2
+      return 1
+    }
+    printf 'dashboard_hardening_rollback_state=already-recorded\n'
+    return 0
+  fi
+  if ! helm --kubeconfig "$kubeconfig" --namespace "$namespace" \
+    status "$release" >/dev/null 2>&1; then
+    printf 'dashboard_hardening_rollback_state=not-required-fresh-install\n'
+    return 0
+  fi
+  revision=$(helm --kubeconfig "$kubeconfig" --namespace "$namespace" \
+    status "$release" --output json | jq -er '.version')
+  prometheus_uid=$("${obs_kubectl[@]}" get pvc "data-${release}-prometheus-0" \
+    --output json | jq -er '.metadata.uid')
+  loki_uid=$("${obs_kubectl[@]}" get pvc "data-${release}-loki-0" \
+    --output json | jq -er '.metadata.uid')
+  jq -n --argjson revision "$revision" --arg prometheus_uid "$prometheus_uid" \
+    --arg loki_uid "$loki_uid" \
+    '{observability_revision:$revision,prometheus_pvc_uid:$prometheus_uid,loki_pvc_uid:$loki_uid}' \
+    > "$hardening_state_file"
+  chown "$SUDO_UID:$SUDO_GID" "$hardening_state_file"
+  chmod 0600 "$hardening_state_file"
+  printf 'dashboard_hardening_rollback_state=recorded observability_revision=%s\n' "$revision"
+}
+
 install_phase06() {
-  local core_revision
+  local core_revision phase06_enabled
   require_cluster
   verify_resource_budget
   verify_phase05_release
@@ -306,12 +359,19 @@ install_phase06() {
     chown "$SUDO_UID:$SUDO_GID" "$state_file"
     chmod 0600 "$state_file"
   fi
-  helm upgrade "$core_release" "$core_chart" --kubeconfig "$kubeconfig" \
-    --namespace "$core_namespace" --values "$core_phase05_values" \
-    --values "$core_phase06_values" --wait=watcher --timeout 15m
+  phase06_enabled=$(helm --kubeconfig "$kubeconfig" --namespace "$core_namespace" \
+    get values "$core_release" --all --output json | jq -r '.phase06.enabled // false')
+  if [[ $phase06_enabled == true ]]; then
+    printf 'phase06_core_overlay=already-active upgrade=skipped\n'
+  else
+    helm upgrade "$core_release" "$core_chart" --kubeconfig "$kubeconfig" \
+      --namespace "$core_namespace" --values "$core_phase05_values" \
+      --values "$core_phase06_values" --wait=watcher --timeout 15m
+  fi
   "${core_kubectl[@]}" rollout status statefulset/cn5g-ue --timeout=600s
   printf 'phase06_ue_probe_rollout=pass replicas=5\n'
   "$script_dir/phase05-lab.sh" validate
+  capture_hardening_rollback_state
   helm upgrade --install "$release" "$observability_chart" \
     --kubeconfig "$kubeconfig" --namespace "$namespace" \
     --create-namespace --rollback-on-failure --wait=watcher --timeout 15m
@@ -414,10 +474,12 @@ validate_prometheus() {
   query_json=$(prometheus_query 'count(container_memory_working_set_bytes{namespace="cn5g",container!=""})')
   jq -e '.data.result | length == 1' <<<"$query_json" >/dev/null
   printf 'kubernetes_node_container_metrics=pass\n'
-  series_count=$(curl --fail --silent --show-error --get \
-    --data-urlencode 'match[]={__name__=~"cn5g_ue_.*"}' \
-    http://127.0.0.1:19090/api/v1/series | jq -er '.data | length')
-  if (( series_count > 30 )); then
+  query_json=$(prometheus_query 'count({__name__=~"cn5g_ue_.*"})')
+  series_count=$(jq -er '
+    .data.result |
+    if length == 1 then .[0].value[1] else error("missing current UE series count") end
+  ' <<<"$query_json")
+  if ! awk -v observed="$series_count" 'BEGIN {exit !(observed+0 <= 30)}'; then
     printf 'error: UE custom metric cardinality exceeds bound: %s\n' "$series_count" >&2
     return 1
   fi
@@ -445,7 +507,23 @@ validate_loki() {
 }
 
 validate_grafana() {
-  local dashboards datasources
+  local dashboards datasources deployment_json
+  deployment_json=$("${obs_kubectl[@]}" get deployment "${release}-grafana" --output json)
+  jq -e '
+    .spec.template.spec.containers[0] as $container |
+    ($container.resources.requests.memory == "192Mi") and
+    ($container.resources.limits.memory == "768Mi") and
+    ([
+      "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES",
+      "GF_PLUGINS_PREINSTALL_AUTO_UPDATE",
+      "GF_PLUGINS_PLUGIN_ADMIN_ENABLED"
+    ] - [$container.env[] | select(.value == "false") | .name] | length == 0) and
+    ([$container.env[] | select(.name == "GF_PLUGINS_PREINSTALL_DISABLED" and .value == "true")] | length == 1)
+  ' <<<"$deployment_json" >/dev/null || {
+    printf 'error: Grafana hardening or resource contract is not active\n' >&2
+    return 1
+  }
+  printf 'grafana_runtime_hardening=pass request_memory=192Mi limit_memory=768Mi runtime_plugin_installation=disabled\n'
   grafana_netrc=$(mktemp)
   chmod 0600 "$grafana_netrc"
   printf 'machine 127.0.0.1 login %s password %s\n' \
@@ -457,14 +535,151 @@ validate_grafana() {
   jq -e '([.[].uid] | sort) == ["loki", "prometheus"]' <<<"$datasources" >/dev/null
   dashboards=$(curl --fail --silent --show-error --netrc-file "$grafana_netrc" \
     'http://127.0.0.1:13000/api/search?type=dash-db')
-  [[ $(jq '[.[] | select(.tags | index("phase-06"))] | length' <<<"$dashboards") == 4 ]] || {
-    printf 'error: expected four provisioned Phase 6 dashboards\n' >&2
+  jq -e '
+    ([.[] | select(.tags | index("phase-06")) | .title] | sort) == [
+      "CN5G Control, Sessions, UEs, And DNNs",
+      "CN5G Kubernetes Resources",
+      "CN5G Logs And Troubleshooting",
+      "CN5G Service Overview"
+    ]
+  ' <<<"$dashboards" >/dev/null || {
+    printf 'error: expected the four exact provisioned Stage A dashboards\n' >&2
     return 1
   }
   rm -f -- "$grafana_netrc"
   grafana_netrc=''
   printf 'grafana_provisioning=pass datasources=2 dashboards=4\n'
   stop_forward
+}
+
+prepare_grafana_soak() {
+  local pod_json pod_count pod_name pod_uid restart_count started_epoch
+  verify_observability_release
+  if [[ -L $grafana_soak_state_file || \
+        ( -e $grafana_soak_state_file && ! -f $grafana_soak_state_file ) ]]; then
+    printf 'error: Grafana soak state target is unsafe\n' >&2
+    return 1
+  fi
+  pod_json=$("${obs_kubectl[@]}" get pods \
+    --selector app.kubernetes.io/component=grafana --output json)
+  pod_count=$(jq -er '.items | length' <<<"$pod_json")
+  [[ $pod_count == 1 ]] || {
+    printf 'error: expected exactly one Grafana Pod before the soak\n' >&2
+    return 1
+  }
+  pod_name=$(jq -er '.items[0].metadata.name' <<<"$pod_json")
+  pod_uid=$(jq -er '.items[0].metadata.uid' <<<"$pod_json")
+  restart_count=$(jq -er '.items[0].status.containerStatuses[0].restartCount' <<<"$pod_json")
+  started_epoch=$(date +%s)
+  jq -n \
+    --argjson started_epoch "$started_epoch" \
+    --arg pod_name "$pod_name" \
+    --arg pod_uid "$pod_uid" \
+    --argjson restart_count "$restart_count" \
+    '{started_epoch:$started_epoch,pod_name:$pod_name,pod_uid:$pod_uid,restart_count:$restart_count}' \
+    > "$grafana_soak_state_file"
+  chown "$SUDO_UID:$SUDO_GID" "$grafana_soak_state_file"
+  chmod 0600 "$grafana_soak_state_file"
+  printf 'grafana_soak_baseline=recorded pod=%s restart_count=%s minimum_duration_seconds=1800\n' \
+    "$pod_name" "$restart_count"
+}
+
+verify_grafana_soak() {
+  local mode started_epoch pod_name pod_uid baseline_restarts now elapsed pod_json
+  local current_uid current_restarts query_json peak_bytes limit_bytes=805306368
+  local peak_mib log_since recent_logs
+  require_cluster
+  verify_secret
+  verify_observability_release
+  [[ -f $grafana_soak_state_file && ! -L $grafana_soak_state_file ]] || {
+    printf 'error: Grafana soak baseline is absent; start it with the grafana action\n' >&2
+    return 1
+  }
+  mode=$(stat -c '%a' "$grafana_soak_state_file")
+  [[ $mode == 600 ]] || {
+    printf 'error: Grafana soak state must use mode 600\n' >&2
+    return 1
+  }
+  started_epoch=$(jq -er '.started_epoch' "$grafana_soak_state_file")
+  pod_name=$(jq -er '.pod_name' "$grafana_soak_state_file")
+  pod_uid=$(jq -er '.pod_uid' "$grafana_soak_state_file")
+  baseline_restarts=$(jq -er '.restart_count' "$grafana_soak_state_file")
+  now=$(date +%s)
+  elapsed=$((now - started_epoch))
+  if (( elapsed < 1800 )); then
+    printf 'error: Grafana soak is too short: elapsed_seconds=%s required_seconds=1800\n' "$elapsed" >&2
+    return 1
+  fi
+  pod_json=$("${obs_kubectl[@]}" get pod "$pod_name" --output json)
+  current_uid=$(jq -er '.metadata.uid' <<<"$pod_json")
+  current_restarts=$(jq -er '.status.containerStatuses[0].restartCount' <<<"$pod_json")
+  [[ $current_uid == "$pod_uid" ]] || {
+    printf 'error: Grafana Pod identity changed during the soak\n' >&2
+    return 1
+  }
+  [[ $current_restarts == "$baseline_restarts" ]] || {
+    printf 'error: Grafana restarted during the soak: before=%s after=%s\n' \
+      "$baseline_restarts" "$current_restarts" >&2
+    return 1
+  }
+  start_forward "${release}-prometheus" 19090 9090 http://127.0.0.1:19090/-/ready
+  query_json=$(prometheus_query \
+    "max(max_over_time(container_memory_working_set_bytes{namespace=\"$namespace\",pod=\"$pod_name\",container=\"grafana\"}[30m]))")
+  peak_bytes=$(jq -er '.data.result | if length == 1 then .[0].value[1] else error("missing Grafana memory series") end' \
+    <<<"$query_json")
+  stop_forward
+  awk -v peak="$peak_bytes" -v limit="$limit_bytes" 'BEGIN {exit !(peak < limit * 0.80)}' || {
+    printf 'error: Grafana memory headroom is below 20 percent: peak_bytes=%s limit_bytes=%s\n' \
+      "$peak_bytes" "$limit_bytes" >&2
+    return 1
+  }
+  log_since=$(date -u -d "@$started_epoch" '+%Y-%m-%dT%H:%M:%SZ')
+  recent_logs=$("${obs_kubectl[@]}" logs "$pod_name" --container grafana --since-time "$log_since")
+  if grep -Eqi 'Installing plugin|Downloading plugin|Plugin update available' <<<"$recent_logs"; then
+    printf 'error: Grafana attempted runtime plugin installation/update during the soak\n' >&2
+    return 1
+  fi
+  peak_mib=$(awk -v bytes="$peak_bytes" 'BEGIN {printf "%.1f", bytes / 1024 / 1024}')
+  rm -f -- "$grafana_soak_state_file" "$hardening_state_file"
+  printf 'grafana_interactive_soak=pass duration_seconds=%s restarts_delta=0 peak_memory_mib=%s limit_memory_mib=768 headroom=pass\n' \
+    "$elapsed" "$peak_mib"
+}
+
+rollback_hardening() {
+  local mode revision expected_prometheus_uid expected_loki_uid
+  local observed_prometheus_uid observed_loki_uid
+  require_cluster
+  [[ -f $hardening_state_file && ! -L $hardening_state_file ]] || {
+    printf 'error: no verified pre-hardening observability revision is recorded\n' >&2
+    return 1
+  }
+  mode=$(stat -c '%a' "$hardening_state_file")
+  [[ $mode == 600 ]] || {
+    printf 'error: dashboard-hardening rollback state must use mode 600\n' >&2
+    return 1
+  }
+  revision=$(jq -er '.observability_revision' "$hardening_state_file")
+  expected_prometheus_uid=$(jq -er '.prometheus_pvc_uid' "$hardening_state_file")
+  expected_loki_uid=$(jq -er '.loki_pvc_uid' "$hardening_state_file")
+  helm --kubeconfig "$kubeconfig" --namespace "$namespace" rollback \
+    "$release" "$revision" --wait=watcher --timeout 15m
+  verify_observability_release
+  observed_prometheus_uid=$("${obs_kubectl[@]}" get pvc "data-${release}-prometheus-0" \
+    --output json | jq -er '.metadata.uid')
+  observed_loki_uid=$("${obs_kubectl[@]}" get pvc "data-${release}-loki-0" \
+    --output json | jq -er '.metadata.uid')
+  [[ $observed_prometheus_uid == "$expected_prometheus_uid" && \
+     $observed_loki_uid == "$expected_loki_uid" ]] || {
+    printf 'error: a telemetry PVC identity changed during rollback\n' >&2
+    return 1
+  }
+  "$script_dir/phase05-lab.sh" validate
+  rm -f -- "$hardening_state_file"
+  if [[ -f $grafana_soak_state_file && ! -L $grafana_soak_state_file ]]; then
+    rm -f -- "$grafana_soak_state_file"
+  fi
+  printf 'dashboard_hardening_rollback=pass target_revision=%s telemetry_pvc_identity=preserved\n' \
+    "$revision"
 }
 
 validate_phase06() {
@@ -553,6 +768,9 @@ uninstall_phase06() {
     rm -f -- "$state_file"
     printf 'phase06_base_core_revision=%s state=removed\n' "$base_revision"
   fi
+  if [[ -f $grafana_soak_state_file && ! -L $grafana_soak_state_file ]]; then
+    rm -f -- "$grafana_soak_state_file"
+  fi
   printf 'phase06_uninstall=pass persistent_data=retained\n'
 }
 
@@ -595,11 +813,14 @@ case "$action" in
   grafana)
     require_cluster
     verify_secret
+    prepare_grafana_soak
     printf 'grafana_url=http://127.0.0.1:13000\n'
     printf 'grafana_credentials=%s and restricted local password file\n' "$(tr -d '\n' < "$admin_user_file")"
     exec kubectl --kubeconfig "$kubeconfig" --namespace "$namespace" \
       port-forward --address 127.0.0.1 "service/${release}-grafana" 13000:3000
     ;;
+  verify-grafana-soak) verify_grafana_soak ;;
+  rollback-hardening) rollback_hardening ;;
   status)
     require_cluster
     helm --kubeconfig "$kubeconfig" --namespace "$core_namespace" list --filter "^${core_release}$"
