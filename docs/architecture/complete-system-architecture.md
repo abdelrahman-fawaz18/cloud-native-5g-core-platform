@@ -690,17 +690,17 @@ sequenceDiagram
     Note over UE,D: UE application now sends ping
     UE->>G: ICMP echo request enters uesimtun0
     G->>U: Encapsulate original packet in N3 GTP-U UDP/2152
-    U->>U: Decapsulate; source rule chooses table 1060
+    U->>U: Decapsulate, then select source-policy table 1060
     U->>D: Forward plain ICMP over N6 to current Internet endpoint Pod
     D-->>K: ICMP echo reply reaches kind node
     K-->>U: 10.60.0.0/24 return route selects current UPF Pod
     U-->>G: Re-encapsulate reply in GTP-U
     G-->>UE: Deliver simulated-radio downlink to uesimtun0
-    UE-->>UE: ping receives echo reply; TUN RX/TX counters rise
+    UE-->>UE: ping receives echo reply and TUN RX/TX counters rise
     M->>UE: sidecar performs source-bound HTTP probe and reads counters
     M->>M: Prometheus scrapes UE :9101 and NF :9090 metrics
     L->>K: Alloy streams project Pod logs and Events
-    L->>L: Loki stores diagnostic context; Grafana can correlate it
+    L->>L: Loki stores diagnostic context for Grafana correlation
 ```
 
 ### The same process in plain language
