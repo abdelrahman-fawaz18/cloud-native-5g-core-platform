@@ -3050,7 +3050,464 @@ The detailed cross-phase system containing Kubernetes, every 5G function,
 sidecars, Services, ports, address domains, probes, storage, and observability
 is documented separately in the [complete accepted-system architecture](architecture/complete-system-architecture.md).
 
-### 33.1 From functional validation to an experiment
+There are two different acceptance states in this section. The Phase 7
+benchmark campaign, analyzer, reviewed report, and rollback are accepted. The
+post-analysis **fifth Grafana dashboard extension is prepared and statically
+verified but is not yet runtime-accepted**. Its Deployment, scrape target, and
+dashboard descriptions below explain the reviewed candidate implementation;
+they become current-runtime claims only after the controlled observability
+upgrade, full validator, and visual inspection pass. This distinction prevents
+planned dashboard state from being presented as live evidence.
+
+This section is deliberately written in layers. Sections 33.1 through 33.12
+assume no previous Prometheus or Grafana experience. They establish the mental
+model and vocabulary first. Sections 33.13 onward then describe the accepted
+performance implementation, its evidence, and the prepared dashboard extension
+precisely. A reader should not need to infer what a tool does from a command
+name.
+
+### 33.1 The whole phase in plain language
+
+Before Phase 7, the project had already proved that the 5G system **worked**:
+five synthetic User Equipment (UE) instances could register, create Protocol
+Data Unit (PDU) sessions, and exchange traffic through the User Plane Function
+(UPF).
+That is functional validation. It answers “does the required behavior happen?”
+
+Phase 7 asks a different question: **what measurements do we observe when the
+same system carries a precisely declared workload?** To answer that honestly,
+the phase had to control all of the following:
+
+- how many UEs were active;
+- which network path their packets used;
+- how much traffic was offered;
+- how long startup, measurement, and recovery lasted;
+- how many times each condition was repeated;
+- which component resources were observed at the same time; and
+- which evidence was allowed into the final report.
+
+The simplest end-to-end picture is:
+
+```text
+start from a known healthy platform
+  -> activate 1, 3, or 5 UEs
+  -> prove their test traffic will use the 5G tunnel
+  -> generate a fixed, timed workload
+  -> collect traffic, procedure, and resource observations
+  -> repeat the condition three times
+  -> analyze only complete accepted evidence
+  -> restore the normal five-UE platform
+  -> display the reviewed results in Grafana
+```
+
+The dashboard is the final viewing layer. Grafana did not generate the traffic,
+decide whether a run was valid, or calculate the accepted report. Those jobs
+belong to the benchmark runner and deterministic analyzer.
+
+### 33.2 Kubernetes, Helm, Prometheus, and Grafana have different jobs
+
+These four names are often shown together, but they are not interchangeable.
+
+| Technology | Simple meaning | Exact job in this phase | What it does **not** do |
+| --- | --- | --- | --- |
+| Kubernetes | Runs and supervises containers | Runs the 5G Pods, benchmark sidecars, Prometheus, the reviewed-results exporter, and Grafana | It does not design the experiment or interpret a graph |
+| Helm | Installs versioned Kubernetes configuration | Renders the chart templates and applies the temporary Phase 7 overlay or the observability release | It does not replace Kubernetes and it is not a metrics database |
+| Prometheus | Collects and queries numeric measurements | Scrapes metric endpoints, stores timestamped samples, answers Prometheus Query Language (PromQL) queries, and supplied resource observations during the benchmark | It does not render the final dashboards and it does not run `iperf3` |
+| Grafana | Queries data sources and presents visualizations | Asks Prometheus for selected reviewed metrics and displays them in panels | It is not the source of the measurements and is not the Phase 7 analyzer |
+| `iperf3` | Generates measured Transmission Control Protocol (TCP) or User Datagram Protocol (UDP) traffic | Runs as a client beside each UE and as servers beside the two Data Network Name (DNN) endpoints | It does not collect Kubernetes central processing unit (CPU) or memory metrics |
+| Phase 7 analyzer | Validates and reduces raw evidence | Rejects incomplete evidence and produces reviewed JavaScript Object Notation (JSON), comma-separated values (CSV), Scalable Vector Graphics (SVG), and report artifacts | It is not a continuously running cluster service |
+
+An important professional distinction is therefore:
+
+```text
+Kubernetes runs the components.
+Helm declares how those components should be installed.
+Prometheus stores and queries numeric observations.
+Grafana turns query results into human-readable panels.
+```
+
+### 33.3 Minimum Kubernetes and Helm vocabulary
+
+The following terms are enough to understand the Phase 7 deployment boundary.
+
+| Term | Precise meaning | Phase 7 example |
+| --- | --- | --- |
+| Container | An isolated process created from a container image | the `benchmark-client` process running `iperf3` |
+| Pod | Kubernetes' smallest deployable unit; its containers share one network namespace and can share volumes | one UE container and one benchmark-client sidecar |
+| Sidecar | An additional container in the same Pod that supports the main application | the benchmark client beside UERANSIM or benchmark server beside a DNN endpoint |
+| Deployment | A controller for replaceable Pods with a declared replica count | Grafana and the reviewed-results exporter |
+| StatefulSet | A controller that gives Pods stable ordinal identities | `cn5g-ue-0` through `cn5g-ue-4` |
+| Service | A stable virtual network endpoint that selects one or more Pods | Prometheus reaching the reviewed-results exporter on TCP port 8080 |
+| ConfigMap | A Kubernetes object containing non-secret configuration data | the generated reviewed metric text and Grafana dashboard JSON |
+| Secret | A Kubernetes object intended for sensitive values | the pre-created Grafana administrator credentials |
+| Namespace | A Kubernetes application programming interface (API) naming and ownership boundary | `cn5g` for the core and `cn5g-observability` for telemetry |
+| Chart | A Helm package containing templates, default values, and files | `charts/cn5g-observability` |
+| Values | Inputs that control how chart templates render | resource limits, image identities, and scrape intervals |
+| Release | One installed instance of a chart tracked by Helm revisions | `cn5g-observability` |
+| Overlay | An additional values file applied to a known baseline | `values-phase07.yaml`, which temporarily enabled benchmark sidecars |
+| Revision | Helm's numbered record of an install, upgrade, or rollback | used to return to the exact pre-experiment configuration |
+
+Helm performs a client-side rendering step: it combines templates with values
+to produce ordinary Kubernetes objects. Kubernetes then stores their desired
+state and its controllers create the corresponding Pods. A successful Helm
+render proves that the YAML configuration format can be generated; it does not
+by itself prove that the Pods became Ready or that a UE registered.
+
+### 33.4 The 5G path being measured
+
+The relevant 5G terms are:
+
+- **User Equipment (UE):** here, one synthetic mobile device simulated by
+  UERANSIM;
+- **gNodeB (gNB):** the simulated 5G base station used by all active UEs;
+- **User Plane Function (UPF):** the Open5GS function that forwards PDU-session
+  user traffic between the access network and the selected data network;
+- **Data Network Name (DNN):** the requested logical data network, comparable
+  in role to an Access Point Name (APN) in older mobile systems; and
+- **GPRS Tunnelling Protocol User Plane (GTP-U):** the tunnel protocol carrying
+  UE user packets between the gNB and UPF on the N3 reference point;
+- **N3:** the 5G user-plane reference point between the gNB and UPF;
+- **N6:** the reference point between the UPF and data network; and
+- **TUN interface:** a Linux virtual network interface that exchanges Layer 3
+  Internet Protocol (IP) packets with a user-space process; UERANSIM creates
+  the `uesimtun0` TUN interface for the UE session.
+
+In this project the intended benchmark packet path is:
+
+```text
+iperf3 client
+  -> UE's uesimtun0 interface
+  -> UERANSIM UE and gNB
+  -> N3 GTP-U tunnel
+  -> Open5GS UPF
+  -> N6 route
+  -> the UE's assigned DNN iperf3 server
+```
+
+The ordinary Kubernetes Pod interface, usually `eth0`, provides another
+possible route between Pods. That route is useful for ordinary cluster
+communication, but it bypasses `uesimtun0`, the simulated radio path, GTP-U,
+and UPF forwarding. Measuring that shortcut would answer the wrong question.
+
+### 33.5 Why the benchmark uses sidecars
+
+Installing `iperf3` inside the already accepted UERANSIM image would change
+the main UE runtime merely to perform a temporary experiment. Running it from
+an unrelated Pod would not automatically use the UE's tunnel. A sidecar solves
+both problems.
+
+Containers in one Pod share the same Linux network namespace. This means the
+UE container and `benchmark-client` sidecar see the same interfaces, addresses,
+routes, and transport-port space. UERANSIM creates `uesimtun0`; the sidecar can
+bind its client socket to the IP address on that interface without being given
+permission to create or reconfigure the interface.
+
+```mermaid
+flowchart LR
+    subgraph UEPOD["one UE Pod"]
+        UE["UERANSIM UE\ncreates uesimtun0"]
+        CLIENT["benchmark-client\niperf3 and ip tools"]
+        NET["shared Pod network namespace\neth0 plus uesimtun0"]
+        UE --> NET
+        CLIENT --> NET
+    end
+
+    NET -->|"source-bound traffic through uesimtun0"| GNB["UERANSIM gNB"]
+    GNB -->|"N3 GTP-U"| UPF["Open5GS UPF"]
+    UPF --> DNN["assigned DNN Pod\nbenchmark-server sidecar"]
+```
+
+The security boundary is intentionally narrow. Both benchmark sidecars run as
+non-root user/group 65532, drop every Linux capability, disable privilege
+escalation, use a read-only root filesystem, and do not receive a Kubernetes
+API token. They have neither `NET_ADMIN` nor `NET_RAW`, no host mount, and no
+subscriber Secret. A 16 MiB memory-backed `/tmp` is their only writable
+scratch space.
+
+### 33.6 Route enforcement: validating the measurement before traffic starts
+
+The runner first discovers the current UE tunnel address and the current DNN
+endpoint Pod address. It then performs the conceptual equivalent of:
+
+```text
+ip -4 route get <DNN-endpoint-IP> from <UE-session-IP>
+ip -4 rule show
+```
+
+The first command asks the Linux kernel: “if a packet goes to this destination
+and has this source address, which route would you actually select?” The
+runner accepts the answer only when it contains all of these facts:
+
+- the source is the current UE PDU-session address;
+- the output device is `uesimtun0`; and
+- policy-routing table 1000 was selected.
+
+The policy-rule output must independently show that traffic from that UE
+address looks up table 1000. UERANSIM names the table `rt_uesimtun0` inside
+its own container filesystem, but the sidecar has a separate read-only `/etc`.
+Both names refer to the same kernel table number; table 1000 is the portable
+identity visible to the sidecar.
+
+The `iperf3 --bind <UE-session-IP>` option then binds the client socket to that
+source address. Source binding and route inspection are complementary:
+binding selects the source; the policy route proves where packets with that
+source will go. If either check fails, no benchmark traffic begins and the
+condition is evidence of a failed mechanism, not a performance result.
+
+### 33.7 What an experimental condition means
+
+An **experiment** is not simply a command that prints a number. It is a
+controlled comparison in which the changed factor, fixed factors, observations,
+timing, and acceptance rules are declared before results are selected.
+
+| Professional term | Meaning in this project |
+| --- | --- |
+| Independent variable | the factor deliberately changed: 1, 3, or 5 concurrent UEs |
+| Controlled variable | a factor kept fixed: images, topology, Maximum Transmission Unit (MTU) 1400, traffic definition, stream count, timing, and reset method |
+| Dependent variable | an observed result: throughput, loss, jitter, latency, CPU, memory, or restart count |
+| Condition | one complete execution at one UE level within one repetition |
+| Repetition | a fresh execution of the same condition used to expose run-to-run variation |
+| Confounder | an unintended difference that could explain a result, such as stale sessions or host contention |
+| Pilot | a small one-UE execution that validates the mechanism before the full matrix |
+| Matrix | all planned repetition/load combinations: 3 repetitions multiplied by 3 UE levels equals 9 conditions |
+
+The source of truth is the machine-readable
+[`experiment.json`](../benchmarks/phase-07/experiment.json), not an informal
+command history. The runner reads this contract, and the analyzer checks that
+the retained evidence matches it.
+
+### 33.8 Workload direction, offered load, and delivered load
+
+`iperf3` uses a client/server model. The client is beside the UE and the server
+is beside the DNN endpoint.
+
+- **Forward TCP** means client to server: UE-originated traffic toward the DNN.
+  Its offered rate is unbounded, so TCP attempts to use the locally available
+  path. This is the phase's saturation-oriented stage.
+- **Reverse TCP** uses `iperf3 --reverse`: the server sends toward the UE-side
+  client. The offered rate is fixed at 10 Mbit/s per UE. It asks whether the
+  path can deliver that declared service load; it does not search for maximum
+  downlink capacity.
+- **UDP** is sent at 1 Mbit/s per UE. Because User Datagram Protocol (UDP) has
+  no TCP-style congestion control or retransmission, the receiver can directly
+  report delivered rate, loss, and arrival-time variation.
+- **Internet Control Message Protocol (ICMP)** echo requests provide a small
+  reachability and round-trip-time check. They are not a throughput test.
+
+**Offered load** is what the generator asks the path to carry. **Delivered
+throughput** is what the receiver reports it actually received. A 99.96%
+target-attainment ratio means delivered rate divided by the fixed offered rate
+was approximately 0.9996. It does not mean the path was 99.96% utilized or
+that its maximum capacity was discovered.
+
+Each `iperf3` stage discards a three-second warm-up and measures the following
+15 seconds. Warm-up prevents connection startup and initial congestion-window
+behavior from dominating the reported interval. After the condition, the
+runner allows ten seconds of cool-down. A separate 30-second idle baseline
+records the platform without benchmark traffic.
+
+```text
+start stream |--- 3 s omitted ---|------ 15 s measured ------| stop
+condition completes ------------------------------------------|--- 10 s cool-down ---|
+```
+
+One stream runs per active UE. Separate server ports 5201 through 5205 prevent
+simultaneous clients from queuing behind one single-test `iperf3` server
+process.
+
+### 33.9 Prometheus from the ground up
+
+Prometheus is a monitoring system built around **time series**. A time series
+is a stream of samples identified by one metric name and one exact label set.
+Each sample has a timestamp and a numeric value.
+
+For example:
+
+```text
+cn5g_phase07_reviewed_procedure_success_ratio{procedure="registration",ue_level="5"} 1
+```
+
+Read this line from left to right:
+
+- `cn5g_phase07_reviewed_procedure_success_ratio` is the metric name;
+- `procedure="registration"` and `ue_level="5"` are labels, which describe
+  the dimensions of this particular series; and
+- `1` is the current numeric value, meaning a ratio of 1.0, or 100%.
+
+Changing a label value creates a different time series. The otherwise identical
+series with `ue_level="3"` is therefore separate from the five-UE series. This
+dimensional model lets one metric name represent a bounded family of related
+measurements.
+
+Two metric types matter here:
+
+- A **counter** normally increases over the lifetime of the observed process.
+  `container_cpu_usage_seconds_total` is a counter. A raw value tells how much
+  CPU time has accumulated; `rate(...[1m])` estimates how quickly it increased
+  over the last minute.
+- A **gauge** can rise, fall, or remain constant. Memory working set, active
+  sessions, and every `cn5g_phase07_reviewed_*` result are gauges. A reviewed
+  result such as 114.70 Mbit/s describes a completed campaign and should not
+  increase like an event counter.
+
+Prometheus normally uses a **pull model**:
+
+1. an application or exporter exposes metric text at a Hypertext Transfer
+   Protocol (HTTP) endpoint;
+2. Prometheus has that endpoint in a **scrape configuration**;
+3. at every scrape interval, Prometheus sends an HTTP request to the target;
+4. it parses the returned metric samples and attaches target labels such as
+   `job` and `instance`; and
+5. it stores timestamped samples in its time-series database.
+
+In this chart, the global scrape interval is supplied by Helm values and the
+reviewed-results job targets the exporter Service on TCP port 8080. The
+accepted configuration uses a 15-second scrape interval. A **target** is the
+HTTP endpoint being scraped; a **job** is the configured group describing why
+and how one or more targets are scraped. The metric `up{job="phase07-reviewed-results"}`
+is 1 when Prometheus' most recent scrape of that target succeeded and 0 when it
+failed.
+
+Prometheus exposes a query language named **Prometheus Query Language
+(PromQL)**. PromQL selects series by name and labels, calculates rates or
+aggregations, and returns numeric result vectors. It is the query layer between
+stored measurements and Grafana.
+
+The official references are the Prometheus
+[data model](https://prometheus.io/docs/concepts/data_model/),
+[querying basics](https://prometheus.io/docs/prometheus/latest/querying/basics/),
+and [configuration reference](https://prometheus.io/docs/prometheus/latest/configuration/configuration/).
+
+### 33.10 How Prometheus was used during the live experiment
+
+During each accepted condition, the runner opened a loopback-only port-forward
+to Prometheus and called its HTTP range-query API. A **range query** evaluates a
+PromQL expression repeatedly between a start and end timestamp. The runner used
+a five-second query step.
+
+Representative live queries were:
+
+```promql
+sum by (pod, container) (
+  rate(container_cpu_usage_seconds_total{namespace="cn5g",container=~"amf|smf|upf|gnb|ue|data-network|benchmark-client|benchmark-server"}[1m])
+)
+```
+
+```promql
+sum by (pod, container) (
+  container_memory_working_set_bytes{namespace="cn5g",container=~"amf|smf|upf|gnb|ue|data-network|benchmark-client|benchmark-server"}
+)
+```
+
+The CPU expression can be read as follows:
+
+1. select the cumulative container CPU counter in namespace `cn5g`;
+2. keep only the declared component containers using the regular-expression
+   label matcher `=~`;
+3. use `rate(...[1m])` to estimate counter increase per second over a one-minute
+   lookback window; and
+4. sum matching series while preserving the `pod` and `container` labels.
+
+One returned CPU value of 0.5 means approximately half of one logical CPU core
+during that rate window. Kubernetes commonly expresses the same quantity as
+500 millicores, where 1000 millicores equals one CPU core.
+
+The memory query reads a gauge directly and returns bytes. The runner also
+queried restart counters, received/transmitted network-byte rates, Access and
+Mobility Management Function (AMF) sessions, and active Packet Forwarding
+Control Protocol (PFCP) sessions. These responses were saved with each raw
+attempt. Because CPU uses a one-minute rate lookback, it is aligned to the
+condition's query timestamps but necessarily incorporates counter samples from
+before each evaluation instant; it is not a packet-level 15-second profiler.
+
+### 33.11 Grafana from the ground up
+
+Grafana is the presentation and exploration layer. It does not automatically
+discover meaning in a metric and it is not the database of record here. Its
+main concepts are:
+
+| Grafana term | Meaning in this project |
+| --- | --- |
+| Data source | a configured connection to a backend; `Prometheus` supplies metrics and `Loki` supplies logs |
+| Dashboard | one named page that organizes related panels |
+| Panel | one rectangular visualization with a title, query, unit, display type, and optional thresholds |
+| Visualization | how query results are drawn, such as a stat value, bar gauge, or text explanation |
+| Variable | a dashboard-level value substituted into one or more queries; `ue_level` can be 1, 3, or 5 |
+| Instant query | evaluates a PromQL expression at one point in time and returns the latest eligible value per series |
+| Range query | evaluates across a time interval and is appropriate for a line evolving through time |
+| Provisioning | loading data sources and dashboard definitions from files rather than creating them manually in the UI |
+
+The Phase 7 dashboard uses the Prometheus data source. When a panel refreshes,
+the Grafana backend sends the panel's PromQL query to Prometheus and returns the
+result to the Grafana frontend in the browser. The frontend applies the panel's
+unit and visualization configuration and renders it.
+
+```text
+browser -> Grafana -> Prometheus HTTP API -> stored metric samples
+                    <- PromQL result ------
+browser <- formatted panel ----------------
+```
+
+Grafana provisioning is configuration as code. The Helm chart stores data
+source YAML and all five dashboard JSON documents in ConfigMaps. Kubernetes
+mounts them read-only into the Grafana Pod. After the extension is deployed,
+Grafana loads them into the `CN5G Platform` folder. `allowUiUpdates: false`
+prevents a dashboard edited in the user interface (UI)
+from becoming an unreviewed source of truth; durable changes belong in the
+tracked JSON and are delivered through a reviewed Helm upgrade.
+
+The Prometheus data source uses the cluster-internal Service URL and the
+Grafana server performs the proxy request. Grafana itself is a ClusterIP-only
+Service. It is not exposed permanently on the Ubuntu host or local network; an
+operator reaches it through a loopback-bound Kubernetes port-forward.
+
+The official Grafana references are
+[data sources](https://grafana.com/docs/grafana/latest/datasources/),
+[dashboards and panels](https://grafana.com/docs/grafana/latest/visualizations/dashboards/),
+[variables](https://grafana.com/docs/grafana/latest/visualizations/dashboards/variables/),
+and [file provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/).
+
+### 33.12 Live telemetry and reviewed results are two different pipelines
+
+Prometheus appears twice in Phase 7, for two different purposes. Keeping these
+pipelines separate prevents a common misunderstanding.
+
+```mermaid
+flowchart TB
+    subgraph LIVE["A. Live condition measurement"]
+        WORK["running 5G and benchmark containers"] --> CAD["container and Kubernetes metrics"]
+        CAD --> PROM1["Prometheus time series"]
+        PROM1 --> RANGE["range-query JSON saved with raw attempt"]
+        IPERF["iperf3, ping, and UERANSIM logs"] --> RAW["raw attempt evidence"]
+        RANGE --> RAW
+    end
+
+    subgraph REVIEWED["B. Reviewed dashboard publication"]
+        RAW --> ANALYZER["deterministic analyzer"]
+        ANALYZER --> SUMMARY["tracked reviewed summary.json"]
+        SUMMARY --> GENERATOR["reviewed-metrics generator"]
+        GENERATOR --> TEXT["bounded Prometheus metric text"]
+        TEXT --> EXPORTER["restricted static exporter"]
+        EXPORTER --> PROM2["Prometheus scrapes every 15 s"]
+        PROM2 --> GRAFANA["Grafana instant-query panels"]
+    end
+```
+
+Pipeline A records what happened while traffic was running. Its raw `iperf3`
+JSON, ping output, logs, Prometheus responses, and runtime Pod identities remain
+ignored local evidence. The analyzer validates and reduces that evidence.
+
+Pipeline B republishes only the accepted, tracked summary in a form Grafana can
+query consistently. It is needed because the benchmark sidecars disappear
+after rollback and Prometheus retains only 24 hours of live history. Grafana
+must not depend on temporary series that will expire, and manually copying
+numbers into dashboard text would break traceability.
+
+The dashboard is therefore a **projection of reviewed evidence**. It is not a
+live benchmark, a second statistical analyzer, or proof that current traffic
+is running.
+
+### 33.13 From functional validation to an experiment
 
 Phase 5 proved that five UEs could register concurrently, establish unique PDU
 sessions, select two DNNs, reach only their intended endpoints, and recover.
@@ -3067,7 +3524,7 @@ Phase 7 introduced the basic language of an experiment:
 | Dependent variables | throughput, retransmissions, loss, jitter, ICMP round-trip time, procedure time, CPU, memory, and restarts |
 | Repetition | three fresh executions of each UE level |
 | Median | middle of the three condition results; less sensitive to one extreme observation than the mean |
-| Nearest-rank p95 | largest observation when only three repetitions exist; retained but interpreted cautiously |
+| Nearest-rank 95th percentile (p95) | largest observation when only three repetitions exist; retained but interpreted cautiously |
 | Failure | preserved evidence that is excluded from accepted summaries unless the declared contract passed |
 
 The machine-readable contract in
@@ -3075,7 +3532,7 @@ The machine-readable contract in
 is the source of truth. Documentation describes it; the lifecycle and analyzer
 enforce it.
 
-### 33.2 The temporary benchmark boundary
+### 33.14 The temporary benchmark boundary
 
 Phase 7 did not send traffic from an ordinary Pod interface because that would
 bypass the 5G user plane. It temporarily added a restricted **benchmark
@@ -3114,7 +3571,8 @@ process accepts one test at a time and could otherwise serialize the workload.
 
 Both benchmark containers:
 
-- ran as UID/GID 65532 with all Linux capabilities dropped;
+- ran with numeric user identifier (UID) and group identifier (GID) 65532,
+  with all Linux capabilities dropped;
 - used a read-only root filesystem and no Kubernetes API token;
 - mounted only a 16 MiB memory-backed `/tmp` for iperf3 scratch state;
 - had no host mount, subscriber Secret, `NET_ADMIN`, or `NET_RAW`; and
@@ -3124,7 +3582,7 @@ The final rollback removed these sidecars and ports. The local benchmark image
 and reviewed evidence remain, but the accepted runtime is again the Phase 6
 topology.
 
-### 33.3 Route enforcement: proving traffic used 5G
+### 33.15 Route enforcement: proving traffic used 5G
 
 The benchmark destination is also reachable through the Kubernetes Pod
 network. That route would measure kind networking rather than the 5G user
@@ -3146,7 +3604,7 @@ This check prevented a plausible-looking but invalid high throughput number.
 Route enforcement is part of measurement validity, not merely a network
 diagnostic.
 
-### 33.4 Declared workload
+### 33.16 Declared workload
 
 Every accepted condition used one stream per active UE, a three-second iperf3
 omit period, a 15-second measured interval, and ten seconds of cool-down.
@@ -3154,7 +3612,7 @@ The campaign also recorded a 30-second idle baseline.
 
 | Stage | Offered workload | Reported evidence | What it means |
 | --- | --- | --- | --- |
-| ICMP | 10 echo requests per UE at 0.2-second intervals | loss and min/average/max RTT | low-rate reachability and round-trip behavior |
+| ICMP | 10 echo requests per UE at 0.2-second intervals | loss and minimum/average/maximum round-trip time (RTT) | low-rate reachability and round-trip behavior |
 | Forward TCP | unbounded | aggregate/per-UE throughput and retransmissions | local saturation-oriented uplink behavior |
 | Reverse TCP | 10 Mbit/s per UE | delivered rate, target attainment, retransmissions | bounded downlink service-load delivery, not maximum capacity |
 | UDP | 1 Mbit/s per UE | delivered rate, loss, jitter | fixed-rate datagram behavior |
@@ -3166,12 +3624,13 @@ important. Reverse TCP and UDP asked whether the path could deliver a declared
 load. Only unbounded forward TCP attempted to discover local saturation
 behavior.
 
-### 33.5 Independence and the clean-state boundary
+### 33.17 Independence and the clean-state boundary
 
 Early exploratory runs showed that simply scaling UEs down and up did not make
-conditions independent. PFCP, GTP-U, NGAP, address allocation, endpoint Pod
-addresses, and iperf3 processes could survive or change across cycles. The
-accepted runner resets the dependent state before every condition.
+conditions independent. Packet Forwarding Control Protocol (PFCP), GTP-U,
+NG Application Protocol (NGAP), address allocation, endpoint Pod addresses,
+and `iperf3` processes could survive or change across cycles. The accepted
+runner resets the dependent state before every condition.
 
 ```mermaid
 flowchart LR
@@ -3189,7 +3648,9 @@ flowchart LR
     ACCEPT -- No --> KEEP["retain failed attempt and stop safely"]
 ```
 
-DNN Pods restart first because their Pod IPs are replaceable. The UPF starts
+DNN Pods restart first because their Pod IPs are replaceable. In the diagram,
+NRF means Network Repository Function and SCP means Service Communication
+Proxy. The UPF starts
 after them, resolves the current endpoint addresses, and installs those exact
 addresses in fail-closed tables 1060 and 1061. Reversing this order can leave
 the UPF pointing at terminated DNN Pods.
@@ -3199,7 +3660,7 @@ directories; accepted markers prevent accidental reruns, while failed attempts
 remain immutable evidence. A trap restores five UEs when a command fails or
 the operator interrupts the campaign.
 
-### 33.6 Safety gates and evidence chain
+### 33.18 Safety gates and evidence chain
 
 Traffic never began if available host memory was below 3 GiB, Docker free
 space was below 6 GiB, the benchmark image identity differed, a required
@@ -3231,7 +3692,7 @@ procedure logs, and Prometheus samples. Resource series were filtered against
 the Pods that existed during each condition, preventing terminated rollout
 Pods from inflating totals. Two analyzer runs produced byte-identical output.
 
-### 33.7 Failures that improved the method
+### 33.19 Failures that improved the method
 
 Failed attempts were not erased or converted into results:
 
@@ -3248,12 +3709,66 @@ These are experiment-design findings as much as software fixes. A result is
 credible only when the mechanism, state boundary, and failure handling are
 declared and enforced.
 
-### 33.8 Accepted matrix and results
+### 33.20 Accepted matrix and results
 
 The accepted campaign ran three repetitions at each of 1, 3, and 5 concurrent
 UEs—nine conditions total. All registrations and PDU sessions succeeded,
 every traffic stage completed, all UEs retained unique sessions, no accepted
 condition added a container restart, and five UEs were restored afterward.
+
+#### How a raw observation becomes one table cell
+
+The results have two aggregation levels, and confusing them can produce an
+incorrect interpretation:
+
+1. Within one condition, the runner has one traffic result per active UE. It
+   can sum those values for **aggregate throughput**, or sort them and take the
+   middle value for a **per-UE median**.
+2. At one UE level, the campaign has three independent condition results. The
+   analyzer sorts those three results and reports their minimum, median,
+   nearest-rank p95, maximum, and sample standard deviation.
+
+For example, “five-UE forward aggregate median” is not the median throughput
+of five individual UEs. It is the middle of the **three aggregate condition
+throughputs**, where each condition aggregate is the sum of its five concurrent
+UE results.
+
+The statistics used in the report mean:
+
+- **minimum:** the smallest of the three repeated condition values;
+- **median:** the middle value after sorting the three values;
+- **maximum:** the largest value;
+- **nearest-rank p95:** the observation at rank
+  `ceil(0.95 × sample_count)` after sorting; with three repetitions this is
+  rank 3, so p95 equals the maximum; and
+- **sample standard deviation:** the dispersion of the three values around
+  their arithmetic mean, calculated with denominator `n - 1`.
+
+Three repetitions are enough to show that the result varies and to prevent one
+chosen best run from becoming the headline. They are not enough to estimate a
+stable production tail distribution or a narrow confidence interval.
+
+#### Units used in the result tables
+
+- **Mbit/s** means decimal megabits per second: 1 Mbit/s is 1,000,000 delivered
+  bits per second at the layer reported by `iperf3`.
+- **ms** means milliseconds: 1 ms is one thousandth of a second.
+- A **ratio** is dimensionless. Grafana can format ratio 1 as 100%.
+- A **millicore** is one thousandth of a logical CPU core. 515.7 millicores is
+  0.5157 core, not 515.7 cores.
+- **MiB** is a binary mebibyte: 1 MiB is 1,048,576 bytes.
+
+**Jain's fairness index** measures how evenly throughput was divided among
+active UEs:
+
+```text
+J = (sum of all per-UE rates)^2 / (number of UEs × sum of squared per-UE rates)
+```
+
+For positive allocations, 1.0 is perfectly equal and a value approaching
+`1 / number_of_UEs` is increasingly unequal. A high fairness index says the
+observed shares were similar; it does not say the aggregate capacity was high
+or that every application's quality target was met.
 
 | UEs | Forward aggregate median | Forward per-UE median | Jain fairness | Reverse target delivered | Maximum UDP loss | Median ICMP RTT |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3268,11 +3783,42 @@ the median per-UE share fell and median forward retransmissions rose from 233
 at one UE to 729 at three and 1,919 at five. This shows contention in the exact
 local path; it does not identify carrier capacity.
 
+Read the traffic table in this order:
+
+1. The aggregate forward median was 114.70 Mbit/s at one UE, 79.38 Mbit/s at
+   three UEs, and 91.70 Mbit/s at five UEs. It is not monotonic and does not
+   scale with concurrency.
+2. Median per-UE forward throughput fell from 114.70 to 26.19 to 17.61 Mbit/s.
+   More UEs therefore shared a contended local path rather than multiplying its
+   delivered rate.
+3. Fairness stayed near 1.0, so the active UEs received broadly similar shares
+   within each condition even though each share became smaller.
+4. Reverse target delivery stayed at 99.96%, but the reverse test offered only
+   10 Mbit/s per UE. This proves delivery of that bounded load, not the maximum
+   reverse-path rate.
+5. Maximum observed UDP loss was 0% at the declared 1 Mbit/s-per-UE load. It
+   means no UDP loss was reported in these accepted samples, not that future or
+   heavier traffic can never lose packets.
+6. Median ICMP round-trip time happened to be lower at the higher UE levels.
+   With ten pings per UE and three repetitions, that pattern is descriptive;
+   it is not evidence that adding load improves latency.
+
+TCP retransmissions mean TCP sent data again because acknowledgements or loss
+recovery behavior required it. The rising counts support the contention
+reading, but a count alone is not a packet-loss percentage: it is affected by
+the amount of data sent, segment sizing, congestion control, and test duration.
+
 ![Phase 7 registration and PDU-session procedure timing](../benchmarks/phase-07/results/plots/procedures.svg)
 
 Registration and PDU-session success were 100% in every condition. A three-
 sample p95 is the maximum repetition rather than a stable tail estimate, so
 the report keeps it but does not overstate it.
+
+Registration and PDU-session latency came from timestamp pairs in fresh
+UERANSIM startup logs. They are procedure durations in this simulated local
+topology, not radio-interface latency and not an end-user application response
+time. The five-UE registration median of 83 ms, for example, is the median of
+three condition-level median registration durations.
 
 ![Phase 7 five-UE component CPU peaks](../benchmarks/phase-07/results/plots/resources.svg)
 
@@ -3282,7 +3828,14 @@ UPF. The UE/gNB side is the leading bottleneck candidate. The evidence does
 not isolate a single cause; packet-level profiling would be required for that
 stronger conclusion.
 
-### 33.9 Pilot, matrix, analysis, and rollback are different gates
+“Leading bottleneck candidate” is deliberately cautious language. The UE and
+gNB observations were the largest CPU peaks on the tested traffic path while
+per-UE throughput fell and retransmissions rose. That correlation identifies
+where a deeper investigation should start. It does not prove that CPU was
+fully saturated, that one process caused every retransmission, or that the UPF
+could never become a bottleneck under a different traffic model.
+
+### 33.21 Pilot, matrix, analysis, and rollback are different gates
 
 ```text
 preflight -> build/load exact image -> install temporary overlay
@@ -3299,11 +3852,11 @@ preflight -> build/load exact image -> install temporary overlay
 
 The final rollback restored the recorded pre-experiment revision 12
 configuration as Helm revision 16, removed benchmark sidecars and ports,
-preserved the MongoDB PVC identity, repaired all five sessions, and passed the
-full Phase 5 and Phase 6 validators.
+preserved the MongoDB PersistentVolumeClaim (PVC) identity, repaired all five
+sessions, and passed the full Phase 5 and Phase 6 validators.
 The post-Phase-7 host-state snapshot was then captured locally.
 
-### 33.10 What Phase 7 proves—and what it does not
+### 33.22 What Phase 7 proves—and what it does not
 
 Phase 7 proves that the repository can define, execute, interrupt, resume,
 analyze, and roll back a controlled experiment whose traffic is forced through
@@ -3324,3 +3877,470 @@ The compact mental model is: **first prove the route, then reset hidden state,
 then control the workload, retain failures, align telemetry, analyze only a
 complete campaign, and finally prove the platform returns to its accepted
 baseline.**
+
+### 33.23 Turning the accepted report into a reproducible dashboard
+
+The benchmark containers are deliberately absent after rollback, and the raw
+Prometheus history has a 24-hour retention boundary. A dashboard that queried
+only those temporary time series would soon become empty. Copying values by
+hand into panel text would be worse: it would break the evidence chain.
+
+The Stage B extension solves this with a deterministic reviewed-results path:
+
+```mermaid
+flowchart LR
+    RAW["Accepted raw attempts\nignored, retained locally"] --> A["Deterministic analyzer"]
+    A --> S["Tracked summary.json\nreviewed_complete"]
+    S --> G["Metrics generator\nschema and 9-condition checks"]
+    G --> M["556 bounded gauges\ncn5g_phase07_reviewed_*"]
+    M --> E["Restricted exporter Pod\nHTTP 8080"]
+    E -->|"15 s scrape"| P["Prometheus"]
+    P --> D["Performance And Capacity\nGrafana dashboard"]
+```
+
+Every arrow has a specific responsibility:
+
+| Artifact or component | Input | Validation or transformation | Output |
+| --- | --- | --- | --- |
+| `analyze-phase07.py` | ignored raw attempts and accepted markers | verifies hashes, expected attempts, runtime identities, restarts, traffic files, procedure logs, and Prometheus samples | reviewed `summary.json`, CSV files, SVG plots, and report |
+| `generate-phase07-dashboard-metrics.py` | tracked reviewed `summary.json` | validates schema, `reviewed_complete` state, exactly 9 accepted conditions, 3 repetitions, expected UE levels, units, finite values, and label safety | Prometheus text exposition file |
+| ConfigMap | generated metric text included in the Helm chart | gives the file a Kubernetes-managed, non-secret configuration boundary | read-only `/config/metrics` inside the exporter Pod |
+| reviewed-results exporter | ConfigMap file | copies the file into a 2 MiB memory-backed writable directory and serves it unchanged with a minimal HTTP server | `/metrics` on TCP 8080 |
+| Prometheus | HTTP metric text | parses, timestamps, and stores every bounded series on each scrape | queryable `cn5g_phase07_reviewed_*` time series |
+| Grafana | PromQL results from Prometheus | applies units, labels, thresholds, panel types, and dashboard-variable substitution | the human-readable performance dashboard |
+
+The exporter is intentionally simple. It does not recalculate statistics at
+request time and it has no access to raw evidence. Its only job is to make the
+reviewed metric text reachable through Prometheus' normal pull interface.
+
+The exporter is a tiny Deployment in the observability namespace. It receives
+no Kubernetes token, runs as UID/GID 65532, drops all Linux capabilities, has
+a read-only root filesystem, and serves only a generated ConfigMap through a
+2 MiB memory-backed directory. No subscriber identity, Pod identity, raw log,
+or per-packet label enters the metric set.
+
+#### Why completed results are represented as gauges
+
+Consider this generated series:
+
+```text
+cn5g_phase07_reviewed_throughput_bits_per_second{direction="forward",scope="aggregate",statistic="median",ue_level="5"} 91702291.5473689
+```
+
+It says: for the reviewed Phase 7 campaign, at the five-UE level, the median
+across repeated aggregate forward-TCP conditions was approximately 91.70
+Mbit/s. The result can be higher, lower, or replaced in a future separately
+reviewed campaign, so its correct Prometheus type is a gauge.
+
+While the exporter is running, Prometheus scrapes the same reviewed value every
+15 seconds and stores new timestamps with that value. This does **not** mean a
+91.70 Mbit/s flow is running every 15 seconds. It means the exporter continues
+to publish the reviewed result. The metric prefix contains `reviewed` to make
+that semantic boundary explicit.
+
+#### Why there are 556 series and a limit of 600
+
+A Prometheus series is one unique metric-name and label-set combination. The
+generated exposition file contains 556 metric sample lines across campaign,
+traffic, procedure, loss, latency, restart, CPU, and memory families. Examples
+with different `ue_level`, `statistic`, `component`, or `procedure` labels are
+different series.
+
+**Cardinality** is the count of unique time series. High or unbounded
+cardinality consumes memory, storage, and query work. Labels such as a new Pod
+identity on every rollout, a raw packet identifier, or an arbitrary subscriber
+identity can grow without a stable bound. This exporter deliberately uses only
+reviewed finite dimensions such as:
+
+```text
+ue_level = 1 | 3 | 5
+statistic = minimum | median | p95_nearest_rank | maximum | sample_standard_deviation
+procedure = registration | pdu_session
+direction = forward | reverse | udp where applicable
+```
+
+It excludes Pod identity, subscriber identity, per-packet values, and raw log
+content. Static tests require exactly 556 generated series for this accepted
+schema and reject a total above 600. The exact-count test detects missing or
+unexpected data; the upper bound prevents a future change from silently
+turning the exporter into an unbounded series source.
+
+#### Reading a dashboard PromQL query precisely
+
+The **Forward TCP aggregate median** panel uses:
+
+```promql
+cn5g_phase07_reviewed_throughput_bits_per_second{
+  direction="forward",
+  scope="aggregate",
+  statistic="median"
+}
+```
+
+This is an instant-vector selector. It asks Prometheus for the latest sample of
+every series with that metric name and those three exact label values. It does
+not specify `ue_level`, so Prometheus returns the 1-, 3-, and 5-UE series and
+Grafana draws three bars.
+
+The **Registration success** panel uses:
+
+```promql
+cn5g_phase07_reviewed_procedure_success_ratio{
+  procedure="registration",
+  ue_level="$ue_level"
+}
+```
+
+`$ue_level` is Grafana syntax, not PromQL syntax sent literally to Prometheus.
+If the dashboard variable is set to 5, Grafana substitutes `5` and sends a
+selector containing `ue_level="5"`. Changing the drop-down refreshes every
+panel that refers to the variable. Comparison panels that intentionally omit
+`$ue_level` continue to show all three load levels.
+
+The **Median component CPU peak** panel also demonstrates a regular-expression
+matcher:
+
+```promql
+cn5g_phase07_reviewed_component_cpu_peak_cores{
+  ue_level="$ue_level",
+  statistic="median",
+  component=~"ue/ue|gnb|upf|smf|amf"
+}
+```
+
+`=~` means “label value matches this regular expression.” The vertical bars
+mean logical alternatives. The query therefore includes the aggregated UE
+runtime, gNB, UPF, Session Management Function (SMF), and AMF component series
+for the selected load.
+
+The **New restarts** panel uses an aggregation:
+
+```promql
+sum(cn5g_phase07_reviewed_new_restarts)
+```
+
+Prometheus adds the three per-load values and returns one scalar-like instant
+vector result. The accepted result is zero. Applying `rate()` to these reviewed
+gauges would be semantically wrong because they are fixed experiment results,
+not monotonically increasing live counters.
+
+The fifth dashboard makes the evidence boundary visible:
+
+- the top row proves one `reviewed_complete` campaign, nine accepted
+  conditions, three repetitions per load, and the declared time controls;
+- traffic panels compare forward throughput, per-UE share, Jain fairness,
+  fixed-load delivery, retransmissions, ICMP round-trip time, and UDP jitter;
+- procedure panels compare registration/PDU-session success and latency plus
+  UDP loss and restart count;
+- resource panels compare condition-aligned CPU and memory peaks; and
+- the final panel states the local-host, kind, UERANSIM, repetition, and
+  non-production limitations.
+
+The dashboard contains 29 panels organized into five reading stages:
+
+| Read in this order | Panels answer | Correct interpretation |
+| --- | --- | --- |
+| 1. Campaign contract | Is this one complete reviewed campaign with 9 conditions, 3 repetitions, a 15-second measured interval, and a 30-second idle baseline? | If these identity and count panels are wrong, do not interpret performance panels |
+| 2. Traffic scaling | How did aggregate rate, per-UE share, fairness, target delivery, retransmissions, ICMP round-trip time, and UDP jitter compare across 1, 3, and 5 UEs? | Comparison bars describe the accepted local campaign only |
+| 3. Procedures and packet integrity | At the selected load, did registration and PDU sessions succeed, was UDP loss observed, and did containers restart? | Success ratios and zero loss are observations under the declared workload, not guarantees |
+| 4. Resources and distributions | Which principal components showed the largest condition-aligned CPU/memory peaks, and how widely did repeated values vary? | Correlation identifies investigation candidates; it does not prove a root cause |
+| 5. Scope limits | What claims are prohibited by the topology and sample size? | This text is part of the evidence contract, not decorative wording |
+
+Grafana's display units matter. The stored throughput is bits per second, CPU
+is cores, memory is bytes, time is seconds, and success/loss/fairness values are
+ratios. Grafana formats them as Mbit/s, millicores or cores, MiB, milliseconds,
+and percentages without changing the underlying metric value.
+
+The `ue_level` variable is fixed to 1, 3, or 5. Panels use instant queries
+because these gauges describe a completed experiment; drawing them as a live
+time series would falsely imply that the benchmark is still running. Static
+tests require exactly 556 series under a hard bound of 600. Runtime validation
+requires one healthy reviewed-results target, the exact campaign counts, all
+five dashboard titles, and the complete Phase 5/6 regression gate.
+
+An **instant query** here means “give me the latest eligible stored sample at
+the evaluation time.” It does not mean “run the experiment now.” A range query
+and time-series graph would draw repeated scrapes of the same reviewed value
+across clock time, creating the false visual suggestion that throughput was
+continuously remeasured. Bar gauges and stat panels match the actual semantics:
+they compare fixed results from one completed campaign.
+
+### 33.24 Operator walkthrough: inspect the Grafana dashboard
+
+This walkthrough applies **after** `docs/project-status.md` records the fifth
+dashboard as runtime-accepted. At the current prepared-only boundary, use the
+tracked metric file and dashboard JSON in Section 33.27 to study the queries;
+do not interpret an absent fifth dashboard or reviewed-results target as a
+failure of the accepted Phase 7 campaign.
+
+Once the runtime acceptance gate has passed, the walkthrough opens that
+deployed dashboard. It does **not** rerun Phase 7, create benchmark traffic,
+install a host package, expose Grafana to the local network, or modify the 5G
+Helm release. The helper does record a local Grafana soak baseline under ignored
+`artifacts/` state, then creates a temporary loopback-only port-forward.
+Pressing `Ctrl-C` removes the port-forward.
+
+#### Step 1 — Open the correct terminal and directory
+
+Open the Ubuntu **Terminal** application. Change to the repository root, the
+directory that contains `scripts/`, `charts/`, and `docs/`:
+
+```bash
+cd /path/to/cloud-native-5g-core-platform
+pwd
+```
+
+Replace `/path/to/cloud-native-5g-core-platform` with the location of this
+checkout. The expected `pwd` output is that exact repository path. If it shows
+another directory, stop and correct it before running the helper.
+
+#### Step 2 — Start the temporary Grafana connection
+
+In the same terminal, run:
+
+```bash
+sudo ./scripts/phase06-lab.sh grafana
+```
+
+Expected output includes:
+
+```text
+grafana_soak_baseline=recorded pod=<current-pod> restart_count=<count> minimum_duration_seconds=1800
+grafana_url=http://127.0.0.1:13000
+grafana_credentials=<username> and restricted local password file
+Forwarding from 127.0.0.1:13000 -> 3000
+```
+
+The command remains running because the terminal process is forwarding local
+TCP port 13000 to the Grafana Service's port 3000. Keep this terminal open. If
+the helper prints `error:`, if the Pod is not Ready, or if port 13000 cannot be
+bound, stop at that exact error. Do not start a second install or terminate an
+unidentified process to force the port open.
+
+#### Step 3 — Sign in
+
+Open a browser on the same Ubuntu host and visit:
+
+```text
+http://127.0.0.1:13000
+```
+
+Use the username printed by the helper. The password is stored locally in the
+ignored, permission-restricted file:
+
+```text
+artifacts/secrets/phase-06/admin-password
+```
+
+That file must remain untracked and must not be copied into documentation,
+screenshots, commands, or Git history.
+
+#### Step 4 — Open the Phase 7 dashboard
+
+In Grafana:
+
+1. open **Dashboards**;
+2. open the **CN5G Platform** folder; and
+3. select **CN5G Performance And Capacity Experiments**.
+
+The first row should show one reviewed-complete campaign, 9 accepted
+conditions, 3 repetitions per level, a 15-second measured interval, a
+30-second idle baseline, and 0 new restarts. If these contract panels do not
+match after the dashboard extension is runtime-accepted, do not interpret the
+lower performance panels.
+
+#### Step 5 — Use the UE-load variable
+
+At the top of the dashboard, find **Selected UE load**. Change it among 1, 3,
+and 5.
+
+- Panels whose query contains `$ue_level` refresh to the selected condition.
+- Cross-load comparison panels intentionally continue showing all three bars.
+- Changing this variable does not scale a StatefulSet, start a UE, or run
+  `iperf3`; it changes only the label value used in Grafana queries.
+
+Select 5 and verify the selected-load panels show 100% registration success,
+100% PDU-session success, 0% maximum observed UDP loss, and 0 new restarts.
+These are reviewed five-UE results, not live state claims.
+
+#### Step 6 — Inspect the query behind a panel
+
+Open the menu on **Forward TCP aggregate median** and inspect the panel query.
+You should see the selector documented in Section 33.23. Notice that it filters
+`direction`, `scope`, and `statistic`, but omits `ue_level`; that is why it
+returns three bars.
+
+Then inspect **Registration success**. Its query contains
+`ue_level="$ue_level"`, so the dashboard variable controls it. The panel's unit
+is a percentage, which formats stored ratio 1.0 as 100%.
+
+Because the dashboard is provisioned with `allowUiUpdates: false`, use panel
+editing only to inspect the query and options. Durable changes must be made in
+the tracked dashboard JSON, statically tested, deployed through Helm, and
+runtime-validated.
+
+#### Step 7 — Query Prometheus through Grafana Explore
+
+Open **Explore**, choose the **Prometheus** data source, and enter:
+
+```promql
+cn5g_phase07_reviewed_throughput_bits_per_second{direction="forward",scope="aggregate",statistic="median"}
+```
+
+Run it as an instant query. The expected result contains three series with
+`ue_level` label values 1, 3, and 5. Their values are stored in bits per second;
+the corresponding approximate decimal rates are 114.70, 79.38, and 91.70
+Mbit/s. Explore is useful for learning what Prometheus returned before Grafana
+applied a visualization.
+
+Next query target health:
+
+```promql
+up{job="phase07-reviewed-results"}
+```
+
+After runtime acceptance, the expected current value is 1. Before the extension
+is installed, no result for this job is expected. A value of 1 verifies that
+Prometheus can scrape the reviewed-results exporter. It does not verify the
+statistical correctness of the campaign; the deterministic analyzer and
+generator checks provide that earlier evidence boundary.
+
+#### Step 8 — Close the connection
+
+Return to the terminal running the port-forward and press `Ctrl-C`. Expected
+behavior is that the foreground forwarding command exits and
+`http://127.0.0.1:13000` is no longer reachable. The in-cluster Grafana Pod and
+Service continue running; only the temporary host-to-Service connection ends.
+
+### 33.25 Troubleshooting the dashboard by layer
+
+“The dashboard is broken” is too broad to diagnose. Move through the data path
+one layer at a time:
+
+```text
+reviewed file
+  -> ConfigMap
+  -> exporter Pod
+  -> exporter Service
+  -> Prometheus target
+  -> Prometheus series
+  -> Grafana data source
+  -> panel query
+  -> visualization
+```
+
+| Symptom | Likely layer | Meaningful next check |
+| --- | --- | --- |
+| Browser cannot reach `127.0.0.1:13000` | port-forward or Grafana readiness | confirm the foreground helper is still running and inspect its exact error |
+| Grafana opens but shows a data-source error | Grafana-to-Prometheus connection | check the Prometheus data source and observability workload state |
+| Only Phase 7 panels say “No data” | exporter, scrape target, or reviewed series | query `up{job="phase07-reviewed-results"}` and then a raw `cn5g_phase07_reviewed_*` metric |
+| A panel shows more or fewer load bars than expected | label selector or generated schema | inspect the panel PromQL and the returned `ue_level` labels |
+| Value exists but unit looks wrong | Grafana field configuration | compare the raw Prometheus value with the panel's configured unit |
+| Dashboard differs after a Pod recreation | provisioning or ConfigMap delivery | verify the tracked dashboard JSON was rendered and mounted; do not repair it by saving a UI-only copy |
+| Dashboard values disagree with the report | evidence-generation boundary | stop interpretation and compare `summary.json`, generated metric text, and generator/static-test results |
+
+After the dashboard extension has been deliberately installed, the supported
+integrated diagnostic from the repository root in a normal Ubuntu terminal is:
+
+```bash
+sudo ./scripts/phase06-lab.sh validate
+```
+
+Expected terminal output ends with:
+
+```text
+phase06_validation=pass
+```
+
+The validator checks the Phase 5 service baseline, observability workloads,
+required Prometheus targets, reviewed campaign counts, exactly 556 reviewed
+series below the limit of 600, the two Grafana data sources, and all five exact
+dashboard titles. If it prints `error:`, preserve the full scoped error and
+diagnose that layer. Do not reinstall the chart, delete PersistentVolumeClaims,
+or rerun the performance matrix merely because a panel is empty.
+
+### 33.26 How to reproduce the experiment safely—and when not to
+
+Reading the dashboard requires only Section 33.24. Re-running Phase 7 is a
+separate, host-intensive operation that changes the `cn5g` Helm release
+temporarily, restarts the project-owned dependency chain between conditions,
+generates network load, and writes ignored raw evidence. It should be run only
+when a new benchmark campaign is intentionally required and the host is idle.
+
+The controlled lifecycle is:
+
+```text
+preflight
+  -> build and verify the exact benchmark image
+  -> install the temporary Phase 7 Helm overlay
+  -> run the one-UE pilot
+  -> run or resume the nine-condition matrix
+  -> run deterministic analysis
+  -> roll back the temporary overlay
+  -> repair and validate five UEs
+  -> validate Phase 6 observability
+```
+
+The runner refuses traffic when available host memory is below 3 GiB, Docker
+free space is below 6 GiB, a required workload is not Ready, the benchmark
+image identity is wrong, or a UE route bypasses `uesimtun0`. A new container
+restart or Out-of-Memory kill rejects the condition. An interruption trap
+attempts to restore five UEs, but the operator must still complete the scoped
+rollback and validation gates before declaring the platform restored.
+
+The exact lifecycle commands and expected gates are maintained in the
+[Phase 7 methodology](architecture/phase-07-performance-methodology.md),
+[`phase07-lab.sh`](../scripts/phase07-lab.sh), and the
+[reviewed Phase 7 report](../reports/07_phase07_performance.md). Do not improvise
+a partial matrix or publish output from a run that did not pass the analyzer.
+
+### 33.27 Compact professional glossary and evidence map
+
+| Term | Professional meaning in this section |
+| --- | --- |
+| Observability | ability to infer system state from outputs such as metrics, logs, and validated probes |
+| Metric | named numeric measurement represented as one or more labeled time series |
+| Sample | one timestamp and numeric value within a Prometheus time series |
+| Label | key/value dimension attached to a metric; changing the label set creates a different series |
+| Cardinality | number of unique metric-name and label-set combinations |
+| Scrape | one Prometheus HTTP collection attempt against a target |
+| Exporter | component that exposes measurements in a Prometheus-readable format |
+| PromQL | Prometheus Query Language, used to select and calculate over time series |
+| Dashboard | collection of Grafana panels organized around an operational or analytical question |
+| Panel | one Grafana query plus its visualization and display configuration |
+| Instant query | query evaluated at one timestamp, returning the latest eligible sample for each result series |
+| Range query | repeated evaluations across a start/end time and step |
+| Throughput | delivered data rate at the measurement layer |
+| Offered load | data rate requested from the traffic generator |
+| Target attainment | delivered fixed-load rate divided by offered fixed-load rate |
+| Latency | elapsed time for an operation or packet round trip; its exact start/end points must be stated |
+| Jitter | variation in packet arrival timing, here reported by UDP `iperf3` |
+| Retransmission | TCP data sent again as part of reliability and congestion-control behavior |
+| Saturation | condition where more offered work no longer produces proportional delivered work because a path resource constrains it |
+| Working-set memory | container memory considered actively in use, excluding readily reclaimable inactive file cache in the source metric's model |
+| Deterministic analysis | same validated input produces byte-identical reviewed output |
+| Evidence boundary | rule separating raw runtime observations, accepted analyzed results, and visual presentation |
+
+The implementation can be followed directly through these tracked artifacts:
+
+| Question | Source of truth |
+| --- | --- |
+| What experiment was declared? | [`benchmarks/phase-07/experiment.json`](../benchmarks/phase-07/experiment.json) |
+| How was the benchmark lifecycle enforced? | [`scripts/phase07-lab.sh`](../scripts/phase07-lab.sh) and [`scripts/run-phase07-matrix.py`](../scripts/run-phase07-matrix.py) |
+| How were raw attempts accepted and summarized? | [`scripts/analyze-phase07.py`](../scripts/analyze-phase07.py) |
+| What reviewed results were published? | [`reports/07_phase07_performance.md`](../reports/07_phase07_performance.md) and [`summary.json`](../benchmarks/phase-07/results/summary.json) |
+| How were reviewed metrics generated? | [`scripts/generate-phase07-dashboard-metrics.py`](../scripts/generate-phase07-dashboard-metrics.py) |
+| What exactly does the exporter serve? | [`phase07-reviewed.prom`](../charts/cn5g-observability/files/phase07-reviewed.prom) |
+| How is the exporter installed? | [`phase07-results.yaml`](../charts/cn5g-observability/templates/phase07-results.yaml) |
+| How does Prometheus discover it? | [`prometheus-config.yaml`](../charts/cn5g-observability/templates/prometheus-config.yaml) |
+| What queries and panels does Grafana use? | [`05-performance-capacity.json`](../charts/cn5g-observability/files/dashboards/05-performance-capacity.json) |
+| How are Grafana data sources and dashboards provisioned? | [`grafana.yaml`](../charts/cn5g-observability/templates/grafana.yaml) |
+
+The final professional mental model is:
+
+> Kubernetes and Helm create a controlled runtime; the runner proves the
+> traffic path and executes declared conditions; Prometheus captures aligned
+> live resource observations; the analyzer decides which complete evidence is
+> publishable; a bounded exporter presents only reviewed results back to
+> Prometheus; and Grafana queries those gauges to visualize one completed local
+> experiment without pretending it is live production capacity.
