@@ -70,3 +70,8 @@ alertExercise:
   resources:
     requests: {cpu: 2m, memory: 4Mi}
     limits: {cpu: 25m, memory: 16Mi}
+
+reviewedResults:
+  resources:
+    requests: {cpu: 2m, memory: 4Mi}
+    limits: {cpu: 25m, memory: 16Mi}

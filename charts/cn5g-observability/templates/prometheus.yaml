@@ -86,7 +86,7 @@ spec:
     - metadata:
         name: data
         labels:
-          {{- include "cn5g-observability.componentLabels" (dict "root" . "component" "prometheus") | nindent 10 }}
+          {{- include "cn5g-observability.retainedClaimTemplateLabels" (dict "root" . "component" "prometheus") | nindent 10 }}
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: {{ .Values.global.storageClassName | quote }}

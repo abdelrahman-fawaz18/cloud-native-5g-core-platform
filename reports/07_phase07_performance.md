@@ -91,6 +91,19 @@ writes reviewed outputs. Raw evidence remains ignored and permission-restricted.
 - `benchmarks/phase-07/results/resource-summary.csv`
 - `benchmarks/phase-07/results/plots/`
 
+## Reviewed Dashboard Projection
+
+The observability chart includes a deterministic projection of this report for
+Grafana. `scripts/generate-phase07-dashboard-metrics.py` validates the reviewed
+summary and produces 556 bounded `cn5g_phase07_reviewed_*` gauges. A restricted
+static exporter serves them to Prometheus, and **CN5G Performance And Capacity
+Experiments** compares the three accepted UE levels without requiring the
+temporary benchmark overlay or expired raw telemetry.
+
+The dashboard is a visual index into this evidence, not a second analyzer and
+not a live load test. Its campaign, traffic, procedure, packet, and resource
+panels use only tracked reviewed values and retain the limitations below.
+
 ## Limitations
 
 - Single Ubuntu host and single-node kind cluster; results are not carrier capacity or production sizing.

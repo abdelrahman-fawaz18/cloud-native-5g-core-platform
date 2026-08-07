@@ -247,9 +247,9 @@ document the full evidence and limitations.
 ## Verified Phase 6 Observability Platform
 
 Phase 6 adds an independent telemetry lifecycle around the accepted Phase 5
-service. Prometheus pulls Kubernetes, node, container, Open5GS, and UE-probe
-metrics; Alloy sends project-scoped logs to Loki; and Grafana renders four
-version-controlled dashboards from Prometheus and Loki.
+service. Prometheus pulls Kubernetes, node, container, Open5GS, UE-probe, and
+reviewed Phase 7 result metrics; Alloy sends project-scoped logs to Loki; and
+Grafana renders five version-controlled dashboards from Prometheus and Loki.
 
 ```mermaid
 flowchart LR
@@ -258,7 +258,8 @@ flowchart LR
     K8S["Kubernetes API + kubelet"] --> KSM["kube-state-metrics"] --> PROM
     K8S -->|"node/container metrics"| PROM
     LOGS["Project Pod logs + Events"] --> ALLOY["Grafana Alloy"] --> LOKI["Loki"]
-    PROM --> GRAFANA["Grafana\n4 provisioned dashboards"]
+    RESULTS["Reviewed Phase 7 summary\n556 bounded gauges"] --> PROM
+    PROM --> GRAFANA["Grafana\n5 provisioned dashboards"]
     LOKI --> GRAFANA
     PROM --> ALERTS["Prometheus alert rules"]
 ```
@@ -269,7 +270,8 @@ Runtime acceptance verified:
 - five AMF sessions, five PFCP sessions, and five successful user-plane
   probes;
 - 20 custom UE series against a hard limit of 30;
-- recent centralized logs, two provisioned data sources, and four dashboards;
+- recent centralized logs, two provisioned data sources, and the original
+  four Phase 6 dashboards;
 - target-down, registered-UE mismatch, and user-plane failure alerts each
   firing and resolving; and
 - two Bound 2 GiB telemetry claims, zero final observability restarts, and the
@@ -291,6 +293,18 @@ summary](reports/README.md#phase-6-observability-validation-summary) describe
 the signal model, limits, lifecycle, recovery, and accepted evidence. These
 results do not claim throughput, packet loss, high availability, long-term
 retention, or production monitoring scale.
+
+The post-Phase-7 dashboard extension adds **CN5G Performance And Capacity
+Experiments**. A deterministic generator converts the accepted nine-condition
+summary into 556 bounded `cn5g_phase07_reviewed_*` gauges served by a
+least-privileged, token-free exporter. This preserves reviewed results after
+the temporary benchmark sidecars are rolled back and the 24-hour Prometheus
+history expires. Its instant-value panels compare 1, 3, and 5 UE conditions;
+they are historical local-lab evidence, not a live speed test or carrier
+capacity claim. Runtime acceptance on 2026-08-06 verified one healthy exporter,
+556 reviewed series, all five dashboard definitions, the complete Phase 5/6
+regression, all three alert lifecycles, and a 2,101-second interactive Grafana
+soak with zero restarts and a 407.2 MiB peak under the 768 MiB limit.
 
 ## Verified Phase 7 Controlled Performance Experiment
 
@@ -454,10 +468,12 @@ machine-readable measurements, and concise reports.
 - [Phase 6 observability runbook](docs/runbooks/phase-06-observability.md)
 - [Phase 6 sanitized validation summary](reports/README.md#phase-6-observability-validation-summary)
 - [Phase 6 visual and operational model](docs/README.md#32-phase-6-observability-and-operational-mental-model)
+- [Observability dashboard evolution and final visual-evidence plan](docs/architecture/observability-dashboard-evolution-plan.md)
 - [Phase 7 controlled performance methodology](docs/architecture/phase-07-performance-methodology.md)
+- [Phase 7 reviewed performance report](reports/07_phase07_performance.md)
+- [Phase 7 performance dashboard model](docs/README.md#3323-turning-the-accepted-report-into-a-reproducible-dashboard)
 - [Complete accepted-system architecture and end-to-end packet walkthrough](docs/architecture/complete-system-architecture.md)
 - [Phase 7 machine-readable experiment contract](benchmarks/phase-07/experiment.json)
-- [Phase 7 reviewed performance report](reports/07_phase07_performance.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

@@ -160,7 +160,10 @@ sudo ./scripts/phase06-lab.sh validate
 Validation repeats the complete Phase 5 protocol/data-path gate, then verifies
 observability workload readiness, required Prometheus targets, five successful
 UE probes, AMF/PFCP counts, Kubernetes/container metrics, bounded custom
-series, recent Loki ingestion, two Grafana data sources, and four dashboards.
+series, recent Loki ingestion, two Grafana data sources, and all five
+dashboards. After the Phase 7 extension it additionally requires one healthy
+reviewed-results exporter, nine accepted conditions, three repetitions per
+level, and exactly 556 generated reviewed series under the hard bound of 600.
 
 ## Alert Lifecycle Exercise
 

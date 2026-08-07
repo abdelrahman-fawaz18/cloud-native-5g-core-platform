@@ -13,6 +13,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "charts" / "cn5g"
+OBS_CHART = ROOT / "charts" / "cn5g-observability"
 OVERLAYS = [
     CHART / "values-phase05.yaml",
     CHART / "values-phase06.yaml",
@@ -23,6 +24,12 @@ DOCKERFILE = ROOT / "containers" / "benchmark" / "Dockerfile"
 VERSIONS = ROOT / "versions" / "phase-07.env"
 EXPERIMENT = ROOT / "benchmarks" / "phase-07" / "experiment.json"
 MATRIX_RUNNER = ROOT / "scripts" / "run-phase07-matrix.py"
+REVIEWED_SUMMARY = ROOT / "benchmarks" / "phase-07" / "results" / "summary.json"
+REVIEWED_METRICS = OBS_CHART / "files" / "phase07-reviewed.prom"
+METRICS_GENERATOR = ROOT / "scripts" / "generate-phase07-dashboard-metrics.py"
+PERFORMANCE_DASHBOARD = (
+    OBS_CHART / "files" / "dashboards" / "05-performance-capacity.json"
+)
 
 
 def helm(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -41,17 +48,38 @@ class Phase07StaticTests(unittest.TestCase):
         )
         if rendered.returncode:
             raise AssertionError(rendered.stderr)
+        observability = helm(
+            "template", "cn5g-observability", str(OBS_CHART),
+            "--namespace", "cn5g-observability", "--kube-version", "1.36.1",
+        )
+        if observability.returncode:
+            raise AssertionError(observability.stderr)
         cls.rendered_text = rendered.stdout
         cls.objects = [item for item in yaml.safe_load_all(rendered.stdout) if item]
+        cls.obs_rendered_text = observability.stdout
+        cls.obs_objects = [
+            item for item in yaml.safe_load_all(observability.stdout) if item
+        ]
         cls.script = SCRIPT.read_text(encoding="utf-8")
         cls.dockerfile = DOCKERFILE.read_text(encoding="utf-8")
         cls.versions = VERSIONS.read_text(encoding="utf-8")
         cls.experiment = json.loads(EXPERIMENT.read_text(encoding="utf-8"))
         cls.matrix_runner = MATRIX_RUNNER.read_text(encoding="utf-8")
+        cls.reviewed_summary = json.loads(REVIEWED_SUMMARY.read_text(encoding="utf-8"))
+        cls.reviewed_metrics = REVIEWED_METRICS.read_text(encoding="utf-8")
+        cls.performance_dashboard = json.loads(
+            PERFORMANCE_DASHBOARD.read_text(encoding="utf-8")
+        )
 
     def object_named(self, kind: str, name: str) -> dict:
         return next(
             item for item in self.objects
+            if item["kind"] == kind and item["metadata"]["name"] == name
+        )
+
+    def obs_object_named(self, kind: str, name: str) -> dict:
+        return next(
+            item for item in self.obs_objects
             if item["kind"] == kind and item["metadata"]["name"] == name
         )
 
@@ -221,6 +249,102 @@ class Phase07StaticTests(unittest.TestCase):
             reset.index('deployment/cn5g-{component}'),
             reset.index('"repair-sessions"'),
         )
+
+    def test_reviewed_dashboard_metrics_are_deterministic_bounded_and_sanitized(self):
+        check = subprocess.run(
+            [str(METRICS_GENERATOR), "--check"], cwd=ROOT, check=False,
+            capture_output=True, text=True,
+        )
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
+        samples = [
+            line for line in self.reviewed_metrics.splitlines()
+            if line.startswith("cn5g_phase07_reviewed_")
+        ]
+        self.assertEqual(len(samples), 556)
+        self.assertLessEqual(len(samples), 600)
+        self.assertIn(
+            'cn5g_phase07_reviewed_campaign_info{campaign_id="20260806T223341Z-matrix",status="reviewed_complete"} 1',
+            self.reviewed_metrics,
+        )
+        self.assertIn("cn5g_phase07_reviewed_accepted_conditions 9", self.reviewed_metrics)
+        self.assertEqual(self.reviewed_summary["campaign"]["accepted_attempt_count"], 9)
+        serialized = self.reviewed_metrics.lower()
+        self.assertNotIn("imsi", serialized)
+        self.assertNotIn("supi", serialized)
+        self.assertNotIn("/home/", serialized)
+
+    def test_reviewed_results_exporter_is_project_scoped_and_least_privileged(self):
+        deployment = self.obs_object_named(
+            "Deployment", "cn5g-observability-phase07-results"
+        )
+        pod_spec = deployment["spec"]["template"]["spec"]
+        container = pod_spec["containers"][0]
+        self.assertFalse(pod_spec["automountServiceAccountToken"])
+        self.assertEqual(container["image"], "cn5g/data-network:0.1.0")
+        self.assertEqual(container["securityContext"]["capabilities"]["drop"], ["ALL"])
+        self.assertFalse(container["securityContext"]["allowPrivilegeEscalation"])
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        self.assertEqual(container["resources"]["limits"]["memory"], "16Mi")
+        self.assertEqual(
+            pod_spec["volumes"][1]["emptyDir"],
+            {"medium": "Memory", "sizeLimit": "2Mi"},
+        )
+        service = self.obs_object_named(
+            "Service", "cn5g-observability-phase07-results"
+        )
+        self.assertEqual(service["spec"]["ports"], [{
+            "name": "metrics", "port": 8080, "targetPort": "metrics",
+            "protocol": "TCP",
+        }])
+        scrape = self.obs_object_named(
+            "ConfigMap", "cn5g-observability-prometheus-config"
+        )["data"]["prometheus.yml"]
+        self.assertIn("job_name: phase07-reviewed-results", scrape)
+        self.assertIn("cn5g-observability-phase07-results:8080", scrape)
+
+    def test_performance_dashboard_explains_reviewed_evidence_and_limitations(self):
+        dashboard = self.performance_dashboard
+        self.assertEqual(dashboard["uid"], "cn5g-performance")
+        self.assertEqual(dashboard["title"], "CN5G Performance And Capacity Experiments")
+        self.assertEqual(set(dashboard["tags"]), {
+            "cn5g", "phase-07", "performance", "reviewed-evidence",
+        })
+        self.assertFalse(dashboard["editable"])
+        self.assertEqual(len(dashboard["links"]), 5)
+        self.assertEqual(
+            {item["url"] for item in dashboard["links"]},
+            {
+                "/d/cn5g-platform", "/d/cn5g-5g-service",
+                "/d/cn5g-kubernetes", "/d/cn5g-logs", "/d/cn5g-performance",
+            },
+        )
+        self.assertEqual(dashboard["templating"]["list"][0]["name"], "ue_level")
+        self.assertEqual(dashboard["templating"]["list"][0]["query"], "1,3,5")
+        titles = {panel["title"] for panel in dashboard["panels"]}
+        for required in (
+            "Campaign state", "Accepted conditions", "Traffic scaling",
+            "Forward TCP aggregate median", "Forward TCP fairness",
+            "Reverse TCP target delivered", "Registration success",
+            "PDU-session latency by UE level", "Median component CPU peak",
+            "Median component memory peak", "Scope and publication limits",
+        ):
+            self.assertIn(required, titles)
+        serialized = json.dumps(dashboard)
+        self.assertIn("benchmarks/phase-07/experiment.json", serialized)
+        self.assertIn("reports/07_phase07_performance.md", serialized)
+        self.assertIn("reviewed phase 7 local-lab results", serialized.lower())
+        self.assertIn("not a live speed test", serialized.lower())
+        self.assertNotIn("/home/", serialized)
+        self.assertNotIn("imsi", serialized.lower())
+        expressions = "\n".join(
+            target["expr"]
+            for panel in dashboard["panels"]
+            for target in panel.get("targets", [])
+            if "expr" in target
+        )
+        self.assertIn("cn5g_phase07_reviewed_throughput_bits_per_second", expressions)
+        self.assertIn("cn5g_phase07_reviewed_component_cpu_peak_cores", expressions)
+        self.assertNotIn("rate(", expressions)
 
 
 if __name__ == "__main__":

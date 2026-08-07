@@ -3050,14 +3050,12 @@ The detailed cross-phase system containing Kubernetes, every 5G function,
 sidecars, Services, ports, address domains, probes, storage, and observability
 is documented separately in the [complete accepted-system architecture](architecture/complete-system-architecture.md).
 
-There are two different acceptance states in this section. The Phase 7
-benchmark campaign, analyzer, reviewed report, and rollback are accepted. The
-post-analysis **fifth Grafana dashboard extension is prepared and statically
-verified but is not yet runtime-accepted**. Its Deployment, scrape target, and
-dashboard descriptions below explain the reviewed candidate implementation;
-they become current-runtime claims only after the controlled observability
-upgrade, full validator, and visual inspection pass. This distinction prevents
-planned dashboard state from being presented as live evidence.
+Both acceptance states in this section are complete. The Phase 7 benchmark
+campaign, analyzer, reviewed report, and rollback are accepted. The
+post-analysis **fifth Grafana dashboard extension is also runtime-accepted** as
+observability revision 6. Its restricted exporter, reviewed-results target,
+556-series contract, five dashboards, complete Phase 5/6 regression, alert
+lifecycles, and 2,101-second interactive soak passed on 2026-08-06.
 
 This section is deliberately written in layers. Sections 33.1 through 33.12
 assume no previous Prometheus or Grafana experience. They establish the mental
@@ -4067,14 +4065,8 @@ they compare fixed results from one completed campaign.
 
 ### 33.24 Operator walkthrough: inspect the Grafana dashboard
 
-This walkthrough applies **after** `docs/project-status.md` records the fifth
-dashboard as runtime-accepted. At the current prepared-only boundary, use the
-tracked metric file and dashboard JSON in Section 33.27 to study the queries;
-do not interpret an absent fifth dashboard or reviewed-results target as a
-failure of the accepted Phase 7 campaign.
-
-Once the runtime acceptance gate has passed, the walkthrough opens that
-deployed dashboard. It does **not** rerun Phase 7, create benchmark traffic,
+This walkthrough opens the accepted deployed dashboard. It does **not** rerun
+Phase 7, create benchmark traffic,
 install a host package, expose Grafana to the local network, or modify the 5G
 Helm release. The helper does record a local Grafana soak baseline under ignored
 `artifacts/` state, then creates a temporary loopback-only port-forward.
@@ -4146,8 +4138,7 @@ In Grafana:
 The first row should show one reviewed-complete campaign, 9 accepted
 conditions, 3 repetitions per level, a 15-second measured interval, a
 30-second idle baseline, and 0 new restarts. If these contract panels do not
-match after the dashboard extension is runtime-accepted, do not interpret the
-lower performance panels.
+match, do not interpret the lower performance panels.
 
 #### Step 5 — Use the UE-load variable
 
@@ -4199,8 +4190,7 @@ Next query target health:
 up{job="phase07-reviewed-results"}
 ```
 
-After runtime acceptance, the expected current value is 1. Before the extension
-is installed, no result for this job is expected. A value of 1 verifies that
+The accepted current value is 1. A value of 1 verifies that
 Prometheus can scrape the reviewed-results exporter. It does not verify the
 statistical correctness of the campaign; the deterministic analyzer and
 generator checks provide that earlier evidence boundary.

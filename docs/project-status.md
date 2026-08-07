@@ -220,3 +220,12 @@ five sessions, and passed the complete
 Phase 5 and Phase 6 regression gates. The post-Phase-7 host-state snapshot was
 captured locally. Phase 7 is complete; Phase 8 remains gated on its own design
 and preflight review.
+
+The post-analysis Phase 7 dashboard extension was runtime-accepted on
+2026-08-06 as `cn5g-observability` revision 6. It deterministically projects
+the reviewed summary as 556 bounded gauges through a token-free exporter and
+adds the fifth **Performance And Capacity Experiments** dashboard. The complete
+Phase 5/6 validator, one reviewed-results target, five dashboard definitions,
+all three alert lifecycles, and repository static gates passed. A 2,101-second
+interactive Grafana soak retained the same Ready Pod with zero restarts and a
+407.2 MiB peak under the 768 MiB limit.

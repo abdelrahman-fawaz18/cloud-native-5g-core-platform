@@ -3,7 +3,7 @@
   "title": "CN5G observability values",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "images", "grafana", "prometheus", "loki", "alloy", "kubeStateMetrics", "alertExercise"],
+  "required": ["global", "images", "grafana", "prometheus", "loki", "alloy", "kubeStateMetrics", "alertExercise", "reviewedResults"],
   "properties": {
     "global": {
       "type": "object", "additionalProperties": false,
@@ -32,7 +32,8 @@
     "loki": {"$ref": "#/$defs/storageWorkload"},
     "alloy": {"$ref": "#/$defs/workload"},
     "kubeStateMetrics": {"$ref": "#/$defs/workload"},
-    "alertExercise": {"$ref": "#/$defs/workload"}
+    "alertExercise": {"$ref": "#/$defs/workload"},
+    "reviewedResults": {"$ref": "#/$defs/workload"}
   },
   "$defs": {
     "registryImage": {

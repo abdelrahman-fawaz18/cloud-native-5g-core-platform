@@ -16,6 +16,23 @@ cn5g.io/phase: "06"
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
+{{/*
+The data volumeClaimTemplates were created by chart 0.1.0. Kubernetes makes
+the entire StatefulSet claim-template specification immutable, including its
+metadata labels, so this lineage label must remain at the originally accepted
+value even when the owning chart advances. Labels on the StatefulSet, Pod, and
+bound PVC resources continue to use the current chart version.
+*/}}
+{{- define "cn5g-observability.retainedClaimTemplateLabels" -}}
+app.kubernetes.io/name: cn5g-observability
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/managed-by: {{ .root.Release.Service }}
+helm.sh/chart: cn5g-observability-0.1.0
+app.kubernetes.io/part-of: cn5g-platform
+cn5g.io/phase: "06"
+app.kubernetes.io/component: {{ .component }}
+{{- end }}
+
 {{- define "cn5g-observability.selectorLabels" -}}
 app.kubernetes.io/name: cn5g-observability
 app.kubernetes.io/instance: {{ .root.Release.Name }}

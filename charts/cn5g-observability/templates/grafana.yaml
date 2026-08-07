@@ -83,7 +83,7 @@ spec:
       labels:
         {{- include "cn5g-observability.selectorLabels" (dict "root" . "component" "grafana") | nindent 8 }}
       annotations:
-        cn5g.io/config-revision: "2"
+        cn5g.io/config-revision: "3"
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20

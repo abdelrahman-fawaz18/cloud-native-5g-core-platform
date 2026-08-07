@@ -98,11 +98,12 @@ flowchart TB
             ALLOYPOD["Alloy Deployment Pod\nalloy container"]
             KSMPOD["kube-state-metrics Deployment Pod\nkube-state-metrics container"]
             ALERTPOD["alert-exercise Deployment Pod\nexporter container"]
+            RESULTSPOD["Phase 7 reviewed-results Deployment Pod\ntoken-free static metrics exporter"]
             PROMPVC["Prometheus PVC\n2 GiB / 24 h and 1 GB retention limits"]
             LOKIPVC["Loki PVC\n2 GiB / 24 h retention"]
             GRAFSEC["pre-created Grafana admin Secret"]
-            OBSCFG["ConfigMaps\nscrapes / alerts / Alloy / Loki / 4 dashboards"]
-            OBSSVC["5 ClusterIP Services"]
+            OBSCFG["ConfigMaps\nscrapes / alerts / Alloy / Loki / 5 dashboards\n556 reviewed Phase 7 gauges"]
+            OBSSVC["6 ClusterIP Services"]
             RBAC["project-scoped ServiceAccounts and RBAC\nPrometheus / KSM / Alloy"]
         end
     end
@@ -124,6 +125,7 @@ flowchart TB
     KUBELET --> ALLOYPOD
     KUBELET --> KSMPOD
     KUBELET --> ALERTPOD
+    KUBELET --> RESULTSPOD
     NET --- CORENS
     NET --- OBSNS
     DNS --- CORESVC
@@ -142,6 +144,7 @@ flowchart TB
     OBSCFG --> LOKIPOD
     OBSCFG --> GRAFPOD
     OBSCFG --> ALLOYPOD
+    OBSCFG --> RESULTSPOD
     RBAC --> PROMPOD
     RBAC --> KSMPOD
     RBAC --> ALLOYPOD
@@ -229,8 +232,9 @@ flowchart LR
         API["Kubernetes API\n10.96.0.1:443\nnode + cAdvisor proxy"]
         ALLOY["16. Grafana Alloy\nhealth TCP 12345"]
         LOKI[("17. Loki\nHTTP TCP 3100\ngRPC 9096 internal")]
-        GRAF["18. Grafana\nTCP 3000\n4 dashboards / 2 data sources"]
+        GRAF["18. Grafana\nTCP 3000\n5 dashboards / 2 data sources"]
         ALERT["alert-exercise\nTCP 8080"]
+        RESULTS["reviewed Phase 7 results\nTCP 8080\n556 bounded gauges"]
     end
 
     USER["Operator browser\n127.0.0.1:13000"]
@@ -263,6 +267,7 @@ flowchart LR
     UE -. "8 five /metrics targets 9101" .-> PROM
     KSM -. "8 object metrics 8080" .-> PROM
     ALERT -. "8 exercise metrics 8080" .-> PROM
+    RESULTS -. "8 reviewed metrics 8080" .-> PROM
     API -. "8 HTTPS node/cAdvisor metrics" .-> PROM
     API -. "9 Pod logs + Events" .-> ALLOY
     ALLOY -. "9 push /loki/api/v1/push :3100" .-> LOKI
@@ -297,8 +302,11 @@ flowchart LR
 7. Two ownership-marked routes inside the kind node send endpoint responses
    for the UE pools back through the current UPF Pod. These routes are not
    installed in the Ubuntu host namespace.
-8. Prometheus pulls numeric metrics. It does not carry registration or user
-   traffic and cannot make the service healthy.
+8. Prometheus pulls numeric metrics. The Phase 7 reviewed-results target serves
+   immutable gauges generated from the accepted summary; unlike UE and NF
+   targets, it describes a completed experiment rather than current service
+   state. Prometheus does not carry registration or user traffic and cannot
+   make the service healthy.
 9. Alloy reads Pod logs and Events through project-scoped Kubernetes API
    permissions, then pushes them to Loki.
 10. Grafana queries Prometheus with PromQL and Loki with LogQL. Its dashboards
@@ -370,6 +378,7 @@ accepted 2026-08-06 snapshot and may change if a Service is recreated.
 | `cn5g-observability` | `cn5g-observability-grafana` | `10.96.149.234` | 3000/TCP |
 | `cn5g-observability` | `cn5g-observability-kube-state-metrics` | `10.96.13.72` | 8080/TCP |
 | `cn5g-observability` | `cn5g-observability-alert-exercise` | `10.96.228.244` | 8080/TCP |
+| `cn5g-observability` | `cn5g-observability-phase07-results` | `10.96.38.108` | 8080/TCP |
 
 `cn5g-nrf.cn5g.svc.cluster.local` is an example fully qualified Service name.
 The other Services use the same `<service>.<namespace>.svc.cluster.local`
@@ -464,6 +473,7 @@ kubectl --kubeconfig artifacts/kubernetes/cn5g.kubeconfig get services -A
 | 8081 | TCP | kube-state-metrics Pod only | readiness telemetry listener |
 | 12345 | TCP | Alloy Pod only | Alloy health/readiness HTTP server |
 | 8080 | TCP | alert-exercise | controlled metric fixture for alert lifecycle tests |
+| 8080 | TCP | Phase 7 reviewed-results exporter | immutable accepted experiment gauges |
 | 5201-5205 | TCP and UDP | Phase 7 DNN benchmark sidecars | one temporary iperf3 port per UE ordinal; absent after rollback |
 | `ogstun` | TUN | UPF Pod | Internet DNN gateway `10.60.0.1/24` |
 | `ogstun2` | TUN | UPF Pod | Enterprise DNN gateway `10.61.0.1/24` |
@@ -495,6 +505,7 @@ Temporary host loopback ports used by lifecycle helpers are not Services:
 | Alloy Deployment | 1 | none | `alloy` | no PVC; bounded `emptyDir` state |
 | kube-state-metrics Deployment | 1 | none | `kube-state-metrics` | none |
 | alert-exercise Deployment | 1 | none | `exporter` | none |
+| Phase 7 reviewed-results Deployment | 1 | none | token-free static metrics `exporter` | none; generated ConfigMap and 2 MiB memory `emptyDir` |
 | Phase 7 temporary UE extension | up to 5 | unchanged | adds `benchmark-client` sidecar | none; 16 MiB memory `/tmp` |
 | Phase 7 temporary DNN extension | 2 | unchanged | adds `benchmark-server` sidecar | none; 16 MiB memory `/tmp` |
 
@@ -514,7 +525,7 @@ and `versions/` manifests.
 | --- | --- |
 | `cn5g/open5gs:2.7.7` | all ten Open5GS NF containers and their config/network init containers |
 | `cn5g/ueransim:3.2.8` | gNB, five UE containers, and UERANSIM config init containers |
-| `cn5g/data-network:0.1.0` | two controlled DNN endpoints and the alert-exercise fixture |
+| `cn5g/data-network:0.1.0` | two controlled DNN endpoints, alert-exercise fixture, and reviewed Phase 7 results exporter |
 | `mongo:8.0.28-noble` with pinned digest | MongoDB, subscriber Job, and subscriber wait init containers |
 | `python:3.13.7-alpine3.22` with pinned digest | five UE user-plane metric sidecars |
 | `prom/prometheus:v3.13.1` with pinned digest | Prometheus |
@@ -546,20 +557,21 @@ topology contains five. A configuration ceiling is not a measured capacity.
 
 | Component | Reads from | Writes/serves | Important boundary |
 | --- | --- | --- | --- |
-| Prometheus | itself; AMF/PCF/SMF/UPF; five UE sidecars; kube-state-metrics; alert fixture; Kubernetes node and cAdvisor proxy | time series, PromQL API, and local alert states on 9090 | pulls metrics every 15 seconds; does not send external notifications |
+| Prometheus | itself; AMF/PCF/SMF/UPF; five UE sidecars; kube-state-metrics; alert fixture; reviewed Phase 7 exporter; Kubernetes node and cAdvisor proxy | time series, PromQL API, and local alert states on 9090 | pulls metrics every 15 seconds; does not send external notifications |
 | kube-state-metrics | selected Pods, Deployments, StatefulSets, Jobs, and PVCs in the two project namespaces | object-state metrics on 8080 | translates API fields; does not measure CPU or understand 5G |
 | Grafana Alloy | project Pod log streams and Kubernetes Events | pushes labeled streams to Loki | mounts no host log directory or runtime socket |
 | Loki | Alloy pushes | LogQL API and retained log chunks on 3100 | 24-hour local retention; diagnostic logs are separate from metrics |
-| Grafana | Prometheus and Loki Services | four provisioned dashboards on 3000 | stores no source-of-truth measurement; UI changes are disabled for provisioned dashboards |
+| Grafana | Prometheus and Loki Services | five provisioned dashboards on 3000 | stores no source-of-truth measurement; UI changes are disabled for provisioned dashboards |
 | alert exercise | controlled in-memory metric values | Prometheus text metrics on 8080 | tests firing/resolution without stopping a real 5G workload |
+| Phase 7 reviewed results | generated, tracked metrics ConfigMap | 556 bounded Prometheus text gauges on 8080 | describes one completed reviewed campaign; does not run traffic or emit live capacity |
 
-Prometheus has 14 active scrape targets in the accepted topology: itself,
+The accepted Stage B installation gives Prometheus 15 active scrape targets: itself,
 four native Open5GS metric endpoints, five UE endpoints, kube-state-metrics,
-the alert fixture, the node API proxy, and the cAdvisor proxy. Thirteen are
-required service/telemetry targets; the alert fixture exists only for bounded
-alert exercises.
+the alert fixture, the reviewed-results exporter, the node API proxy, and the
+cAdvisor proxy. The results target is required for the fifth dashboard; the
+alert fixture exists only for bounded alert exercises.
 
-The four Git-controlled Grafana dashboards are:
+The five Git-controlled Grafana dashboards are:
 
 1. **platform overview:** service health, 5G counts, user-plane status, target
    health, alerts, and cross-dashboard navigation;
@@ -568,7 +580,10 @@ The four Git-controlled Grafana dashboards are:
 3. **Kubernetes resources:** normalized requests/limits, CPU, memory, restarts,
    Out-of-Memory evidence, and scrape health; and
 4. **project logs:** bounded Loki panels for component logs, Kubernetes Events,
-   and procedure-oriented troubleshooting.
+   and procedure-oriented troubleshooting; and
+5. **performance and capacity experiments:** reviewed Phase 7 throughput,
+   procedure, fairness, packet, and resource evidence with explicit local-lab
+   limitations.
 
 ## Probe And Health Model
 
@@ -590,6 +605,7 @@ different questions. Startup/readiness/liveness affect Pod lifecycle;
 | Alloy | none | HTTP `/-/ready` on 12345 | HTTP `/-/healthy` on 12345 |
 | kube-state-metrics | `/healthz` on 8080 | `/readyz` on 8081 | `/livez` on 8080 |
 | alert-exercise | none | HTTP `/metrics` | none |
+| Phase 7 reviewed results | HTTP `/metrics` | HTTP `/metrics` | HTTP `/metrics` |
 | Phase 7 benchmark client | none; image executables are verified before install | `uesimtun0` exists in the shared network namespace | PID 1 lives |
 | Phase 7 benchmark server | all five TCP listeners exist | all five TCP listeners exist | supervisor PID 1 lives |
 

@@ -2,7 +2,9 @@
 
 ## Status And Purpose
 
-Status: Stage A accepted on 2026-08-06; Stage B awaits measured Phase 7 data.
+Status: Stages A and B accepted on 2026-08-06. Phase 7 measurement, analysis,
+reviewed-results export, and the fifth Grafana dashboard passed their live
+runtime gates. Stage C remains gated on Phase 8 recovery evidence.
 
 This document defines how the CN5G dashboards will evolve from the accepted
 Phase 6 operational baseline into a realistic monitoring, performance, and
@@ -96,11 +98,13 @@ configuration.
 flowchart LR
     A["Pre-Phase 7\nHardening + operational UX"] --> B["Phase 7\nPerformance and capacity"]
     B --> C["Phase 8\nReliability and recovery"]
-    C --> D["Final release\nCurated presentation and evidence"]
+    C --> D["Final release\nDashboard curation"]
+    D --> E["Before final documentation\nVisual evidence publication"]
 ```
 
-The implementation is divided into four stages. Only Stage A should be
-implemented before Phase 7.
+The implementation is divided into five stages. Stages are activated only
+when their required evidence exists; this prevents attractive panels from
+silently becoming claims the project has not measured.
 
 ## Stage A — Pre-Phase-7 Hardening And Operational UX
 
@@ -291,6 +295,57 @@ Dashboard panels should consume reviewed machine-readable summaries or
 time-aligned experiment metrics. They must not silently mix separate runs or
 present a best run as a general result.
 
+Phase 7 has now supplied that evidence. The accepted campaign contains nine
+conditions: three repetitions at each of 1, 3, and 5 concurrent synthetic UEs.
+The benchmark overlay was intentionally rolled back and Prometheus retains
+only 24 hours, so Stage B uses a deterministic exporter generated from the
+tracked, reviewed `benchmarks/phase-07/results/summary.json`. It exposes 556
+bounded gauges under the `cn5g_phase07_reviewed_` prefix. These are immutable
+historical experiment facts, not live benchmark samples and not capacity
+promises.
+
+The Stage B dashboard therefore uses instant-value comparisons rather than
+fake time trends. It covers campaign identity and completeness, throughput,
+target attainment, fairness, retransmissions, ICMP round-trip time, UDP loss
+and jitter, registration/PDU-session success and latency, component CPU and
+memory peaks, repetition distributions, and explicit publication limits. A
+fixed `ue_level` selector allows only 1, 3, or 5. The exporter runs without a
+Kubernetes token, Linux capabilities, writable root filesystem, subscriber
+data, or network-specific identity labels.
+
+Stage B acceptance requires:
+
+- deterministic regeneration from the reviewed summary with no diff;
+- exactly 556 reviewed series under a hard limit of 600;
+- one healthy `phase07-reviewed-results` Prometheus target;
+- the reviewed campaign marker, nine accepted conditions, three repetitions,
+  and six procedure-success series returning the declared values;
+- all five exact dashboard titles provisioned from Git;
+- every Performance dashboard panel rendering data or an intentional explained
+  empty state, with the 1/3/5 UE selector and all evidence links working;
+- the full Phase 5 and Phase 6 regressions and alert lifecycles still passing;
+- a fresh 30-minute interactive Grafana soak across the new dashboard passing
+  with zero restarts, unchanged Pod identity, and at least 20% memory headroom;
+- no subscriber material, local identity, raw benchmark evidence, or secret
+  entering the chart or published screenshots.
+
+Stage B passed this gate on 2026-08-06 as observability revision 6. Runtime
+validation found one healthy reviewed-results target, exactly 556 reviewed
+series, all five dashboard definitions, and the intact five-UE/two-DNN service.
+All three alert scenarios fired and resolved. The 2,101-second interactive
+Grafana soak retained one Ready Pod with zero restarts and measured a 407.2 MiB
+peak, 53.0% of the 768 MiB limit.
+
+Two guarded upgrade attempts exposed lifecycle defects without losing the
+accepted release. First, the server-side dry run used a field manager different
+from Helm while the chart-version label changed. Second, the chart-version
+label inside the retained Loki and Prometheus `volumeClaimTemplates` attempted
+to change an immutable StatefulSet field. Helm rolled the release back each
+time. The accepted correction uses Helm's manager identity, adds Helm's native
+server dry run, prohibits force-conflict takeover, and preserves the original
+`0.1.0` label only inside the immutable claim-template lineage while current
+workload labels correctly report chart `0.2.0`.
+
 ## Stage C — Phase 8 Reliability And Recovery Dashboard
 
 This dashboard is added only after controlled AMF, SMF, UPF, and selected
@@ -316,7 +371,7 @@ Proposed name: **CN5G Reliability And Recovery**.
 Annotations should mark controlled experiment boundaries so that an operator
 can correlate metrics and logs without guessing when the fault occurred.
 
-## Stage D — Final Release Presentation
+## Stage D — Final Dashboard Curation
 
 After the later phase gates, perform one final curation pass:
 
@@ -340,6 +395,73 @@ CN5G Dashboards
 ├── Performance And Capacity Experiments       (Phase 7 evidence)
 └── Reliability And Recovery                   (Phase 8 evidence)
 ```
+
+## Stage E — Visual Evidence Publication Before Final Documentation
+
+This is the final dashboard step. It is performed only after every planned
+implementation phase is accepted and immediately before the main final
+documentation pass. Its purpose is to give a repository visitor visual proof
+of the working interface without treating screenshots as the source of truth.
+
+### E.1 Controlled capture session
+
+1. Revalidate the final service and observability releases.
+2. Start the loopback-only Grafana forward with
+   `sudo ./scripts/phase06-lab.sh grafana`.
+3. Select a declared time window and stable variable values for each view.
+4. Exercise only documented, bounded scenarios. Healthy overview and Phase 7
+   reviewed-results views are mandatory; Phase 8 recovery views are captured
+   only after their fault lifecycle is accepted.
+5. Capture the browser viewport without credentials, local file paths,
+   bookmarks, unrelated tabs, usernames, raw subscriber values, or accidental
+   host details.
+6. Record the dashboard UID, Git commit, capture time, selected variables,
+   scenario, and what the view does and does not prove.
+
+The user will identify the local screenshot paths or attach the images. Before
+publication, each image is visually inspected, cropped only when needed,
+privacy-checked, and copied into `docs/images/dashboards/`. The original local
+captures remain outside Git. Selected images receive descriptive filenames;
+for example `service-overview-healthy.png` and
+`phase07-performance-reviewed.png`.
+
+### E.2 Repository presentation
+
+Create `docs/dashboard-gallery.md` as the complete visual walkthrough. Each
+image receives alt text, a short interpretation, capture metadata, a link to
+the version-controlled dashboard JSON, and a link to the validation/report
+that supports the displayed state. Add only two or three high-value images to
+the root README so the landing page stays fast and focused; link from those
+images to the full gallery.
+
+The recommended final set is:
+
+| View | Why it earns a place |
+| --- | --- |
+| Service Overview in a healthy accepted state | communicates the whole platform in seconds |
+| Control/session or DNN view | proves telecom-specific depth beyond generic Kubernetes monitoring |
+| Phase 7 reviewed performance dashboard | shows repeatable experiment design and measured results |
+| Phase 8 recovery timeline | added only after controlled recovery evidence exists |
+| selected logs/troubleshooting view | optional; include only if legible and fully sanitized |
+
+### E.3 Visual acceptance gate
+
+- images are readable at normal repository width and use a web-suitable PNG
+  or WebP size;
+- no image contains credentials, subscriber identities, local usernames,
+  private paths, tokens, kubeconfigs, or unrelated host/application content;
+- filenames, alt text, dashboard UIDs, variables, commit, and evidence meaning
+  are recorded in the gallery;
+- README and gallery image links work from a clean clone;
+- screenshots agree with the checked-in JSON and accepted reports;
+- no panel implies production scale, carrier capacity, high availability, or
+  unmeasured reliability; and
+- repository link, privacy, secret, and cleanliness checks pass after the
+  binary assets are added.
+
+Screenshots demonstrate that the provisioned interface rendered and was
+usable. The dashboard JSON, generated metrics, experiment summary, and
+validation reports remain the reproducible evidence chain.
 
 ## Visual Design Standard
 
@@ -461,6 +583,5 @@ rollback.
 
 ## Approval Boundary
 
-Stage A was implemented only after explicit approval and is now accepted.
-Stage B remains blocked until Phase 7 defines and executes its traffic model,
-measurement windows, repetitions, failure criteria, and reviewed evidence.
+Stages A and B were implemented only after explicit approval and are accepted.
+Stages C through E retain their evidence and timing boundaries.

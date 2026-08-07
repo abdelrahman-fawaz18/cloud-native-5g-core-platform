@@ -14,7 +14,8 @@
     {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
-    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false}
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false},
+    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false}
   ],
   "templating": {"list": [
     {"name": "namespace", "label": "Namespace", "type": "custom", "query": "cn5g,cn5g-observability", "includeAll": true, "allValue": "cn5g|cn5g-observability", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}, "options": []},

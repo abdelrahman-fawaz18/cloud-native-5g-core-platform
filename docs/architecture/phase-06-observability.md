@@ -17,6 +17,14 @@ Kubernetes readiness is not treated as proof of registration, PFCP session
 creation, or user-plane reachability. The dashboards show these signals beside
 each other so an operator can distinguish platform health from 5G health.
 
+This document preserves the accepted Phase 6 four-dashboard boundary. After
+Phase 7 analysis, the same observability chart gained a fifth reviewed-results
+dashboard and a static exporter generated from the accepted performance
+summary. That extension is explained in
+[Section 33.23](../README.md#3323-turning-the-accepted-report-into-a-reproducible-dashboard)
+and the [dashboard evolution plan](observability-dashboard-evolution-plan.md);
+it does not rewrite what Phase 6 originally measured.
+
 ## System Mind Map
 
 ```mermaid

@@ -15,7 +15,8 @@ Actions:
   install         Add bounded UE probe metrics, install the isolated
                   observability release, and run end-to-end validation.
   validate        Revalidate Phase 5 plus Prometheus, Grafana, Loki, Alloy,
-                  Kubernetes metrics, telecom metrics, and cardinality.
+                  Kubernetes/telecom metrics, reviewed Phase 7 results,
+                  five dashboards, and both cardinality contracts.
   test-alerts     Prove firing and resolution for three actionable alert
                   rules using the bounded controlled exercise metric.
   grafana         Record a stability-soak baseline, then expose Grafana only
@@ -172,6 +173,7 @@ verify_image_pins() {
 
 deterministic_render() {
   local render_dir cleanup
+  "$project_root/scripts/generate-phase07-dashboard-metrics.py" --check
   render_dir=$(mktemp -d)
   printf -v cleanup 'rm -rf -- %q' "$render_dir"
   trap "$cleanup" RETURN
@@ -292,10 +294,24 @@ server_dry_run() {
     > "$render_dir/core.yaml"
   helm template "$release" "$observability_chart" --namespace "$namespace" \
     > "$render_dir/observability.yaml"
+  # These resources already belong to Helm. Use the existing manager identity
+  # for the non-mutating server-side simulation so a legitimate chart-version
+  # label update is evaluated as Helm's update, while conflicts owned by a
+  # different manager still fail the dry run.
   kubectl --kubeconfig "$kubeconfig" apply --server-side --dry-run=server \
-    --field-manager=cn5g-phase06-preflight --filename "$render_dir/core.yaml" >/dev/null
+    --field-manager=helm --filename "$render_dir/core.yaml" >/dev/null
   kubectl --kubeconfig "$kubeconfig" apply --server-side --dry-run=server \
-    --field-manager=cn5g-phase06-preflight --filename "$render_dir/observability.yaml" >/dev/null
+    --field-manager=helm --filename "$render_dir/observability.yaml" >/dev/null
+  # Helm 4 performs upgrades with server-side apply. Exercise that exact Helm
+  # path as well: the generic Kubernetes dry run cannot detect every immutable
+  # StatefulSet comparison made against Helm's stored release manifest.
+  helm upgrade --install "$core_release" "$core_chart" \
+    --kubeconfig "$kubeconfig" --namespace "$core_namespace" \
+    --values "$core_phase05_values" --values "$core_phase06_values" \
+    --dry-run=server --hide-secret >/dev/null
+  helm upgrade --install "$release" "$observability_chart" \
+    --kubeconfig "$kubeconfig" --namespace "$namespace" \
+    --dry-run=server --hide-secret >/dev/null
   rm -rf -- "$render_dir"
   trap - RETURN
   printf 'server_side_phase06_dry_run=pass\n'
@@ -443,17 +459,18 @@ verify_observability_release() {
 }
 
 validate_prometheus() {
-  local targets_json query_json value series_count
+  local targets_json query_json value series_count reviewed_series_count
   start_forward "${release}-prometheus" 19090 9090 http://127.0.0.1:19090/-/ready
   targets_json=$(curl --fail --silent --show-error http://127.0.0.1:19090/api/v1/targets)
   jq -e '
     ([.data.activeTargets[] | select(.labels.job == "cn5g-ue-user-plane")] | length) == 5 and
-    ([.data.activeTargets[] | select(.labels.job | test("^(alert-exercise|open5gs-(amf|pcf|smf|upf)|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor)$")) | .health] | all(. == "up"))
+    ([.data.activeTargets[] | select(.labels.job == "phase07-reviewed-results")] | length) == 1 and
+    ([.data.activeTargets[] | select(.labels.job | test("^(alert-exercise|phase07-reviewed-results|open5gs-(amf|pcf|smf|upf)|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor)$")) | .health] | all(. == "up"))
   ' <<<"$targets_json" >/dev/null || {
     printf 'error: required Prometheus targets are absent or unhealthy\n' >&2
     return 1
   }
-  printf 'prometheus_target_health=pass ue_targets=5\n'
+  printf 'prometheus_target_health=pass ue_targets=5 reviewed_results_targets=1\n'
   for query_expected in \
     'max(amf_session):5' \
     'max(pfcp_sessions_active):5' \
@@ -484,6 +501,31 @@ validate_prometheus() {
     return 1
   fi
   printf 'metric_cardinality=bounded series=%s limit=30\n' "$series_count"
+  for query_expected in \
+    'cn5g_phase07_reviewed_campaign_info{status="reviewed_complete"}:1' \
+    'cn5g_phase07_reviewed_accepted_conditions:9' \
+    'cn5g_phase07_reviewed_repetitions:3' \
+    'count(cn5g_phase07_reviewed_procedure_success_ratio):6'; do
+    query=${query_expected%:*}
+    expected=${query_expected##*:}
+    query_json=$(prometheus_query "$query")
+    value=$(jq -er '.data.result | if length == 1 then .[0].value[1] else error("unexpected reviewed-result vector") end' <<<"$query_json")
+    awk -v observed="$value" -v expected="$expected" 'BEGIN {exit !(observed+0 == expected+0)}' || {
+      printf 'error: reviewed Phase 7 metric did not meet contract: %s observed=%s\n' "$query" "$value" >&2
+      return 1
+    }
+  done
+  query_json=$(prometheus_query 'count({__name__=~"cn5g_phase07_reviewed_.+"})')
+  reviewed_series_count=$(jq -er '
+    .data.result |
+    if length == 1 then .[0].value[1] else error("missing reviewed Phase 7 series count") end
+  ' <<<"$query_json")
+  if ! awk -v observed="$reviewed_series_count" 'BEGIN {exit !(observed+0 == 556 && observed+0 <= 600)}'; then
+    printf 'error: reviewed Phase 7 metric cardinality does not match the generated contract: %s\n' "$reviewed_series_count" >&2
+    return 1
+  fi
+  printf 'phase07_reviewed_metric_validation=pass accepted_conditions=9 series=%s limit=600\n' \
+    "$reviewed_series_count"
   stop_forward
 }
 
@@ -536,19 +578,20 @@ validate_grafana() {
   dashboards=$(curl --fail --silent --show-error --netrc-file "$grafana_netrc" \
     'http://127.0.0.1:13000/api/search?type=dash-db')
   jq -e '
-    ([.[] | select(.tags | index("phase-06")) | .title] | sort) == [
+    ([.[] | select(.tags | index("cn5g")) | .title] | sort) == [
       "CN5G Control, Sessions, UEs, And DNNs",
       "CN5G Kubernetes Resources",
       "CN5G Logs And Troubleshooting",
+      "CN5G Performance And Capacity Experiments",
       "CN5G Service Overview"
     ]
   ' <<<"$dashboards" >/dev/null || {
-    printf 'error: expected the four exact provisioned Stage A dashboards\n' >&2
+    printf 'error: expected the five exact provisioned CN5G dashboards\n' >&2
     return 1
   }
   rm -f -- "$grafana_netrc"
   grafana_netrc=''
-  printf 'grafana_provisioning=pass datasources=2 dashboards=4\n'
+  printf 'grafana_provisioning=pass datasources=2 dashboards=5\n'
   stop_forward
 }
 

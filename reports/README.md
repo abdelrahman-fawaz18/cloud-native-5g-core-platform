@@ -206,6 +206,24 @@ gate, and all three alert firing-resolution cycles passed. Repository-wide
 regression finished with 149 tests passing, strict Helm lint, deterministic
 rendering, valid dashboard JSON, and a clean privacy scan.
 
+### Post-Phase-7 Dashboard Extension Result
+
+The reviewed Phase 7 summary is now projected through one token-free static
+exporter and the fifth **Performance And Capacity Experiments** dashboard.
+Observability revision 6 passed the complete Phase 5/6 validator with one
+healthy reviewed-results target, exactly 556 reviewed series under the limit
+of 600, five dashboards, and all three alert firing-resolution cycles. The
+2,101-second interactive gate retained the same Ready Grafana Pod with zero
+restarts and a 407.2 MiB peak, 53.0% of its 768 MiB limit. The exporter Service
+used replaceable ClusterIP `10.96.38.108` in the accepted snapshot.
+
+The chart upgrade also proved rollback safety. Two rejected attempts left the
+accepted release deployed: one detected field-manager ownership and one
+detected an immutable StatefulSet claim-template label. The accepted chart
+preserves the original retained-claim lineage label, uses current `0.2.0`
+labels elsewhere, and now exercises Helm's native server dry run before every
+upgrade.
+
 ### Limitations
 
 This is a 24-hour, single-node, single-replica local observability baseline.
@@ -214,5 +232,6 @@ general sizing guidance.
 It does not prove backend high availability, external alert delivery,
 long-term retention, production access control, throughput, packet loss, or
 capacity. The UE probe duration is an operational reachability signal, not a
-radio or carrier-grade latency benchmark. Phase 7 must define and execute a
-controlled load methodology before any performance claim is made.
+radio or carrier-grade latency benchmark. Controlled Phase 7 performance
+evidence is reported separately and remains limited to its declared local
+experiment contract.

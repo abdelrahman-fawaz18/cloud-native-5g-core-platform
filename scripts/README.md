@@ -268,21 +268,31 @@ rules, and read-only collectors belong to the separate
 retained 2 GiB PVC; Grafana is reconstructed from provisioned files and its
 credential is an ignored pre-created Secret.
 
-The accepted runtime run completed installation, repeated validation, and
-three alert firing/resolution cycles on 2026-08-05. It verified 13 required
+The original accepted runtime run completed installation, repeated validation,
+and three alert firing/resolution cycles on 2026-08-05. It verified 13 required
 healthy Prometheus targets, five UE targets, five AMF and PFCP sessions, five
 successful user-plane probes, 20 bounded custom series, recent Loki data, two
-Grafana data sources, and four dashboards.
+Grafana data sources, and the original four operational dashboards.
 
 The 2026-08-06 Stage A upgrade retained the active core overlay, upgraded only
 the observability release to revision 3, and passed a 2,568-second interactive
 Grafana gate with zero restart increase and a 473.2 MiB peak under the 768 MiB
 limit.
 
+After Phase 7 analysis, `generate-phase07-dashboard-metrics.py --check`
+verifies that the tracked 556-series reviewed-results fixture exactly matches
+the accepted summary. The observability chart serves it through a restricted
+exporter and provisions the fifth **Performance And Capacity Experiments**
+dashboard. `phase06-lab.sh validate` now requires that exporter target, the
+exact reviewed campaign contract, its cardinality bound, and all five
+dashboard titles. The extension was accepted as observability revision 6 after
+the full validator, all three alert lifecycles, and a 2,101-second interactive
+soak passed with zero Grafana restarts and a 407.2 MiB peak.
+
 Use `sudo ./scripts/phase06-lab.sh grafana` for a temporary
 `127.0.0.1:13000` port-forward. That command also records the exact Grafana Pod
-identity, restart count, and start time for the Stage A stability gate. Keep
-the terminal open for at least 30 minutes while inspecting the four dashboards,
+identity, restart count, and start time for the interactive stability gate. Keep
+the terminal open for at least 30 minutes while inspecting the five dashboards,
 then stop the forward with `Ctrl+C` and run:
 
 ```bash

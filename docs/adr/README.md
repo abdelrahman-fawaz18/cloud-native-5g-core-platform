@@ -53,3 +53,4 @@ How can the decision be changed safely?
 - [ADR-0007: Version pinning and update policy](0007-version-pinning-policy.md)
 - [ADR-0008: Continuous Integration and privileged test boundary](0008-ci-privileged-test-boundary.md)
 - [ADR-0009: Phase 7 benchmark traffic path and tooling](0009-phase-07-benchmark-path.md)
+- [ADR-0010: Reviewed performance evidence in the operational dashboard](0010-reviewed-performance-dashboard.md)
