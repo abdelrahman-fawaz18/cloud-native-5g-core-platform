@@ -4329,11 +4329,11 @@ The implementation can be followed directly through these tracked artifacts:
 | How was the benchmark lifecycle enforced? | [`scripts/phase07-lab.sh`](../scripts/phase07-lab.sh) and [`scripts/run-phase07-matrix.py`](../scripts/run-phase07-matrix.py) |
 | How were raw attempts accepted and summarized? | [`scripts/analyze-phase07.py`](../scripts/analyze-phase07.py) |
 | What reviewed results were published? | [`reports/07_phase07_performance.md`](../reports/07_phase07_performance.md) and [`summary.json`](../benchmarks/phase-07/results/summary.json) |
-| How were reviewed metrics generated? | [`scripts/generate-phase07-dashboard-metrics.py`](../scripts/generate-phase07-dashboard-metrics.py) |
-| What exactly does the exporter serve? | [`phase07-reviewed.prom`](../charts/cn5g-observability/files/phase07-reviewed.prom) |
-| How is the exporter installed? | [`phase07-results.yaml`](../charts/cn5g-observability/templates/phase07-results.yaml) |
+| How were reviewed metrics generated? | prepared path `scripts/generate-phase07-dashboard-metrics.py` |
+| What exactly does the exporter serve? | prepared path `charts/cn5g-observability/files/phase07-reviewed.prom` |
+| How is the exporter installed? | prepared path `charts/cn5g-observability/templates/phase07-results.yaml` |
 | How does Prometheus discover it? | [`prometheus-config.yaml`](../charts/cn5g-observability/templates/prometheus-config.yaml) |
-| What queries and panels does Grafana use? | [`05-performance-capacity.json`](../charts/cn5g-observability/files/dashboards/05-performance-capacity.json) |
+| What queries and panels does Grafana use? | prepared path `charts/cn5g-observability/files/dashboards/05-performance-capacity.json` |
 | How are Grafana data sources and dashboards provisioned? | [`grafana.yaml`](../charts/cn5g-observability/templates/grafana.yaml) |
 
 The final professional mental model is:
