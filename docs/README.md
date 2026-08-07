@@ -26,6 +26,7 @@ Phase-specific extensions:
 - [Observability dashboard evolution plan](architecture/observability-dashboard-evolution-plan.md)
 - [ADR-0005 observability stack decision](adr/0005-observability-stack.md)
 - [Phase 7 controlled performance methodology](architecture/phase-07-performance-methodology.md)
+- [Complete accepted-system architecture](architecture/complete-system-architecture.md)
 - [Phase 7 reviewed performance report](../reports/07_phase07_performance.md)
 - [ADR-0009 benchmark traffic-path decision](adr/0009-phase-07-benchmark-path.md)
 
@@ -2292,6 +2293,16 @@ After this foundation, use the following review order:
 13. [Phase 5 implementation model](#31-phase-5-multi-ue-and-dnn-implementation-model)
     — deterministic identity derivation, StatefulSet ordinals, two-DNN
     topology, source-policy isolation, controlled migration, and runtime gate.
+14. [Phase 6 observability model](#32-phase-6-observability-and-operational-mental-model)
+    — metrics, logs, dashboards, alerts, sidecar probes, persistence, and
+    operational troubleshooting.
+15. [Phase 7 experiment model](#33-phase-7-controlled-performance-and-capacity-experiment)
+    — route enforcement, controlled workload, clean-state boundaries,
+    repeated analysis, retained failures, results, and rollback.
+16. [Complete accepted-system architecture](architecture/complete-system-architecture.md)
+    — Helm and Kubernetes ownership, every Pod/container, 5G and telemetry
+    interfaces, address/port inventory, probes, storage, security, and a
+    registration-to-ping walkthrough.
 
 Raw logs, host snapshots, runtime state, kubeconfigs, Secrets, keys, and packet
 captures remain local and ignored by default. Public reports contain only
@@ -3006,9 +3017,9 @@ flowchart LR
 The current metrics are operational signals, not a performance benchmark.
 Probe duration is not radio latency, a current session gauge is not an
 availability percentage, and a short CPU sample is not capacity planning.
-Phase 7 must define offered traffic, warm-up, measurement duration,
-repetitions, percentiles, loss calculation, and pass/fail thresholds before
-reporting throughput or performance.
+Phase 7 subsequently defined offered traffic, warm-up, measurement duration,
+repetitions, percentiles, loss calculation, and pass/fail thresholds before it
+reported any controlled local performance result.
 
 ### 32.10 Compact operator model
 
@@ -3025,3 +3036,291 @@ When investigating a problem, move from broad dependency to narrow evidence:
 This is the central Phase 6 mental model: **metrics reveal the shape and time
 of a problem; logs explain the component behavior; application validation
 proves the service has actually recovered.**
+
+## 33. Phase 7 Controlled Performance And Capacity Experiment
+
+Phase 7 was accepted on 2026-08-06 after a route-enforced pilot, nine repeated
+matrix conditions, deterministic analysis, scoped Helm rollback, and complete
+Phase 5/6 regression validation. The phase answers a narrow question:
+**how does this exact single-node, five-UE UERANSIM platform behave under a
+controlled local workload?** It does not estimate carrier capacity or
+production sizing.
+
+The detailed cross-phase system containing Kubernetes, every 5G function,
+sidecars, Services, ports, address domains, probes, storage, and observability
+is documented separately in the [complete accepted-system architecture](architecture/complete-system-architecture.md).
+
+### 33.1 From functional validation to an experiment
+
+Phase 5 proved that five UEs could register concurrently, establish unique PDU
+sessions, select two DNNs, reach only their intended endpoints, and recover.
+Phase 6 proved that the platform exposed metrics, logs, dashboards, and alert
+state. Neither phase controlled offered load, duration, repetitions, or
+statistical treatment, so neither could support a throughput result.
+
+Phase 7 introduced the basic language of an experiment:
+
+| Concept | Phase 7 meaning |
+| --- | --- |
+| Independent variable | concurrent UE count: 1, 3, or 5 |
+| Controlled variables | image identity, topology, MTU 1400, one stream, traffic rate, duration, reset method, and run order |
+| Dependent variables | throughput, retransmissions, loss, jitter, ICMP round-trip time, procedure time, CPU, memory, and restarts |
+| Repetition | three fresh executions of each UE level |
+| Median | middle of the three condition results; less sensitive to one extreme observation than the mean |
+| Nearest-rank p95 | largest observation when only three repetitions exist; retained but interpreted cautiously |
+| Failure | preserved evidence that is excluded from accepted summaries unless the declared contract passed |
+
+The machine-readable contract in
+[`benchmarks/phase-07/experiment.json`](../benchmarks/phase-07/experiment.json)
+is the source of truth. Documentation describes it; the lifecycle and analyzer
+enforce it.
+
+### 33.2 The temporary benchmark boundary
+
+Phase 7 did not send traffic from an ordinary Pod interface because that would
+bypass the 5G user plane. It temporarily added a restricted **benchmark
+sidecar** to every UE Pod and a restricted iperf3 server sidecar to each DNN
+Pod. Containers in one Pod share a network namespace, so the client could use
+the UE main container's `uesimtun0` without receiving the UE's Secret or extra
+Linux capabilities.
+
+```mermaid
+flowchart LR
+    RUNNER["Phase 7 runner"]
+    subgraph UEPOD["UE Pod — shared network namespace"]
+        UE["UERANSIM UE\ncreates uesimtun0"]
+        CLIENT["benchmark-client sidecar\niperf3 + ip\nzero capabilities"]
+        TUN["uesimtun0\nUE session address"]
+        UE --> TUN
+        CLIENT -->|"bind source address"| TUN
+    end
+    GNB["UERANSIM gNB"]
+    UPF["Open5GS UPF"]
+    subgraph DNNPOD["Assigned DNN Pod"]
+        HTTP["data-network\nTCP 8080"]
+        SERVER["benchmark-server sidecar\nTCP/UDP 5201-5205\nzero capabilities"]
+    end
+
+    RUNNER -->|"starts bounded window"| CLIENT
+    TUN -->|"simulated radio"| GNB
+    GNB -->|"N3 GTP-U / UDP 2152"| UPF
+    UPF -->|"N6 routed IP"| SERVER
+```
+
+Each DNN sidecar ran five independent iperf3 server processes. UE ordinal 0
+used port 5201, ordinal 1 used 5202, through ordinal 4 on 5205. Separate ports
+allowed simultaneous clients to run concurrently; a single iperf3 server
+process accepts one test at a time and could otherwise serialize the workload.
+
+Both benchmark containers:
+
+- ran as UID/GID 65532 with all Linux capabilities dropped;
+- used a read-only root filesystem and no Kubernetes API token;
+- mounted only a 16 MiB memory-backed `/tmp` for iperf3 scratch state;
+- had no host mount, subscriber Secret, `NET_ADMIN`, or `NET_RAW`; and
+- existed only while the Phase 7 Helm overlay was active.
+
+The final rollback removed these sidecars and ports. The local benchmark image
+and reviewed evidence remain, but the accepted runtime is again the Phase 6
+topology.
+
+### 33.3 Route enforcement: proving traffic used 5G
+
+The benchmark destination is also reachable through the Kubernetes Pod
+network. That route would measure kind networking rather than the 5G user
+plane. Before starting traffic, the runner therefore required a source-aware
+route lookup to select `uesimtun0` and source-policy table 1000. The table is
+named `rt_uesimtun0` inside the UE container, but the benchmark sidecar has its
+own read-only `/etc` and sees the same kernel table by number.
+
+```mermaid
+flowchart TD
+    START["candidate benchmark"] --> LOOKUP["ip route get destination\nfrom current UE address"]
+    LOOKUP --> ROUTE{"device is uesimtun0\nand rule selects table 1000?"}
+    ROUTE -- No --> REJECT["reject condition\nstart no traffic"]
+    ROUTE -- Yes --> PATH["UE TUN -> gNB -> GTP-U -> UPF -> intended DNN"]
+    PATH --> VERIFY["record route, source, endpoint identity, and iperf3 JSON"]
+```
+
+This check prevented a plausible-looking but invalid high throughput number.
+Route enforcement is part of measurement validity, not merely a network
+diagnostic.
+
+### 33.4 Declared workload
+
+Every accepted condition used one stream per active UE, a three-second iperf3
+omit period, a 15-second measured interval, and ten seconds of cool-down.
+The campaign also recorded a 30-second idle baseline.
+
+| Stage | Offered workload | Reported evidence | What it means |
+| --- | --- | --- | --- |
+| ICMP | 10 echo requests per UE at 0.2-second intervals | loss and min/average/max RTT | low-rate reachability and round-trip behavior |
+| Forward TCP | unbounded | aggregate/per-UE throughput and retransmissions | local saturation-oriented uplink behavior |
+| Reverse TCP | 10 Mbit/s per UE | delivered rate, target attainment, retransmissions | bounded downlink service-load delivery, not maximum capacity |
+| UDP | 1 Mbit/s per UE | delivered rate, loss, jitter | fixed-rate datagram behavior |
+| Procedures | fresh UE startup per condition | registration and PDU-session success/latency | control/session behavior under the declared concurrency |
+| Resources | time-aligned Prometheus range queries | CPU, working-set memory, network, restarts | component pressure during the same measurement window |
+
+The distinction between **offered rate** and **delivered throughput** is
+important. Reverse TCP and UDP asked whether the path could deliver a declared
+load. Only unbounded forward TCP attempted to discover local saturation
+behavior.
+
+### 33.5 Independence and the clean-state boundary
+
+Early exploratory runs showed that simply scaling UEs down and up did not make
+conditions independent. PFCP, GTP-U, NGAP, address allocation, endpoint Pod
+addresses, and iperf3 processes could survive or change across cycles. The
+accepted runner resets the dependent state before every condition.
+
+```mermaid
+flowchart LR
+    SAFE["host memory/disk\nand image checks"] --> DNN["restart both DNN Pods"]
+    DNN --> QUIESCE["scale UE StatefulSet to 0"]
+    QUIESCE --> CORE["dependency-ordered\nNRF/SCP/data/auth/policy/UPF/SMF/AMF reset"]
+    CORE --> GNB["restart gNB"]
+    GNB --> NRF["require 9 NRF profiles"]
+    NRF --> LEVEL["scale UEs to condition level"]
+    LEVEL --> ROUTE["prove every 5G route"]
+    ROUTE --> MEASURE["ICMP + forward TCP + reverse TCP + UDP\nwith aligned telemetry"]
+    MEASURE --> RESTORE["restore 5 UEs and validate baseline"]
+    RESTORE --> ACCEPT{"condition complete and safe?"}
+    ACCEPT -- Yes --> MARK["write accepted marker"]
+    ACCEPT -- No --> KEEP["retain failed attempt and stop safely"]
+```
+
+DNN Pods restart first because their Pod IPs are replaceable. The UPF starts
+after them, resolves the current endpoint addresses, and installs those exact
+addresses in fail-closed tables 1060 and 1061. Reversing this order can leave
+the UPF pointing at terminated DNN Pods.
+
+The runner is resumable. Every repetition/level has numbered attempt
+directories; accepted markers prevent accidental reruns, while failed attempts
+remain immutable evidence. A trap restores five UEs when a command fails or
+the operator interrupts the campaign.
+
+### 33.6 Safety gates and evidence chain
+
+Traffic never began if available host memory was below 3 GiB, Docker free
+space was below 6 GiB, the benchmark image identity differed, a required
+workload was unready, or a route bypassed the UE TUN. Any new container restart
+or Out-of-Memory (OOM) event failed the condition.
+
+```mermaid
+flowchart LR
+    RAW["ignored raw evidence\niperf3 JSON / ping / logs / Prometheus / snapshots"]
+    STATE["campaign state\naccepted markers + hashes"]
+    ANALYZER["deterministic analyzer"]
+    CSV["3 reviewed CSV files"]
+    JSON["summary.json"]
+    SVG["3 SVG charts"]
+    REPORT["sanitized report"]
+
+    RAW --> ANALYZER
+    STATE --> ANALYZER
+    ANALYZER --> CSV
+    ANALYZER --> JSON
+    ANALYZER --> SVG
+    ANALYZER --> REPORT
+```
+
+The analyzer refused incomplete, hash-mismatched, or incorrectly restored
+evidence. It required exactly nine accepted conditions and checked experiment,
+image, Helm revision, runtime Pod identity, restart snapshots, traffic files,
+procedure logs, and Prometheus samples. Resource series were filtered against
+the Pods that existed during each condition, preventing terminated rollout
+Pods from inflating totals. Two analyzer runs produced byte-identical output.
+
+### 33.7 Failures that improved the method
+
+Failed attempts were not erased or converted into results:
+
+| Failure | What it revealed | Permanent correction |
+| --- | --- | --- |
+| candidate route used `eth0` | direct Pod traffic could bypass the 5G path | source-aware `uesimtun0` route enforcement before traffic |
+| repeated unbounded reverse TCP stopped making progress | the UERANSIM downlink path could stall under that exploratory workload | declare reverse TCP as a bounded 10 Mbit/s-per-UE service-load check |
+| session state accumulated across scale cycles | one load level could influence the next | reset the complete dependency chain before every condition |
+| DNN restart left stale UPF policy routes | the UPF had resolved an endpoint Pod IP that no longer existed | restart DNNs first, then rebuild the UPF/session chain |
+| concurrent clients shared one server process | tests could queue rather than run together | one iperf3 server port per UE ordinal |
+| retained Prometheus series represented replaced Pods | resource totals could count historical containers | filter series by each condition's runtime Pod snapshot |
+
+These are experiment-design findings as much as software fixes. A result is
+credible only when the mechanism, state boundary, and failure handling are
+declared and enforced.
+
+### 33.8 Accepted matrix and results
+
+The accepted campaign ran three repetitions at each of 1, 3, and 5 concurrent
+UEs—nine conditions total. All registrations and PDU sessions succeeded,
+every traffic stage completed, all UEs retained unique sessions, no accepted
+condition added a container restart, and five UEs were restored afterward.
+
+| UEs | Forward aggregate median | Forward per-UE median | Jain fairness | Reverse target delivered | Maximum UDP loss | Median ICMP RTT |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 114.70 Mbit/s | 114.70 Mbit/s | 1.0000 | 99.96% | 0% | 2.089 ms |
+| 3 | 79.38 Mbit/s | 26.19 Mbit/s | 0.9997 | 99.96% | 0% | 1.491 ms |
+| 5 | 91.70 Mbit/s | 17.61 Mbit/s | 0.9928 | 99.96% | 0% | 1.266 ms |
+
+![Phase 7 throughput, offered-load delivery, and fairness](../benchmarks/phase-07/results/plots/throughput.svg)
+
+The aggregate forward result did not rise proportionally with UE count, while
+the median per-UE share fell and median forward retransmissions rose from 233
+at one UE to 729 at three and 1,919 at five. This shows contention in the exact
+local path; it does not identify carrier capacity.
+
+![Phase 7 registration and PDU-session procedure timing](../benchmarks/phase-07/results/plots/procedures.svg)
+
+Registration and PDU-session success were 100% in every condition. A three-
+sample p95 is the maximum repetition rather than a stable tail estimate, so
+the report keeps it but does not overstate it.
+
+![Phase 7 five-UE component CPU peaks](../benchmarks/phase-07/results/plots/resources.svg)
+
+At five UEs, median peak CPU was 515.7 millicores across the UE runtime
+containers, 334.7 millicores at the single gNB, and 147.7 millicores at the
+UPF. The UE/gNB side is the leading bottleneck candidate. The evidence does
+not isolate a single cause; packet-level profiling would be required for that
+stronger conclusion.
+
+### 33.9 Pilot, matrix, analysis, and rollback are different gates
+
+```text
+preflight -> build/load exact image -> install temporary overlay
+          -> pilot -> repeated matrix -> deterministic analysis
+          -> rollback overlay -> Phase 5 validation -> Phase 6 validation
+```
+
+- The **pilot** proved the route and tool mechanism using one UE.
+- The **matrix** produced repeated raw observations.
+- The **analyzer** determined whether the complete evidence was eligible for
+  reviewed summaries.
+- The **rollback** proved the experiment was reversible and did not damage the
+  accepted service.
+
+The final rollback restored the recorded pre-experiment revision 12
+configuration as Helm revision 16, removed benchmark sidecars and ports,
+preserved the MongoDB PVC identity, repaired all five sessions, and passed the
+full Phase 5 and Phase 6 validators.
+The post-Phase-7 host-state snapshot was then captured locally.
+
+### 33.10 What Phase 7 proves—and what it does not
+
+Phase 7 proves that the repository can define, execute, interrupt, resume,
+analyze, and roll back a controlled experiment whose traffic is forced through
+the real synthetic 5G user plane. It provides reproducible local measurements
+and exposes contention as concurrency rises.
+
+It does **not** prove:
+
+- production or carrier capacity;
+- a complete 5G New Radio physical layer—UERANSIM models radio behavior in
+  user space;
+- high availability or multi-node performance;
+- general Internet throughput—the endpoints are controlled Pods;
+- a stable p95 distribution from only three repetitions; or
+- that the gNB alone caused the observed bottleneck.
+
+The compact mental model is: **first prove the route, then reset hidden state,
+then control the workload, retain failures, align telemetry, analyze only a
+complete campaign, and finally prove the platform returns to its accepted
+baseline.**

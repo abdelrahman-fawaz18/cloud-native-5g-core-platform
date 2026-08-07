@@ -214,8 +214,9 @@ delivered 99.96% of its 10 Mbit/s-per-UE target, UDP delivered approximately
 100% of its 1 Mbit/s-per-UE target with zero loss, and every registration and
 PDU session succeeded. The analyzer reproduced byte-identical outputs across
 two runs, and the repository passed 161 tests. The final scoped rollback
-restored Helm revision 12, removed the benchmark overlay, preserved the exact
-MongoDB claim identity, repaired all five sessions, and passed the complete
+restored revision 12's configuration as Helm revision 16, removed the
+benchmark overlay, preserved the exact MongoDB claim identity, repaired all
+five sessions, and passed the complete
 Phase 5 and Phase 6 regression gates. The post-Phase-7 host-state snapshot was
 captured locally. Phase 7 is complete; Phase 8 remains gated on its own design
 and preflight review.

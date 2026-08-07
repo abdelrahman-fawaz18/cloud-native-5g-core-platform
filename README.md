@@ -342,9 +342,10 @@ restarts, and recovery of the five-UE baseline. Median five-UE peak CPU was
 single gNB, and 147.7 millicores at the UPF. The UE/gNB side is therefore the
 leading bottleneck candidate, not a proven isolated cause.
 
-The final lifecycle gate rolled Helm back to revision 12, removed the benchmark
-overlay, preserved the MongoDB claim, and reran the complete Phase 5 and Phase
-6 validators. See the [methodology](docs/architecture/phase-07-performance-methodology.md),
+The final lifecycle gate restored revision 12's configuration as Helm revision
+16, removed the benchmark overlay, preserved the MongoDB claim, and reran the
+complete Phase 5 and Phase 6 validators. See the
+[methodology](docs/architecture/phase-07-performance-methodology.md),
 [reviewed report](reports/07_phase07_performance.md), and
 [machine-readable summary](benchmarks/phase-07/results/summary.json) for the
 statistics, retained failures, limitations, and reproduction contract.
@@ -454,6 +455,7 @@ machine-readable measurements, and concise reports.
 - [Phase 6 sanitized validation summary](reports/README.md#phase-6-observability-validation-summary)
 - [Phase 6 visual and operational model](docs/README.md#32-phase-6-observability-and-operational-mental-model)
 - [Phase 7 controlled performance methodology](docs/architecture/phase-07-performance-methodology.md)
+- [Complete accepted-system architecture and end-to-end packet walkthrough](docs/architecture/complete-system-architecture.md)
 - [Phase 7 machine-readable experiment contract](benchmarks/phase-07/experiment.json)
 - [Phase 7 reviewed performance report](reports/07_phase07_performance.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
