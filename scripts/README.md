@@ -55,6 +55,20 @@ targets, and support a dry-run or read-only mode where practical.
   After the accepted pilot, its resumable matrix runner executes three
   repetitions at 1, 3, and 5 concurrent UEs with separate per-UE server ports
   and aligned Prometheus evidence.
+- `phase08-lab.sh`: owns the gated reliability-experiment lifecycle. It
+  verifies the accepted post-Phase-7 Phase 5/6 baseline, resolves one exact
+  AMF/SMF/UPF Pod before each fault, runs component pilots and a resumable
+  three-repetition matrix, preserves Kubernetes/Prometheus/Loki/5G evidence,
+  separates replacement readiness from automatic or operator-assisted service
+  recovery, and requires dependency-ordered restoration plus complete Phase
+  5/6 validation after every attempt. Separate actions prove MongoDB PVC
+  persistence and invalid-configuration rejection without mixing those safety
+  questions into the timing matrix.
+- `generate-phase07-dashboard-metrics.py` and
+  `generate-phase08-dashboard-metrics.py`: deterministically convert only
+  reviewed summaries into bounded Prometheus fixtures. Their `--check` mode
+  blocks observability rendering when a tracked fixture is missing, stale, or
+  hand-edited.
 - `validate-phase05.sh`: reports each ordinal, Pod, DNN, tunnel address,
   registration/session result, intended endpoint result, and cross-DNN denial.
   It also verifies five database records, unique addresses and F-SEIDs,
@@ -292,7 +306,7 @@ soak passed with zero Grafana restarts and a 407.2 MiB peak.
 Use `sudo ./scripts/phase06-lab.sh grafana` for a temporary
 `127.0.0.1:13000` port-forward. That command also records the exact Grafana Pod
 identity, restart count, and start time for the interactive stability gate. Keep
-the terminal open for at least 30 minutes while inspecting the five dashboards,
+the terminal open for at least 30 minutes while inspecting the six dashboards,
 then stop the forward with `Ctrl+C` and run:
 
 ```bash
@@ -361,3 +375,39 @@ sudo ./scripts/phase07-lab.sh rollback --confirm
 It restores the exact recorded Helm revision and MongoDB claim identity, then
 runs the Phase 5 and Phase 6 validators. It does not delete benchmark images,
 subscriber state, telemetry state, the kind cluster, or unrelated resources.
+
+## Phase 8 Controlled Recovery Experiments
+
+Phase 8 begins only from the accepted post-Phase-7 baseline with the temporary
+benchmark overlay absent:
+
+```bash
+sudo ./scripts/phase08-lab.sh preflight
+sudo ./scripts/phase08-lab.sh pilot amf
+sudo ./scripts/phase08-lab.sh pilot smf
+sudo ./scripts/phase08-lab.sh pilot upf
+sudo ./scripts/phase08-lab.sh run-matrix
+sudo ./scripts/phase08-lab.sh test-mongodb
+sudo ./scripts/phase08-lab.sh test-invalid-config
+./scripts/phase08-lab.sh analyze
+./scripts/generate-phase08-dashboard-metrics.py --check
+```
+
+The matrix introduces one ordinary, exact Pod deletion per condition and lets
+the existing Deployment controller reconcile it. Every attempt records MTTD,
+replacement readiness, service-recovery mode, MTTR, user-plane disruption,
+the MongoDB PVC identity, and complete baseline restoration. A failed attempt
+is retained and a rerun creates a new attempt number. `recover` is the only
+manual recovery action required after interruption:
+
+```bash
+sudo ./scripts/phase08-lab.sh recover
+```
+
+The complete command meanings, expected markers, and stop conditions are in
+the [Phase 8 recovery runbook](../docs/runbooks/phase-08-recovery.md).
+
+After the exact campaign reaches `reviewed_complete`, the dashboard generator
+recreates 75 bounded Prometheus gauges from the reviewed summary. Phase 6
+preflight and install refuse a stale or hand-edited fixture before provisioning
+the token-free Phase 8 results exporter and sixth Grafana dashboard.

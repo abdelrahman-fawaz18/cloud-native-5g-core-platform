@@ -5,7 +5,7 @@
   "tags": ["cn5g", "logs", "phase-06", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "graphTooltip": 1,
   "refresh": "30s",
@@ -15,7 +15,8 @@
     {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false},
-    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false}
+    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Reliability And Recovery", "type": "link", "url": "/d/cn5g-reliability", "keepTime": false, "includeVars": false, "targetBlank": false}
   ],
   "templating": {"list": [
     {"name": "component", "label": "Core component", "type": "query", "datasource": {"type": "loki", "uid": "loki"}, "query": "label_values({namespace=\"cn5g\"}, component)", "refresh": 1, "sort": 1, "includeAll": true, "allValue": ".*", "multi": true, "current": {"selected": true, "text": ["All"], "value": ["$__all"]}},

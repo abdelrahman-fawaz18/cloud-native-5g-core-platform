@@ -7,7 +7,8 @@ SA) Core platform. It deploys Open5GS, MongoDB, and UERANSIM on a local
 Kubernetes environment, exercises multiple synthetic User Equipments (UEs),
 and preserves measured evidence for signalling, user-plane traffic, lifecycle,
 isolation, recovery, metrics, logs, dashboards, alert behavior, and controlled
-load. Controlled component-failure experiments remain in later roadmap phases.
+load. It also preserves reviewed evidence from controlled AMF, SMF, and UPF
+failure-and-recovery experiments.
 
 The project extends the validated protocol baseline documented in the
 [5G SA Core Protocol Lab](https://github.com/abdelrahman-fawaz18/5g-sa-core-protocol-lab).
@@ -16,7 +17,7 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-Phases 0-7 are complete. Phase 7 retained its exploratory failures, passed a
+Phases 0-8 are complete. Phase 7 retained its exploratory failures, passed a
 route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
 produced deterministic reviewed summaries and plots, and passed its scoped
 rollback with the Phase 5/6 regression gates intact. The accepted runtime has
@@ -30,8 +31,10 @@ object/resource telemetry. The platform has passed real N2 SCTP/NGAP, 5G-AKA,
 NAS security, per-UE registration and PDU sessions, N4 PFCP, N3 GTP-U,
 bidirectional N6 traffic, two-DNN selection/isolation, negative access,
 partial-provisioning recovery, persistence, rollback/rerun, least-privilege,
-bounded-cardinality, centralized-log, dashboard-provisioning, and alert-
-lifecycle gates. See the [project
+bounded-cardinality, centralized-log, dashboard-provisioning, alert-lifecycle,
+and controlled recovery gates. Phase 8 accepted nine AMF/SMF/UPF fault
+conditions, preserved MongoDB state, rejected invalid configurations, and
+published a sixth reviewed reliability dashboard. See the [project
 status](docs/project-status.md), [container report](reports/02_container_baseline.md),
 and [architecture decisions](docs/adr/README.md).
 
@@ -364,6 +367,56 @@ complete Phase 5 and Phase 6 validators. See the
 [machine-readable summary](benchmarks/phase-07/results/summary.json) for the
 statistics, retained failures, limitations, and reproduction contract.
 
+## Verified Phase 8 Reliability And Recovery Experiment
+
+Phase 8 deleted exactly one project-owned AMF, SMF, or UPF Pod per condition
+and measured three separate boundaries: Kubernetes fault detection, the
+replacement Pod becoming Ready, and complete five-UE service recovery. Three
+repetitions per component produced one accepted nine-condition campaign.
+
+```mermaid
+flowchart LR
+    HEALTHY["Validated five-UE baseline"] --> FAULT["Delete one exact Pod\nAMF, SMF, or UPF"]
+    FAULT --> DETECT["Kubernetes detects change\nMTTD"]
+    DETECT --> READY["Replacement Pod Ready"]
+    READY --> AUTO{"Five-UE service\nrecovered?"}
+    AUTO -->|"No within 90 s"| REPAIR["Dependency-ordered\noperator repair"]
+    AUTO -->|"Yes"| VERIFY["Full Phase 5/6 validation"]
+    REPAIR --> VERIFY
+    VERIFY --> REVIEW["Reviewed CSV, JSON, SVG, report\nand bounded dashboard metrics"]
+```
+
+| Faulted component | Median MTTD | Median Pod Ready | Median validated MTTR | Median user-plane disruption | Recovery mode |
+| --- | ---: | ---: | ---: | ---: | --- |
+| AMF | 0.177 s | 4.481 s | 212.187 s | 119.406 s | 3/3 operator-assisted |
+| SMF | 0.177 s | 4.432 s | 210.757 s | 72.274 s | 3/3 operator-assisted |
+| UPF | 0.214 s | 6.581 s | 210.866 s | 155.825 s | 3/3 operator-assisted |
+
+![Phase 8 recovery boundary results](benchmarks/phase-08/results/plots/recovery-times.svg)
+
+![Phase 8 recovery mode results](benchmarks/phase-08/results/plots/recovery-modes.svg)
+
+![Phase 8 user-plane disruption results](benchmarks/phase-08/results/plots/user-plane-disruption.svg)
+
+Every attempt restored the complete Phase 5/6 baseline and preserved the
+MongoDB PersistentVolumeClaim identity. A separate MongoDB recreation kept all
+five subscriber records, while invalid Helm values and an invalid Kubernetes
+object were rejected without changing Helm revision 16. These results describe
+single-node, single-replica recovery with operator assistance; they do not
+claim high availability, zero downtime, or a production Recovery Time
+Objective.
+
+Deterministic analysis generated two CSV files, one JSON summary, three plots,
+and the reviewed report. The accepted sixth **Reliability And Recovery**
+dashboard projects that summary through exactly 75 bounded, sanitized
+`cn5g_phase08_reviewed_*` gauges. Runtime acceptance verified two reviewed
+results targets, all six dashboards, all three alert firing/resolution
+lifecycles, and a 2,606-second interactive Grafana soak with zero restarts and
+a 468.6 MiB peak under the 768 MiB limit. The final Phase 5/6 regression and
+post-Phase-8 host snapshot also passed. See the [methodology](docs/architecture/phase-08-reliability-methodology.md),
+[runbook](docs/runbooks/phase-08-recovery.md), [reviewed report](reports/08_phase08_reliability.md),
+and [machine-readable summary](benchmarks/phase-08/results/summary.json).
+
 ## Target Capabilities
 
 - pinned and reproducible container images;
@@ -421,6 +474,9 @@ baseline. Phase 6 added operational metrics, dashboards, alerts, and correlated
 logs without changing the accepted subscriber or user-plane contracts. Phase
 7 added a temporary, route-enforced benchmark overlay, preserved reviewed
 results, and then rolled that overlay back to the accepted Phase 6 runtime.
+Phase 8 measured exact AMF, SMF, and UPF Pod recovery from that baseline and
+published the reviewed reliability dashboard without leaving a fault-injection
+overlay in the core release.
 
 ## Repository Structure
 
@@ -474,6 +530,10 @@ machine-readable measurements, and concise reports.
 - [Phase 7 performance dashboard model](docs/README.md#3323-turning-the-accepted-report-into-a-reproducible-dashboard)
 - [Complete accepted-system architecture and end-to-end packet walkthrough](docs/architecture/complete-system-architecture.md)
 - [Phase 7 machine-readable experiment contract](benchmarks/phase-07/experiment.json)
+- [Phase 8 controlled recovery methodology](docs/architecture/phase-08-reliability-methodology.md)
+- [Phase 8 reviewed reliability report](reports/08_phase08_reliability.md)
+- [Phase 8 recovery runbook](docs/runbooks/phase-08-recovery.md)
+- [Phase 8 machine-readable experiment contract](benchmarks/phase-08/experiment.json)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

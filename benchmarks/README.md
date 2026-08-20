@@ -28,3 +28,19 @@ After the raw campaign reaches `raw_complete`, run
 hash-mismatched evidence, filters resource series by the condition's runtime
 Pod identities, and regenerates the tracked files under `phase-07/results/`
 plus the sanitized Phase 7 report.
+
+Phase 8 uses the separate tracked contract in
+[`phase-08/experiment.json`](phase-08/experiment.json). It deletes exactly one
+AMF, SMF, or UPF Pod per attempt, distinguishes Kubernetes detection and Pod
+readiness from end-to-end service recovery, and performs three repetitions per
+component only after all three pilots pass. MongoDB recreation and invalid
+configuration rejection are separate safety tests and do not enter the timing
+distributions.
+
+Each accepted recovery attempt retains Kubernetes events, bounded Loki logs,
+Prometheus ranges, a two-second service timeline, exact Pod/PVC identities,
+and pre/post validation locally under `benchmarks/raw/phase-08/`. The analyzer
+accepts only the exact nine-condition campaign with complete baseline
+restoration and generates reviewed Phase 8 artifacts. The accepted campaign
+now supplies the Reliability and Recovery Grafana dashboard through a
+deterministic 75-series reviewed metric fixture.

@@ -5,7 +5,7 @@
   "tags": ["cn5g", "phase-06", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "graphTooltip": 1,
   "refresh": "30s",
@@ -15,13 +15,14 @@
     {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": true, "includeVars": true, "targetBlank": false},
     {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": true, "includeVars": true, "targetBlank": false},
-    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false}
+    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Reliability And Recovery", "type": "link", "url": "/d/cn5g-reliability", "keepTime": false, "includeVars": false, "targetBlank": false}
   ],
   "templating": {"list": []},
   "panels": [
     {
       "id": 1, "type": "text", "title": "How to read this dashboard", "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
-      "options": {"mode": "markdown", "content": "### Service first, infrastructure second\nThe top row answers whether the **local five-UE/two-DNN service contract** is operating. Continue downward to locate workload, resource, scrape, or log symptoms. Green means the measured contract is currently satisfied; it is not a production availability claim. The separate **Performance Experiments** dashboard presents one reviewed Phase 7 campaign as immutable evidence; Phase 8 recovery evidence remains intentionally absent."}
+      "options": {"mode": "markdown", "content": "### Service first, infrastructure second\nThe top row answers whether the **local five-UE/two-DNN service contract** is operating. Continue downward to locate workload, resource, scrape, or log symptoms. Green means the measured contract is currently satisfied; it is not a production availability claim. The separate **Performance Experiments** and **Reliability And Recovery** dashboards present reviewed Phase 7 and Phase 8 campaigns as immutable evidence."}
     },
     {
       "id": 2, "type": "stat", "title": "Core workload readiness", "description": "Available Deployment replicas plus Ready StatefulSet replicas divided by their desired replicas in namespace cn5g.", "gridPos": {"h": 5, "w": 4, "x": 0, "y": 4},

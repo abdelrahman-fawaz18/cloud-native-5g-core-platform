@@ -1,0 +1,138 @@
+{
+  "uid": "cn5g-reliability",
+  "title": "CN5G Reliability And Recovery",
+  "description": "Reviewed Phase 8 single-replica AMF, SMF, and UPF fault-recovery evidence. Kubernetes detection, Pod readiness, service recovery, and user-plane disruption are intentionally separate boundaries.",
+  "tags": ["cn5g", "phase-08", "reliability", "reviewed-evidence"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {"from": "now-30m", "to": "now"},
+  "links": [
+    {"title": "Service Overview", "type": "link", "url": "/d/cn5g-platform", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Reliability And Recovery", "type": "link", "url": "/d/cn5g-reliability", "keepTime": false, "includeVars": false, "targetBlank": false}
+  ],
+  "templating": {"list": [
+    {"name": "component", "label": "Faulted component", "type": "custom", "query": "amf,smf,upf", "includeAll": false, "multi": false, "current": {"selected": true, "text": "upf", "value": "upf"}, "options": []}
+  ]},
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "How to read this reviewed recovery evidence", "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "markdown", "content": "### Infrastructure recovery is not service recovery\nEach accepted condition deleted exactly one **AMF**, **SMF**, or **UPF** Pod. **MTTD** is Mean Time To Detect at the Kubernetes API boundary; **Pod Ready** means the replacement passed its readiness probe; **MTTR** is Mean Time To Recover and ends only after component-specific 5G signals and all five UE paths recover. All nine attempts required the documented operator-assisted session restoration path. [Experiment contract](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/phase-08/experiment.json) · [Reviewed report](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/reports/08_phase08_reliability.md) · [Machine-readable summary](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/phase-08/results/summary.json)"}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Campaign state", "description": "One means the deterministic analyzer accepted the exact nine-condition campaign.", "gridPos": {"h": 5, "w": 4, "x": 0, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_campaign_info{status=\"reviewed_complete\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "mappings": [{"type": "value", "options": {"1": {"text": "REVIEWED", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Accepted conditions", "description": "Three repetitions for each of the three faulted components.", "gridPos": {"h": 5, "w": 4, "x": 4, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_accepted_conditions", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 9, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 9}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Automatic recoveries", "description": "Attempts that restored the complete five-UE service without the operator repair path. Zero is the measured result, not a target.", "gridPos": {"h": 5, "w": 4, "x": 8, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(cn5g_phase08_reviewed_recovery_outcomes_total{mode=\"automatic\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed-color", "fixedColor": "orange"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 5, "type": "stat", "title": "Assisted recoveries", "description": "Attempts requiring the declared dependency-ordered repair path before complete service validation passed.", "gridPos": {"h": 5, "w": 4, "x": 12, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(cn5g_phase08_reviewed_recovery_outcomes_total{mode=\"operator_assisted\"})", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 9, "color": {"mode": "fixed-color", "fixedColor": "purple"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 6, "type": "stat", "title": "Baseline restorations", "description": "Attempts ending with complete Phase 5 functional and Phase 6 observability validation.", "gridPos": {"h": 5, "w": 4, "x": 16, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_baseline_restorations_total", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 9, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 9}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 7, "type": "stat", "title": "MongoDB PVC identity", "description": "One means every accepted attempt preserved the MongoDB PersistentVolumeClaim identity.", "gridPos": {"h": 5, "w": 4, "x": 20, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_mongodb_pvc_preserved", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "mappings": [{"type": "value", "options": {"1": {"text": "PRESERVED", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 8, "type": "text", "title": "Recovery boundaries", "gridPos": {"h": 3, "w": 24, "x": 0, "y": 11},
+      "options": {"mode": "markdown", "content": "### Compare the controller with the service seen by the UEs\nFast detection and replacement did not preserve the stateful 5G sessions in this single-replica topology. The difference between **Pod Ready** and **MTTR** is the service-restoration gap. Bars are medians across three accepted repetitions; they are descriptive local-lab evidence."}
+    },
+    {
+      "id": 9, "type": "bargauge", "title": "Median MTTD", "description": "Median time from the fault request until Kubernetes API state exposed the deletion/replacement transition.", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"detection\",statistic=\"median\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 10, "type": "bargauge", "title": "Median replacement Pod Ready", "description": "Median infrastructure replacement time. This boundary does not claim restored UE sessions or traffic.", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"pod_ready\",statistic=\"median\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 11, "type": "bargauge", "title": "Median MTTR", "description": "Median end-to-end recovery time including the declared operator-assisted restoration and complete validation.", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"service_recovery\",statistic=\"median\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 12, "type": "bargauge", "title": "Median service-restoration gap", "description": "Median MTTR minus median Pod readiness. This makes the 5G state-reconstruction interval explicit.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 22},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"service_recovery\",statistic=\"median\"} - ignoring(boundary) cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"pod_ready\",statistic=\"median\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 13, "type": "bargauge", "title": "Median observed user-plane disruption", "description": "Median interval between the first failed five-UE probe observation and the later complete recovered observation.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 22},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{boundary=\"user_plane_disruption\",statistic=\"median\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 14, "type": "text", "title": "Selected component detail", "gridPos": {"h": 3, "w": 24, "x": 0, "y": 31},
+      "options": {"mode": "markdown", "content": "### Inspect spread, not only one median\nChoose a faulted component above. With only three repetitions, nearest-rank p95 equals the maximum observation and is shown as a cautious range boundary—not as a production tail-latency estimate."}
+    },
+    {
+      "id": 15, "type": "bargauge", "title": "Selected component boundary medians", "description": "Median detection, readiness, service-recovery, and user-plane-disruption boundaries for the selected component.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 34},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{component=\"$component\",statistic=\"median\"}", "instant": true, "legendFormat": "{{boundary}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 16, "type": "bargauge", "title": "Selected MTTR distribution", "description": "Minimum, median, nearest-rank p95, and maximum end-to-end recovery time for the selected component.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 34},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_boundary_seconds{component=\"$component\",boundary=\"service_recovery\",statistic=~\"minimum|median|p95_nearest_rank|maximum\"}", "instant": true, "legendFormat": "{{statistic}}"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
+      "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 17, "type": "stat", "title": "Target-down observations", "description": "Attempts where the 15-second scrape cadence captured the selected component target as down. A missed observation does not mean the Pod stayed available.", "gridPos": {"h": 6, "w": 8, "x": 0, "y": 43},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_prometheus_target_down_observations_total{component=\"$component\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 3, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 18, "type": "stat", "title": "Selected automatic recoveries", "description": "Accepted selected-component attempts that recovered end-to-end inside the automatic observation window.", "gridPos": {"h": 6, "w": 8, "x": 8, "y": 43},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_outcomes_total{component=\"$component\",mode=\"automatic\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 3, "color": {"mode": "fixed-color", "fixedColor": "orange"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 19, "type": "stat", "title": "Selected assisted recoveries", "description": "Accepted selected-component attempts requiring dependency-ordered session restoration.", "gridPos": {"h": 6, "w": 8, "x": 16, "y": 43},
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase08_reviewed_recovery_outcomes_total{component=\"$component\",mode=\"operator_assisted\"}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 3, "color": {"mode": "fixed-color", "fixedColor": "purple"}}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
+    },
+    {
+      "id": 20, "type": "text", "title": "Scope and publication limits", "gridPos": {"h": 6, "w": 24, "x": 0, "y": 49},
+      "options": {"mode": "markdown", "content": "### What these panels do **not** claim\nThis was one Ubuntu host, one kind node, one replica per network function, five synthetic UEs, and ordinary Pod deletion. It does not demonstrate high availability, zero downtime, node-loss tolerance, geographic redundancy, or a production Recovery Time Objective. Raw Kubernetes events, Loki logs, Prometheus ranges, Pod identities, and local paths remain ignored; every displayed value is regenerated from the reviewed summary."}
+    }
+  ]
+}

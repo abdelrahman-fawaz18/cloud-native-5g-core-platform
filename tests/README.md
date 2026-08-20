@@ -2,9 +2,9 @@
 
 The current test suite covers repository, Compose, Phase 3 feasibility, Phase
 4 static contracts, Phase 5 identity/chart/lifecycle contracts, Phase 6
-observability architecture/security/lifecycle contracts, and Phase 7
-experiment, analyzer, reviewed-metric, and dashboard contracts. Later phases
-extend it with reliability and release automation.
+observability architecture/security/lifecycle contracts, Phase 7 experiment
+and dashboard contracts, and Phase 8 recovery, analyzer, reviewed-metric, and
+dashboard contracts. Later phases extend it with release automation.
 
 Current Phase 4 coverage includes:
 
@@ -49,7 +49,7 @@ TUN devices, and narrowly scoped network capabilities.
 
 Phase 6 static coverage verifies immutable image pins, deterministic rendering,
 the separate-release boundary, bounded UE metric labels, exact scrape jobs,
-four alert definitions, five valid dashboard models, 24-hour retention,
+four alert definitions, six valid dashboard models, 24-hour retention,
 API-based log collection, least-privilege security/RBAC, local-only Grafana
 access, scoped cleanup, and absence of committed credentials. The privileged
 runtime gate passed on 2026-08-05 with 13 required healthy targets, five UE
@@ -63,7 +63,22 @@ repetition contract, deterministic analysis, and rollback safety. The
 post-analysis dashboard tests additionally require the tracked summary to
 generate exactly 556 bounded sanitized gauges, a token-free restricted
 reviewed-results exporter, one Prometheus scrape job, the fixed 1/3/5 UE
-selector, required performance/procedure/resource panels, five-dashboard
+selector, required performance/procedure/resource panels, six-dashboard
 navigation, and explicit non-production limitations. Repository-wide static
 acceptance passed 164 tests before observability revision 6 completed the live
 validator, alert, and interactive-soak gates.
+
+Phase 8 static coverage verifies the exact AMF/SMF/UPF one-Pod fault contract,
+three-repetition/pilot gates, strict resource and baseline preconditions,
+automatic-versus-assisted timing boundary, raw-evidence privacy, resumable
+attempt state, emergency restoration, MongoDB PVC preservation, invalid Helm
+and API-server dry-run rejection, and deterministic analysis helpers. The
+post-analysis extension additionally requires exactly 75 sanitized reviewed
+series, a token-free exporter, a dedicated scrape target, six-dashboard
+navigation, and separate detection/Pod-readiness/service-recovery panels. The
+privileged local pilots, nine-condition matrix, MongoDB recreation, negative
+configuration test, and deterministic analysis all passed on 2026-08-07; the
+live dashboard gate subsequently passed with two reviewed-results targets,
+exactly 75 Phase 8 series, six provisioned dashboards, all three alert
+lifecycles, a 2,606-second zero-restart Grafana soak, and the final Phase 5/6
+regression.

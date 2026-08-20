@@ -2,9 +2,11 @@
 
 ## Status And Purpose
 
-Status: Stages A and B accepted on 2026-08-06. Phase 7 measurement, analysis,
-reviewed-results export, and the fifth Grafana dashboard passed their live
-runtime gates. Stage C remains gated on Phase 8 recovery evidence.
+Status: Stages A and B were accepted on 2026-08-06. Stage C was accepted on
+2026-08-20 after the exact nine-condition Phase 8 campaign, deterministic
+analysis, scoped live observability upgrade, alert regression, six-dashboard
+validation, and interactive Grafana soak passed. Stages D and E remain the
+final Phase 10 curation and visual-publication work.
 
 This document defines how the CN5G dashboards will evolve from the accepted
 Phase 6 operational baseline into a realistic monitoring, performance, and
@@ -348,10 +350,10 @@ workload labels correctly report chart `0.2.0`.
 
 ## Stage C — Phase 8 Reliability And Recovery Dashboard
 
-This dashboard is added only after controlled AMF, SMF, UPF, and selected
-stateful recovery experiments pass.
+This dashboard was implemented only after controlled AMF, SMF, UPF, MongoDB,
+and invalid-configuration recovery gates passed.
 
-Planned evidence:
+Accepted reviewed evidence:
 
 - experiment and fault identifier;
 - healthy baseline timestamp;
@@ -366,10 +368,25 @@ Planned evidence:
 - blast radius and affected DNN/UE count; and
 - baseline-restoration result.
 
-Proposed name: **CN5G Reliability And Recovery**.
+Name: **CN5G Reliability And Recovery**.
 
-Annotations should mark controlled experiment boundaries so that an operator
-can correlate metrics and logs without guessing when the fault occurred.
+The dashboard uses 75 immutable `cn5g_phase08_reviewed_*` gauges generated
+from the reviewed summary. It compares detection, replacement readiness,
+service recovery, user-plane disruption, recovery mode, baseline restoration,
+and PVC preservation. The source summary does not retain a safe public event
+timestamp per attempt, so the dashboard does not fabricate live annotations;
+the ignored raw evidence and runbook remain the incident-timeline sources.
+
+The sixth dashboard is historical reviewed evidence rather than a live chaos
+control. It cannot inject faults, and its values change only after a new exact
+campaign passes deterministic review and the metric fixture is regenerated.
+
+Stage C runtime acceptance found two healthy reviewed-results targets, exactly
+75 bounded Phase 8 series, and all six provisioned dashboards. All three alert
+scenarios fired and resolved. The 2,606-second interactive Grafana soak kept
+the same Ready Pod with zero restarts and measured a 468.6 MiB peak under the
+768 MiB limit. The complete Phase 5/6 regression and post-Phase-8 local host
+snapshot also passed.
 
 ## Stage D — Final Dashboard Curation
 
@@ -583,5 +600,6 @@ rollback.
 
 ## Approval Boundary
 
-Stages A and B were implemented only after explicit approval and are accepted.
-Stages C through E retain their evidence and timing boundaries.
+Stages A through C were implemented only after explicit approval and are
+accepted. Stages D and E retain their evidence and timing boundaries for the
+final documentation phase.

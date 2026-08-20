@@ -310,12 +310,13 @@ class Phase07StaticTests(unittest.TestCase):
             "cn5g", "phase-07", "performance", "reviewed-evidence",
         })
         self.assertFalse(dashboard["editable"])
-        self.assertEqual(len(dashboard["links"]), 5)
+        self.assertEqual(len(dashboard["links"]), 6)
         self.assertEqual(
             {item["url"] for item in dashboard["links"]},
             {
                 "/d/cn5g-platform", "/d/cn5g-5g-service",
                 "/d/cn5g-kubernetes", "/d/cn5g-logs", "/d/cn5g-performance",
+                "/d/cn5g-reliability",
             },
         )
         self.assertEqual(dashboard["templating"]["list"][0]["name"], "ue_level")

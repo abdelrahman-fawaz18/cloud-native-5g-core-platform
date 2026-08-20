@@ -5,7 +5,7 @@
   "tags": ["cn5g", "phase-07", "performance", "reviewed-evidence"],
   "timezone": "browser",
   "schemaVersion": 42,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "graphTooltip": 1,
   "refresh": "30s",
@@ -15,7 +15,8 @@
     {"title": "5G Sessions And DNNs", "type": "link", "url": "/d/cn5g-5g-service", "keepTime": false, "includeVars": false, "targetBlank": false},
     {"title": "Kubernetes Resources", "type": "link", "url": "/d/cn5g-kubernetes", "keepTime": false, "includeVars": false, "targetBlank": false},
     {"title": "Logs And Troubleshooting", "type": "link", "url": "/d/cn5g-logs", "keepTime": false, "includeVars": false, "targetBlank": false},
-    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false}
+    {"title": "Performance Experiments", "type": "link", "url": "/d/cn5g-performance", "keepTime": false, "includeVars": false, "targetBlank": false},
+    {"title": "Reliability And Recovery", "type": "link", "url": "/d/cn5g-reliability", "keepTime": false, "includeVars": false, "targetBlank": false}
   ],
   "templating": {"list": [
     {"name": "ue_level", "label": "Selected UE load", "type": "custom", "query": "1,3,5", "includeAll": false, "multi": false, "current": {"selected": true, "text": "5", "value": "5"}, "options": []}

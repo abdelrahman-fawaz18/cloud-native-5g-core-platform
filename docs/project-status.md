@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-06
+Last updated: 2026-08-20
 
 | Phase | State | Current gate |
 | --- | --- | --- |
@@ -12,7 +12,8 @@ Last updated: 2026-08-06
 | 5 — Multi-UE and DNN automation | Complete | Five concurrent UEs, two isolated DNNs, negative/recovery behavior, rollback, resource observation, and clean rerun verified |
 | 6 — Observability and operational visibility | Complete | Metrics, logs, dashboards, bounded cardinality, persistence, and three alert firing/resolution lifecycles verified |
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
-| 8-10 | Not started | Each later phase remains gated by the preceding verified baseline |
+| 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
+| 9-10 | Not started | Each later phase remains gated by the preceding verified baseline |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -218,8 +219,8 @@ restored revision 12's configuration as Helm revision 16, removed the
 benchmark overlay, preserved the exact MongoDB claim identity, repaired all
 five sessions, and passed the complete
 Phase 5 and Phase 6 regression gates. The post-Phase-7 host-state snapshot was
-captured locally. Phase 7 is complete; Phase 8 remains gated on its own design
-and preflight review.
+captured locally. Phase 7 is complete; the subsequently accepted Phase 8
+runtime result is documented below.
 
 The post-analysis Phase 7 dashboard extension was runtime-accepted on
 2026-08-06 as `cn5g-observability` revision 6. It deterministically projects
@@ -229,3 +230,52 @@ Phase 5/6 validator, one reviewed-results target, five dashboard definitions,
 all three alert lifecycles, and repository static gates passed. A 2,101-second
 interactive Grafana soak retained the same Ready Pod with zero restarts and a
 407.2 MiB peak under the 768 MiB limit.
+
+Phase 8 runtime evidence is accepted. Its
+tracked contract defines exact one-Pod AMF, SMF, and UPF faults, one pilot per
+component, three measured repetitions, separate Kubernetes detection/Pod
+readiness/service-recovery boundaries, a 90-second automatic-recovery window,
+operator-assisted restoration, resource abort floors, and ignored raw
+evidence. The lifecycle also includes separate MongoDB recreation and invalid
+configuration tests.
+
+The first AMF, SMF, and UPF mechanism pilots each restored the complete
+baseline, but their reported service-recovery times were invalidated before
+the matrix. The runner had treated the Prometheus HTTP instant-query
+evaluation timestamp as metric-sample freshness, allowing a pre-fault gauge to
+appear post-fault. The corrected contract now evaluates `timestamp(metric)`,
+requires the underlying source sample to cross the fault boundary, and uses
+the minimum source timestamp across all five UE probes. Changing the tracked
+contract hash deliberately prevents the retained exploratory pilots from
+satisfying the corrected pilot gate.
+
+The corrected pilots passed for AMF, SMF, and UPF. Each replacement Pod became
+Ready in seconds, but none of the single-replica components restored the
+complete five-UE service inside the 90-second automatic observation window.
+The operator-assisted dependency-ordered path restored every baseline.
+
+Campaign `20260807T050635Z-matrix` then accepted all nine conditions: three
+repetitions each for AMF, SMF, and UPF. Median MTTD was 0.177, 0.177, and
+0.214 seconds; median replacement readiness was 4.481, 4.432, and 6.581
+seconds; and median fully validated MTTR was 212.187, 210.757, and 210.866
+seconds respectively. Median observed user-plane disruption was 119.406,
+72.274, and 155.825 seconds. These are local single-node, single-replica
+measurements and do not establish high availability or a production RTO.
+
+The separate MongoDB Pod recreation preserved the exact claim identity and
+all five subscriber records. Invalid Helm values and an invalid Kubernetes
+Deployment were rejected through rendering/server dry run without changing
+Helm revision 16. Deterministic analysis accepted all nine conditions and
+generated two CSV files, one JSON summary, three SVG plots, and the sanitized
+reliability report.
+
+Those reviewed artifacts drive the accepted sixth **Reliability And Recovery**
+dashboard. Its token-free exporter exposes exactly 75 bounded
+`cn5g_phase08_reviewed_*` gauges and keeps detection, Pod readiness, MTTR, and
+user-plane disruption as separate boundaries. Runtime validation found two
+healthy reviewed-results targets, exactly 75 Phase 8 series, and all six
+provisioned dashboards. The three controlled alert scenarios still fired and
+resolved. A 2,606-second interactive Grafana soak retained the same Ready Pod
+with zero restarts and measured a 468.6 MiB peak under the 768 MiB limit. The
+complete Phase 5 and Phase 6 regression passed, and the post-Phase-8 host-state
+snapshot was captured locally. Phase 8 is complete.

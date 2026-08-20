@@ -104,7 +104,7 @@ class Phase06StaticTests(unittest.TestCase):
     def test_stack_is_separate_bounded_and_persistent_where_required(self):
         kinds = [item["kind"] for item in self.obs]
         self.assertEqual(kinds.count("StatefulSet"), 2)
-        self.assertEqual(kinds.count("Deployment"), 5)
+        self.assertEqual(kinds.count("Deployment"), 6)
         self.assertEqual(kinds.count("PersistentVolumeClaim"), 0)
         for component in ("prometheus", "loki"):
             workload = self.object_named(
@@ -118,7 +118,7 @@ class Phase06StaticTests(unittest.TestCase):
             )
             self.assertEqual(
                 workload["metadata"]["labels"]["helm.sh/chart"],
-                "cn5g-observability-0.2.0",
+                "cn5g-observability-0.3.0",
             )
         prometheus = self.object_named(
             self.obs, "StatefulSet", "cn5g-observability-prometheus"
@@ -168,6 +168,7 @@ class Phase06StaticTests(unittest.TestCase):
         self.assertFalse(tokens["cn5g-observability-grafana"])
         self.assertFalse(tokens["cn5g-observability-loki"])
         self.assertFalse(tokens["cn5g-observability-phase07-results"])
+        self.assertFalse(tokens["cn5g-observability-phase08-results"])
 
     def test_prometheus_covers_platform_telecom_and_bounded_probe_metrics(self):
         config = self.object_named(
@@ -178,6 +179,7 @@ class Phase06StaticTests(unittest.TestCase):
             "open5gs-amf", "open5gs-pcf", "open5gs-smf", "open5gs-upf",
             "cn5g-ue-user-plane", "kube-state-metrics", "kubernetes-node",
             "kubernetes-cadvisor", "alert-exercise", "phase07-reviewed-results",
+            "phase08-reviewed-results",
         ):
             self.assertIn(f"job_name: {job}", scrape)
         self.assertIn("fallback_scrape_protocol: PrometheusText0.0.4", scrape)
@@ -194,7 +196,7 @@ class Phase06StaticTests(unittest.TestCase):
 
     def test_grafana_and_loki_are_fully_provisioned_from_git(self):
         dashboard_paths = sorted((OBS_CHART / "files" / "dashboards").glob("*.json"))
-        self.assertEqual(len(dashboard_paths), 5)
+        self.assertEqual(len(dashboard_paths), 6)
         uids = set()
         titles = set()
         for path in dashboard_paths:
@@ -204,12 +206,14 @@ class Phase06StaticTests(unittest.TestCase):
             self.assertIn("cn5g", dashboard["tags"])
             if dashboard["uid"] == "cn5g-performance":
                 self.assertIn("phase-07", dashboard["tags"])
+            elif dashboard["uid"] == "cn5g-reliability":
+                self.assertIn("phase-08", dashboard["tags"])
             else:
                 self.assertIn("phase-06", dashboard["tags"])
             self.assertFalse(dashboard["editable"])
             self.assertEqual(dashboard["refresh"], "30s")
             self.assertGreaterEqual(len(dashboard["panels"]), 10)
-            self.assertEqual(len(dashboard["links"]), 5)
+            self.assertEqual(len(dashboard["links"]), 6)
             self.assertEqual(dashboard["panels"][0]["type"], "text")
             serialized = json.dumps(dashboard).lower()
             self.assertNotIn("imsi", serialized)
@@ -221,13 +225,14 @@ class Phase06StaticTests(unittest.TestCase):
                 for target in panel.get("targets", []):
                     if panel.get("datasource", {}).get("type") == "loki":
                         self.assertLessEqual(target.get("maxLines", 500), 500)
-        self.assertEqual(len(uids), 5)
+        self.assertEqual(len(uids), 6)
         self.assertEqual(titles, {
             "CN5G Service Overview",
             "CN5G Control, Sessions, UEs, And DNNs",
             "CN5G Kubernetes Resources",
             "CN5G Logs And Troubleshooting",
             "CN5G Performance And Capacity Experiments",
+            "CN5G Reliability And Recovery",
         })
         grafana = self.object_named(
             self.obs, "ConfigMap", "cn5g-observability-grafana-provisioning"
@@ -311,7 +316,7 @@ class Phase06StaticTests(unittest.TestCase):
         self.assertEqual(
             deployment["spec"]["template"]["metadata"]["annotations"]
             ["cn5g.io/config-revision"],
-            "3",
+            "4",
         )
 
     def test_alloy_is_api_based_and_strictly_project_scoped(self):
@@ -338,7 +343,7 @@ class Phase06StaticTests(unittest.TestCase):
             "grafana_provisioning=pass", "metric_cardinality=bounded",
             "phase06_uninstall=pass", "phase06_destroy=pass",
             "--address 127.0.0.1", "phase05-lab.sh repair-sessions",
-            "--rollback-on-failure", "alert-exercise|phase07-reviewed-results|open5gs-",
+            "--rollback-on-failure", "alert-exercise|phase07-reviewed-results|phase08-reviewed-results|open5gs-",
             "verify-grafana-soak", "grafana_soak_baseline=recorded",
             "grafana_interactive_soak=pass", "minimum_duration_seconds=1800",
             "runtime_plugin_installation=disabled",
@@ -350,7 +355,9 @@ class Phase06StaticTests(unittest.TestCase):
             'count({__name__=~"cn5g_ue_.*"})',
             'count({__name__=~"cn5g_phase07_reviewed_.+"})',
             "phase07_reviewed_metric_validation=pass",
-            "grafana_provisioning=pass datasources=2 dashboards=5",
+            'count({__name__=~"cn5g_phase08_reviewed_.+"})',
+            "phase08_reviewed_metric_validation=pass",
+            "grafana_provisioning=pass datasources=2 dashboards=6",
             "--field-manager=helm",
             "--dry-run=server --hide-secret",
         ):

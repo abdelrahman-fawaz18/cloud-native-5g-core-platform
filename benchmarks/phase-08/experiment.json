@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "experiment_id": "cn5g-phase08-local-kind-recovery-v1",
+  "purpose": "Measure detection and service recovery after one controlled AMF, SMF, or UPF Pod deletion in the accepted single-node local topology.",
+  "topology": {
+    "cluster": "kind single-node Kubernetes 1.36.1",
+    "core_release": "cn5g",
+    "core_namespace": "cn5g",
+    "observability_release": "cn5g-observability",
+    "observability_namespace": "cn5g-observability",
+    "ue_count": 5,
+    "dnn_count": 2,
+    "replicas_per_faulted_component": 1,
+    "availability_claim": "Measured single-replica recovery; this is not high availability or zero-downtime service."
+  },
+  "faults": {
+    "amf": {
+      "workload_kind": "Deployment",
+      "workload_name": "cn5g-amf",
+      "selector": "app.kubernetes.io/instance=cn5g,app.kubernetes.io/component=amf",
+      "prometheus_job": "open5gs-amf",
+      "expected_primary_blast_radius": "N2 signalling, registration state, and mobility control",
+      "service_recovery_signals": ["replacement_ready", "prometheus_target_up", "amf_sessions_five", "user_plane_paths_five"]
+    },
+    "smf": {
+      "workload_kind": "Deployment",
+      "workload_name": "cn5g-smf",
+      "selector": "app.kubernetes.io/instance=cn5g,app.kubernetes.io/component=smf",
+      "prometheus_job": "open5gs-smf",
+      "expected_primary_blast_radius": "PDU-session control and PFCP session management",
+      "service_recovery_signals": ["replacement_ready", "prometheus_target_up", "smf_pfcp_peer_one", "pfcp_sessions_five", "user_plane_paths_five"]
+    },
+    "upf": {
+      "workload_kind": "Deployment",
+      "workload_name": "cn5g-upf",
+      "selector": "app.kubernetes.io/instance=cn5g,app.kubernetes.io/component=upf",
+      "prometheus_job": "open5gs-upf",
+      "expected_primary_blast_radius": "PFCP state, GTP-U forwarding, and both DNN user-plane paths",
+      "service_recovery_signals": ["replacement_ready", "prometheus_target_up", "upf_pfcp_peer_one", "pfcp_sessions_five", "user_plane_paths_five"]
+    }
+  },
+  "controls": {
+    "repetitions": 3,
+    "pilot_required_per_component": true,
+    "run_order": ["amf", "smf", "upf"],
+    "fault_method": "Delete the one exact selected Pod with the ordinary Kubernetes grace period and let its existing controller reconcile it.",
+    "one_intended_fault_per_attempt": true,
+    "sample_interval_seconds": 2,
+    "automatic_recovery_observation_seconds": 90,
+    "replacement_ready_timeout_seconds": 300,
+    "cool_down_seconds": 15,
+    "restoration_method": "Run the Phase 5 dependency-ordered session repair after measurement, then require complete Phase 5 and Phase 6 validation.",
+    "baseline_required_before_each_attempt": true,
+    "preserve_failed_attempts": true
+  },
+  "timing": {
+    "healthy_baseline": "The last successful Phase 5 and Phase 6 validation before fault injection.",
+    "fault_time": "The UTC timestamp immediately before the Kubernetes Pod delete request.",
+    "detection_time": "The first Kubernetes API sample where the old Pod UID is absent or the Deployment has zero available replicas.",
+    "infrastructure_recovery_time": "The first sample where a replacement Pod with a different UID is Ready and its Deployment is available.",
+    "automatic_service_recovery_time": "The first post-fault sample satisfying the component recovery signals before operator repair.",
+    "assisted_service_recovery_time": "Completion of session repair and both Phase 5 and Phase 6 validation when automatic recovery did not restore the complete service.",
+    "mttd": "Detection time minus fault time.",
+    "mttr": "The applicable automatic or assisted service recovery time minus fault time. Pod readiness alone is never MTTR."
+  },
+  "evidence": {
+    "sources": ["Kubernetes API and events", "Prometheus range queries", "Loki range query", "source-bound UE user-plane probe", "Phase 5 validation", "Phase 6 validation"],
+    "prometheus_step_seconds": 2,
+    "loki_component_filter": "amf|smf|upf|gnb|ue",
+    "freshness_rule": "A recovery gauge is eligible only when max(timestamp(metric)) or min(timestamp(metric)) proves the underlying source sample is at or after the fault boundary; the HTTP query evaluation timestamp is not used as metric freshness.",
+    "raw_data": "ignored under benchmarks/raw/phase-08",
+    "reviewed_data": "generated only from a complete accepted campaign"
+  },
+  "abort_thresholds": {
+    "host_available_memory_mib": 3072,
+    "docker_free_space_mib": 6144,
+    "unexpected_faulted_pod_count": 1,
+    "unexpected_workload_replicas": 1,
+    "mongodb_pvc_identity_change_allowed": false,
+    "subscriber_record_count_change_allowed": false
+  },
+  "secondary_safety_tests": {
+    "mongodb_recreation": "Recreate only the MongoDB Pod and prove the same PVC identity and five subscriber records remain.",
+    "invalid_configuration": "Use Helm values-schema validation and a server-side dry run to reject an invalid five-UE contract without changing the release."
+  },
+  "publication": {
+    "prohibited_claims": ["high availability", "zero downtime", "carrier-grade resilience", "multi-node recovery", "production RTO"],
+    "required_limitations": ["single node", "single replica per network function", "local synthetic subscribers", "operator-assisted repair reported separately"]
+  }
+}

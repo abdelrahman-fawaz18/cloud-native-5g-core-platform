@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="420" viewBox="0 0 820 420">
+<title>Median observed user-plane disruption by Phase 8 fault component</title>
+<rect width="100%" height="100%" fill="#0f172a"/>
+<text x="40" y="38" fill="#f8fafc" font-size="21" font-family="sans-serif">Median observed user-plane disruption</text>
+<rect x="140" y="130.8" width="100" height="199.2" fill="#ef4444" rx="4"/>
+<text x="190" y="122.8" text-anchor="middle" fill="#e2e8f0" font-size="14" font-family="sans-serif">119.4s</text>
+<text x="190" y="360" text-anchor="middle" fill="#f8fafc" font-size="16" font-family="sans-serif">AMF</text>
+<rect x="360" y="209.4" width="100" height="120.6" fill="#ef4444" rx="4"/>
+<text x="410" y="201.4" text-anchor="middle" fill="#e2e8f0" font-size="14" font-family="sans-serif">72.3s</text>
+<text x="410" y="360" text-anchor="middle" fill="#f8fafc" font-size="16" font-family="sans-serif">SMF</text>
+<rect x="580" y="70.0" width="100" height="260.0" fill="#ef4444" rx="4"/>
+<text x="630" y="62.0" text-anchor="middle" fill="#e2e8f0" font-size="14" font-family="sans-serif">155.8s</text>
+<text x="630" y="360" text-anchor="middle" fill="#f8fafc" font-size="16" font-family="sans-serif">UPF</text>
+</svg>

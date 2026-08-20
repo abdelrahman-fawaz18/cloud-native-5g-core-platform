@@ -1,0 +1,165 @@
+{
+  "campaign": {
+    "accepted_attempt_count": 9,
+    "campaign_id": "20260807T050635Z-matrix",
+    "completed_at": "2026-08-07T05:48:31.231Z",
+    "helm_revision": 16,
+    "status": "reviewed_complete"
+  },
+  "components": {
+    "amf": {
+      "automatic_recoveries": 0,
+      "baseline_restoration_seconds": {
+        "maximum": 213.60791754722595,
+        "mean": 210.8618276913961,
+        "median": 212.18680953979492,
+        "minimum": 206.79075598716736,
+        "p95_nearest_rank": 213.60791754722595,
+        "sample_standard_deviation": 3.596540783575927
+      },
+      "mttd_seconds": {
+        "maximum": 0.20791363716125488,
+        "mean": 0.18260439236958823,
+        "median": 0.17652368545532227,
+        "minimum": 0.1633758544921875,
+        "p95_nearest_rank": 0.20791363716125488,
+        "sample_standard_deviation": 0.022883067292261566
+      },
+      "mttr_seconds": {
+        "maximum": 213.60791754722595,
+        "mean": 210.8618276913961,
+        "median": 212.18680953979492,
+        "minimum": 206.79075598716736,
+        "p95_nearest_rank": 213.60791754722595,
+        "sample_standard_deviation": 3.596540783575927
+      },
+      "operator_assisted_recoveries": 3,
+      "prometheus_target_down_observations": 2,
+      "repetitions": 3,
+      "replacement_ready_seconds": {
+        "maximum": 4.5461297035217285,
+        "mean": 4.502432107925415,
+        "median": 4.4814207553863525,
+        "minimum": 4.479745864868164,
+        "p95_nearest_rank": 4.5461297035217285,
+        "sample_standard_deviation": 0.0378524927876117
+      },
+      "user_plane_disruption_seconds": {
+        "maximum": 130.002347946167,
+        "mean": 122.25965642929077,
+        "median": 119.40645503997803,
+        "minimum": 117.3701663017273,
+        "p95_nearest_rank": 130.002347946167,
+        "sample_standard_deviation": 6.782224701417075
+      }
+    },
+    "smf": {
+      "automatic_recoveries": 0,
+      "baseline_restoration_seconds": {
+        "maximum": 213.73459362983704,
+        "mean": 210.55222741762796,
+        "median": 210.75661730766296,
+        "minimum": 207.1654713153839,
+        "p95_nearest_rank": 213.73459362983704,
+        "sample_standard_deviation": 3.2893271980638965
+      },
+      "mttd_seconds": {
+        "maximum": 0.18980979919433594,
+        "mean": 0.17437156041463217,
+        "median": 0.17705869674682617,
+        "minimum": 0.15624618530273438,
+        "p95_nearest_rank": 0.18980979919433594,
+        "sample_standard_deviation": 0.01694238975519614
+      },
+      "mttr_seconds": {
+        "maximum": 213.73459362983704,
+        "mean": 210.55222741762796,
+        "median": 210.75661730766296,
+        "minimum": 207.1654713153839,
+        "p95_nearest_rank": 213.73459362983704,
+        "sample_standard_deviation": 3.2893271980638965
+      },
+      "operator_assisted_recoveries": 3,
+      "prometheus_target_down_observations": 2,
+      "repetitions": 3,
+      "replacement_ready_seconds": {
+        "maximum": 4.475391149520874,
+        "mean": 4.434180895487468,
+        "median": 4.432227849960327,
+        "minimum": 4.394923686981201,
+        "p95_nearest_rank": 4.475391149520874,
+        "sample_standard_deviation": 0.04026926771145367
+      },
+      "user_plane_disruption_seconds": {
+        "maximum": 74.31381559371948,
+        "mean": 67.35828415552776,
+        "median": 72.27413010597229,
+        "minimum": 55.48690676689148,
+        "p95_nearest_rank": 74.31381559371948,
+        "sample_standard_deviation": 10.331373580013455
+      }
+    },
+    "upf": {
+      "automatic_recoveries": 0,
+      "baseline_restoration_seconds": {
+        "maximum": 211.186420917511,
+        "mean": 210.61765869458517,
+        "median": 210.86556363105774,
+        "minimum": 209.80099153518677,
+        "p95_nearest_rank": 211.186420917511,
+        "sample_standard_deviation": 0.7252215430455856
+      },
+      "mttd_seconds": {
+        "maximum": 0.23153018951416016,
+        "mean": 0.204679807027181,
+        "median": 0.21383333206176758,
+        "minimum": 0.16867589950561523,
+        "p95_nearest_rank": 0.23153018951416016,
+        "sample_standard_deviation": 0.03241150580486303
+      },
+      "mttr_seconds": {
+        "maximum": 211.186420917511,
+        "mean": 210.61765869458517,
+        "median": 210.86556363105774,
+        "minimum": 209.80099153518677,
+        "p95_nearest_rank": 211.186420917511,
+        "sample_standard_deviation": 0.7252215430455856
+      },
+      "operator_assisted_recoveries": 3,
+      "prometheus_target_down_observations": 1,
+      "repetitions": 3,
+      "replacement_ready_seconds": {
+        "maximum": 6.719082593917847,
+        "mean": 5.919681708017985,
+        "median": 6.581033945083618,
+        "minimum": 4.45892858505249,
+        "p95_nearest_rank": 6.719082593917847,
+        "sample_standard_deviation": 1.2669309855123614
+      },
+      "user_plane_disruption_seconds": {
+        "maximum": 162.56039714813232,
+        "mean": 157.4740118185679,
+        "median": 155.82546019554138,
+        "minimum": 154.03617811203003,
+        "p95_nearest_rank": 162.56039714813232,
+        "sample_standard_deviation": 4.494871453579038
+      }
+    }
+  },
+  "contract": {
+    "components": [
+      "amf",
+      "smf",
+      "upf"
+    ],
+    "fault_method": "Delete the one exact selected Pod with the ordinary Kubernetes grace period and let its existing controller reconcile it.",
+    "repetitions": 3
+  },
+  "limitations": [
+    "single node",
+    "single replica per network function",
+    "local synthetic subscribers",
+    "operator-assisted repair reported separately"
+  ],
+  "schema_version": 1
+}

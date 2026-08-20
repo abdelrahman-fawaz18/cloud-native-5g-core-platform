@@ -15,8 +15,8 @@ Actions:
   install         Add bounded UE probe metrics, install the isolated
                   observability release, and run end-to-end validation.
   validate        Revalidate Phase 5 plus Prometheus, Grafana, Loki, Alloy,
-                  Kubernetes/telecom metrics, reviewed Phase 7 results,
-                  five dashboards, and both cardinality contracts.
+                  Kubernetes/telecom metrics, reviewed Phase 7/8 results,
+                  six dashboards, and all cardinality contracts.
   test-alerts     Prove firing and resolution for three actionable alert
                   rules using the bounded controlled exercise metric.
   grafana         Record a stability-soak baseline, then expose Grafana only
@@ -174,6 +174,7 @@ verify_image_pins() {
 deterministic_render() {
   local render_dir cleanup
   "$project_root/scripts/generate-phase07-dashboard-metrics.py" --check
+  "$project_root/scripts/generate-phase08-dashboard-metrics.py" --check
   render_dir=$(mktemp -d)
   printf -v cleanup 'rm -rf -- %q' "$render_dir"
   trap "$cleanup" RETURN
@@ -460,17 +461,19 @@ verify_observability_release() {
 
 validate_prometheus() {
   local targets_json query_json value series_count reviewed_series_count
+  local recovery_series_count
   start_forward "${release}-prometheus" 19090 9090 http://127.0.0.1:19090/-/ready
   targets_json=$(curl --fail --silent --show-error http://127.0.0.1:19090/api/v1/targets)
   jq -e '
     ([.data.activeTargets[] | select(.labels.job == "cn5g-ue-user-plane")] | length) == 5 and
     ([.data.activeTargets[] | select(.labels.job == "phase07-reviewed-results")] | length) == 1 and
-    ([.data.activeTargets[] | select(.labels.job | test("^(alert-exercise|phase07-reviewed-results|open5gs-(amf|pcf|smf|upf)|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor)$")) | .health] | all(. == "up"))
+    ([.data.activeTargets[] | select(.labels.job == "phase08-reviewed-results")] | length) == 1 and
+    ([.data.activeTargets[] | select(.labels.job | test("^(alert-exercise|phase07-reviewed-results|phase08-reviewed-results|open5gs-(amf|pcf|smf|upf)|cn5g-ue-user-plane|kube-state-metrics|kubernetes-node|kubernetes-cadvisor)$")) | .health] | all(. == "up"))
   ' <<<"$targets_json" >/dev/null || {
     printf 'error: required Prometheus targets are absent or unhealthy\n' >&2
     return 1
   }
-  printf 'prometheus_target_health=pass ue_targets=5 reviewed_results_targets=1\n'
+  printf 'prometheus_target_health=pass ue_targets=5 reviewed_results_targets=2\n'
   for query_expected in \
     'max(amf_session):5' \
     'max(pfcp_sessions_active):5' \
@@ -526,6 +529,34 @@ validate_prometheus() {
   fi
   printf 'phase07_reviewed_metric_validation=pass accepted_conditions=9 series=%s limit=600\n' \
     "$reviewed_series_count"
+  for query_expected in \
+    'cn5g_phase08_reviewed_campaign_info{status="reviewed_complete"}:1' \
+    'cn5g_phase08_reviewed_accepted_conditions:9' \
+    'cn5g_phase08_reviewed_repetitions:3' \
+    'sum(cn5g_phase08_reviewed_recovery_outcomes_total{mode="automatic"}):0' \
+    'sum(cn5g_phase08_reviewed_recovery_outcomes_total{mode="operator_assisted"}):9' \
+    'cn5g_phase08_reviewed_baseline_restorations_total:9' \
+    'cn5g_phase08_reviewed_mongodb_pvc_preserved:1'; do
+    query=${query_expected%:*}
+    expected=${query_expected##*:}
+    query_json=$(prometheus_query "$query")
+    value=$(jq -er '.data.result | if length == 1 then .[0].value[1] else error("unexpected Phase 8 reviewed-result vector") end' <<<"$query_json")
+    awk -v observed="$value" -v expected="$expected" 'BEGIN {exit !(observed+0 == expected+0)}' || {
+      printf 'error: reviewed Phase 8 metric did not meet contract: %s observed=%s\n' "$query" "$value" >&2
+      return 1
+    }
+  done
+  query_json=$(prometheus_query 'count({__name__=~"cn5g_phase08_reviewed_.+"})')
+  recovery_series_count=$(jq -er '
+    .data.result |
+    if length == 1 then .[0].value[1] else error("missing reviewed Phase 8 series count") end
+  ' <<<"$query_json")
+  if ! awk -v observed="$recovery_series_count" 'BEGIN {exit !(observed+0 == 75 && observed+0 <= 100)}'; then
+    printf 'error: reviewed Phase 8 metric cardinality does not match the generated contract: %s\n' "$recovery_series_count" >&2
+    return 1
+  fi
+  printf 'phase08_reviewed_metric_validation=pass accepted_conditions=9 series=%s limit=100\n' \
+    "$recovery_series_count"
   stop_forward
 }
 
@@ -583,15 +614,16 @@ validate_grafana() {
       "CN5G Kubernetes Resources",
       "CN5G Logs And Troubleshooting",
       "CN5G Performance And Capacity Experiments",
+      "CN5G Reliability And Recovery",
       "CN5G Service Overview"
     ]
   ' <<<"$dashboards" >/dev/null || {
-    printf 'error: expected the five exact provisioned CN5G dashboards\n' >&2
+    printf 'error: expected the six exact provisioned CN5G dashboards\n' >&2
     return 1
   }
   rm -f -- "$grafana_netrc"
   grafana_netrc=''
-  printf 'grafana_provisioning=pass datasources=2 dashboards=5\n'
+  printf 'grafana_provisioning=pass datasources=2 dashboards=6\n'
   stop_forward
 }
 

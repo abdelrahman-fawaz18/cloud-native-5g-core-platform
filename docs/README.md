@@ -2299,7 +2299,10 @@ After this foundation, use the following review order:
 15. [Phase 7 experiment model](#33-phase-7-controlled-performance-and-capacity-experiment)
     — route enforcement, controlled workload, clean-state boundaries,
     repeated analysis, retained failures, results, and rollback.
-16. [Complete accepted-system architecture](architecture/complete-system-architecture.md)
+16. [Phase 8 recovery model](#34-phase-8-controlled-reliability-and-recovery)
+    — exact Pod faults, detection/readiness/service boundaries, corrected
+    sample freshness, repeated recovery, safety controls, and reviewed results.
+17. [Complete accepted-system architecture](architecture/complete-system-architecture.md)
     — Helm and Kubernetes ownership, every Pod/container, 5G and telemetry
     interfaces, address/port inventory, probes, storage, security, and a
     registration-to-ping walkthrough.
@@ -3060,7 +3063,7 @@ lifecycles, and 2,101-second interactive soak passed on 2026-08-06.
 This section is deliberately written in layers. Sections 33.1 through 33.12
 assume no previous Prometheus or Grafana experience. They establish the mental
 model and vocabulary first. Sections 33.13 onward then describe the accepted
-performance implementation, its evidence, and the prepared dashboard extension
+performance implementation, its evidence, and the accepted dashboard extension
 precisely. A reader should not need to infer what a tool does from a command
 name.
 
@@ -4319,11 +4322,11 @@ The implementation can be followed directly through these tracked artifacts:
 | How was the benchmark lifecycle enforced? | [`scripts/phase07-lab.sh`](../scripts/phase07-lab.sh) and [`scripts/run-phase07-matrix.py`](../scripts/run-phase07-matrix.py) |
 | How were raw attempts accepted and summarized? | [`scripts/analyze-phase07.py`](../scripts/analyze-phase07.py) |
 | What reviewed results were published? | [`reports/07_phase07_performance.md`](../reports/07_phase07_performance.md) and [`summary.json`](../benchmarks/phase-07/results/summary.json) |
-| How were reviewed metrics generated? | prepared path `scripts/generate-phase07-dashboard-metrics.py` |
-| What exactly does the exporter serve? | prepared path `charts/cn5g-observability/files/phase07-reviewed.prom` |
-| How is the exporter installed? | prepared path `charts/cn5g-observability/templates/phase07-results.yaml` |
+| How were reviewed metrics generated? | tracked path `scripts/generate-phase07-dashboard-metrics.py` |
+| What exactly does the exporter serve? | tracked path `charts/cn5g-observability/files/phase07-reviewed.prom` |
+| How is the exporter installed? | tracked path `charts/cn5g-observability/templates/phase07-results.yaml` |
 | How does Prometheus discover it? | [`prometheus-config.yaml`](../charts/cn5g-observability/templates/prometheus-config.yaml) |
-| What queries and panels does Grafana use? | prepared path `charts/cn5g-observability/files/dashboards/05-performance-capacity.json` |
+| What queries and panels does Grafana use? | tracked path `charts/cn5g-observability/files/dashboards/05-performance-capacity.json` |
 | How are Grafana data sources and dashboards provisioned? | [`grafana.yaml`](../charts/cn5g-observability/templates/grafana.yaml) |
 
 The final professional mental model is:
@@ -4334,3 +4337,288 @@ The final professional mental model is:
 > publishable; a bounded exporter presents only reviewed results back to
 > Prometheus; and Grafana queries those gauges to visualize one completed local
 > experiment without pretending it is live production capacity.
+
+## 34. Phase 8 Controlled Reliability And Recovery
+
+Phase 8 answers a different question from Phase 7. Phase 7 asked how the
+working platform behaved under declared load. Phase 8 deliberately removed
+one network-function Pod and measured what Kubernetes restored automatically,
+what 5G state remained broken, and what the operator had to reconstruct.
+
+The phase used the accepted five-UE/two-DNN release after the temporary Phase
+7 benchmark overlay was rolled back. It did not introduce a chaos framework,
+change replica counts, delete controllers, or simulate node failure. Each
+attempt changed one condition: one exact AMF, SMF, or UPF Pod was deleted with
+the ordinary Kubernetes grace period.
+
+### 34.1 The four recovery boundaries
+
+The most important lesson is that recovery is not one timestamp:
+
+| Boundary | What ended the timer | What it proves |
+| --- | --- | --- |
+| MTTD | Kubernetes API state exposed the fault/replacement transition | the orchestrator detected the changed runtime object |
+| Replacement Ready | the new Pod passed its Kubernetes readiness probe | the process and its local readiness check recovered |
+| Automatic service recovery | fresh component-specific Prometheus signals and all five UE probes recovered without repair | the complete service recovered automatically |
+| Validated MTTR | full dependency-ordered restoration and Phase 5/6 validation completed | the accepted user-visible baseline was restored |
+
+**MTTD** means Mean Time To Detect. **MTTR** means Mean Time To Recover. A
+Ready Pod can answer a local health check while earlier UE registration,
+PFCP, and GTP-U session state is still absent. Phase 8 therefore never uses
+Pod readiness alone as MTTR.
+
+```mermaid
+flowchart LR
+    A["Healthy five-UE baseline"] --> B["Delete one exact Pod"]
+    B --> C["Kubernetes API detects change\nMTTD"]
+    C --> D["Deployment creates replacement"]
+    D --> E["Replacement Pod Ready"]
+    E --> F{"Fresh 5G signals and\nall five UE probes healthy?"}
+    F -->|"Yes within 90 s"| G["Automatic recovery"]
+    F -->|"No"| H["Dependency-ordered\noperator restoration"]
+    G --> I["Complete Phase 5/6 validation"]
+    H --> I
+    I --> J["Accepted attempt"]
+```
+
+The 90-second automatic observation window is long compared with the observed
+four-to-seven-second Pod replacement times. When the service did not recover
+inside that window, the runner recorded `operator-assisted` rather than
+silently presenting the later repair as Kubernetes self-healing.
+
+### 34.2 Exact fault scope and why it matters
+
+AMF, SMF, and UPF were each one-replica Deployments. The experiment selected
+the workload with an exact name and verified that its selector matched exactly
+one Ready Pod. It then deleted that Pod—not the Deployment, Service, Secret,
+ConfigMap, namespace, or PVC.
+
+```mermaid
+flowchart TB
+    R["Phase 8 runner"] --> V["Verify exact selector\none replica, one Ready Pod"]
+    V --> K["Kubernetes API\nDELETE selected Pod"]
+    K --> D["Existing Deployment controller"]
+    D --> P["New Pod, new UID and Pod IP"]
+    P --> S["Existing ClusterIP Service"]
+    S --> T["Prometheus target and 5G peers"]
+
+    R -. "does not delete" .-> X["Deployment / Service / Secret / PVC"]
+```
+
+This is a single-replica recovery experiment, not a high-availability test.
+The Service name remains stable, but the application state that lived in the
+terminated process may not. A controller can reconstruct a Pod specification;
+it cannot automatically reconstruct every external protocol relationship.
+
+### 34.3 What “healthy baseline” meant
+
+Before fault injection, the runner required more than Running Pods:
+
+- the `cn5g` and `cn5g-observability` Helm releases were deployed;
+- all required Pods and fault targets were Ready;
+- five synthetic subscribers existed in MongoDB;
+- the gNB had an SCTP association and successful NG Setup with the AMF;
+- five UEs were registered with five unique addresses and sessions;
+- PFCP control-plane and GTP-U user-plane state matched the five-session
+  contract;
+- all five source-bound user-plane probes passed through their intended DNN;
+- cross-DNN isolation still denied the unintended paths;
+- every required Prometheus target and Loki ingestion path was healthy; and
+- host memory and Docker storage remained above the declared abort floors.
+
+The same complete baseline had to pass after every attempt. This prevents a
+later repetition from inheriting hidden damage from an earlier fault.
+
+### 34.4 Evidence collected during each attempt
+
+The raw evidence stayed local and permission-restricted:
+
+| Evidence stream | Purpose |
+| --- | --- |
+| Kubernetes objects and Events | identify the old Pod, deletion, replacement identity, scheduling, and readiness transition |
+| Prometheus ranges | measure target health, component-specific 5G signals, and five UE probe states on a common time axis |
+| Loki ranges | correlate application messages with the fault and restoration window |
+| two-second service timeline | distinguish first failure, replacement readiness, and later service recovery |
+| Pod/container snapshots | detect restarts, termination reasons, and unexpected additional faults |
+| MongoDB PVC identity | prove that an unrelated stateful identity did not change |
+| Phase 5/6 validation logs | prove full functional and observability restoration |
+
+Raw files include ephemeral Pod names, UIDs, local paths, and detailed logs,
+so `benchmarks/raw/phase-08/` remains ignored. The analyzer publishes only
+sanitized reductions.
+
+### 34.5 Why Prometheus sample freshness required special care
+
+An early pilot exposed a measurement error. A Prometheus instant query returns
+an evaluation timestamp alongside the most recent eligible sample. Treating
+that evaluation time as if the underlying metric had just been collected made
+a pre-fault healthy gauge appear post-fault and produced false four-second
+“automatic recovery” results.
+
+The corrected runner queries `timestamp(metric)` and requires the metric's
+source sample timestamp to cross the fault boundary. For the five user-plane
+probes it uses the minimum timestamp across all five series, so one fresh UE
+cannot hide four stale UEs. The experiment-contract hash changed, deliberately
+invalidating the exploratory pilots before the matrix could start.
+
+This distinction is broadly useful: a query response time tells when the query
+was evaluated; a source-sample time tells when the exporter actually observed
+the state.
+
+### 34.6 Restoration order
+
+When automatic recovery did not occur, the runner used the already accepted
+dependency-ordered session-repair path:
+
+```mermaid
+sequenceDiagram
+    participant R as Phase 8 runner
+    participant U as Five UE Pods
+    participant C as 5G Core dependency chain
+    participant G as gNB
+    participant V as Validators
+
+    R->>U: Scale UEs to zero
+    R->>C: Restart NRF, SCP, UDR, UDM, AUSF, PCF, NSSF
+    R->>C: Restart UPF, SMF, AMF in dependency order
+    R->>G: Restart gNB
+    R->>C: Wait for nine NRF profiles and healthy control plane
+    R->>U: Restore five StatefulSet replicas
+    U->>G: Register and request PDU sessions
+    G->>C: Rebuild N2, PFCP, and GTP-U state
+    R->>V: Run complete Phase 5 and Phase 6 validation
+    V-->>R: Baseline restoration accepted
+```
+
+Scaling UEs down first prevents stale clients from racing the control-plane
+restart. Starting the core in dependency order ensures that service discovery,
+subscriber data, policy, user-plane control, mobility, and radio state become
+available in a controlled sequence.
+
+### 34.7 Accepted matrix and measured results
+
+Campaign `20260807T050635Z-matrix` accepted three repetitions for each
+component:
+
+| Component | Median MTTD | Median Pod Ready | Median MTTR | Median user-plane disruption | Automatic | Assisted |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| AMF | 0.177 s | 4.481 s | 212.187 s | 119.406 s | 0 | 3 |
+| SMF | 0.177 s | 4.432 s | 210.757 s | 72.274 s | 0 | 3 |
+| UPF | 0.214 s | 6.581 s | 210.866 s | 155.825 s | 0 | 3 |
+
+Kubernetes detected every fault in well under one second and replaced the
+Pods in seconds. All nine end-to-end recoveries required the declared operator
+path and completed in roughly 207-214 seconds. The larger service interval is
+not Kubernetes startup time; it includes the automatic observation window,
+state reconstruction, five-UE convergence, and complete functional and
+observability validation.
+
+The UPF condition had the largest median observed user-plane disruption in
+this campaign. The sample size is three per component, so the result describes
+this experiment and does not rank general product reliability.
+
+### 34.8 Stateful and invalid-configuration controls
+
+MongoDB was tested separately because database recreation answers a storage
+question, not the AMF/SMF/UPF timing question. The test deleted only
+`cn5g-mongodb-0`, observed a new Pod identity, verified the same PVC UID and
+backing volume, and confirmed all five subscriber records remained. It then
+reran the Phase 5 and Phase 6 validators.
+
+The invalid-configuration action provided two negative controls:
+
+1. Helm rendering rejected an invalid four-UE value against the accepted
+   five-UE contract.
+2. Kubernetes server-side dry run rejected a Deployment with a negative
+   replica count.
+
+Neither test created the invalid object or changed Helm revision 16. This
+proves that unsafe input can fail before a rollout modifies live workloads.
+
+### 34.9 Deterministic analysis and dashboard projection
+
+The analyzer accepted only a `raw_complete` campaign whose contract hash,
+Helm revision, exact nine conditions, PVC identity, service timelines, and
+restoration results matched the declared experiment. It produced:
+
+- `attempt-summary.csv` and `component-summary.csv`;
+- one reviewed `summary.json`;
+- recovery-time, recovery-mode, and user-plane-disruption SVG plots; and
+- `reports/08_phase08_reliability.md`.
+
+Only after that gate did the dashboard generator become valid:
+
+```mermaid
+flowchart LR
+    RAW["Ignored raw campaign\nEvents, metrics, logs, identities"] --> A["Deterministic analyzer"]
+    A --> JSON["Reviewed summary.json"]
+    JSON --> G["Phase 8 metric generator"]
+    G --> P["75 bounded\ncn5g_phase08_reviewed_* gauges"]
+    P --> E["Token-free static exporter"]
+    E --> PR["Prometheus scrape target"]
+    PR --> GF["Grafana\nReliability And Recovery"]
+```
+
+The exporter is a tiny project-owned Deployment. It receives no ServiceAccount
+token, drops all Linux capabilities, forbids privilege escalation, and uses a
+read-only root filesystem. Prometheus scrapes one additional internal target;
+Grafana queries the repeated immutable gauges with instant PromQL queries.
+
+The dashboard keeps these views separate:
+
+- campaign acceptance, restoration count, and PVC preservation;
+- median MTTD, replacement readiness, MTTR, and user-plane disruption;
+- the service-restoration gap between Pod Ready and MTTR;
+- automatic versus operator-assisted outcomes;
+- per-component medians and min/median/p95/max spread; and
+- explicit single-node and single-replica limitations.
+
+It does not replay faults or reconstruct a live incident timeline. Detailed
+event timestamps remain in ignored raw evidence, so no annotation is invented
+from incomplete public data.
+
+The live acceptance gate subsequently verified two healthy reviewed-results
+targets, exactly 75 Phase 8 series, and all six provisioned dashboards. All
+three controlled alert scenarios still fired and resolved. A 2,606-second
+interactive Grafana soak retained the same Ready Pod with zero restarts and a
+468.6 MiB peak under its 768 MiB limit. The complete Phase 5 and Phase 6
+regression passed before the ignored `after-phase-08` host snapshot was
+captured.
+
+### 34.10 What Phase 8 proves—and what it does not
+
+Phase 8 proves that this local Kubernetes deployment can detect and replace
+the selected Pods, that the project can measure service-level recovery rather
+than only container readiness, that the operator repair path is repeatable,
+and that every attempt restores the complete accepted baseline without
+changing MongoDB storage identity.
+
+It does **not** prove:
+
+- high availability or zero downtime;
+- recovery from node, disk, network, or geographic failure;
+- multi-replica Open5GS state synchronization;
+- a production Recovery Time Objective;
+- carrier-grade resilience; or
+- that a different topology will have the same timings.
+
+The source-of-truth artifacts are:
+
+| Question | Source |
+| --- | --- |
+| What fault and timing contract was declared? | [`benchmarks/phase-08/experiment.json`](../benchmarks/phase-08/experiment.json) |
+| How were faults and restoration enforced? | [`scripts/phase08-lab.sh`](../scripts/phase08-lab.sh) and [`scripts/run-phase08-recovery.py`](../scripts/run-phase08-recovery.py) |
+| How were attempts accepted? | [`scripts/analyze-phase08.py`](../scripts/analyze-phase08.py) |
+| What values were reviewed? | [`reports/08_phase08_reliability.md`](../reports/08_phase08_reliability.md) and [`summary.json`](../benchmarks/phase-08/results/summary.json) |
+| How are bounded metrics generated? | [`generate-phase08-dashboard-metrics.py`](../scripts/generate-phase08-dashboard-metrics.py) |
+| How are they exposed? | [`phase08-results.yaml`](../charts/cn5g-observability/templates/phase08-results.yaml) |
+| What does Grafana provision? | [`06-reliability-recovery.json`](../charts/cn5g-observability/files/dashboards/06-reliability-recovery.json) |
+| How does an operator repeat or recover the workflow? | [`phase-08-recovery.md`](runbooks/phase-08-recovery.md) |
+
+The compact mental model is:
+
+> Kubernetes restored the process quickly; Phase 8 measured whether the 5G
+> service recovered too. It did not recover automatically in this
+> single-replica topology, so the automation labelled the operator repair
+> honestly, validated the complete service, and published only the reviewed,
+> sanitized evidence.

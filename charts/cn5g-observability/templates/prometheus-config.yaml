@@ -53,6 +53,12 @@ data:
         fallback_scrape_protocol: PrometheusText0.0.4
         static_configs:
           - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "phase07-results") }}:8080"]
+      - job_name: phase08-reviewed-results
+        # This reviewed result fixture is immutable, bounded, and served by
+        # the same least-privileged BusyBox HTTP boundary as Phase 7.
+        fallback_scrape_protocol: PrometheusText0.0.4
+        static_configs:
+          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "phase08-results") }}:8080"]
       - job_name: kubernetes-node
         scheme: https
         authorization:
@@ -90,7 +96,7 @@ data:
       - name: cn5g-platform
         rules:
           - alert: Cn5gPrometheusTargetDown
-            expr: (up{job=~"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|phase07-reviewed-results"} == 0) or on() (cn5g_observability_alert_exercise{scenario="target-down"} == 1)
+            expr: (up{job=~"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|phase07-reviewed-results|phase08-reviewed-results"} == 0) or on() (cn5g_observability_alert_exercise{scenario="target-down"} == 1)
             for: 30s
             labels: {severity: critical, service: cn5g}
             annotations:
