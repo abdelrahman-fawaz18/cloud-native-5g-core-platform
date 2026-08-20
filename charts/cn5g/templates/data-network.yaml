@@ -24,6 +24,7 @@ spec:
         {{- include "cn5g.selectorLabels" (dict "root" $root "component" $endpoint.component) | nindent 8 }}
       annotations:
         cn5g.io/rollout-token: {{ $root.Values.global.rolloutToken | quote }}
+        cn5g.io/expected-image-id: {{ $root.Values.images.dataNetwork.expectedImageID | quote }}
     spec:
       serviceAccountName: {{ include "cn5g.serviceAccountName" $root }}
       automountServiceAccountToken: false

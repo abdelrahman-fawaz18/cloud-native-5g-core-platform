@@ -1,0 +1,20 @@
+title = "CN5G secret scanning with narrow synthetic-data exceptions"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Helm references the Kubernetes Secret name, not secret material"
+condition = "AND"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+paths = ['''^charts/cn5g/values\.yaml$''']
+regexes = ['''^\s*existingSecret:\s+cn5g-(subscriber|subscribers-phase05)\s*$''']
+
+[[allowlists]]
+description = "Published UERANSIM example uses the documented synthetic lab key"
+condition = "AND"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+paths = ['''^configs/compose/ueransim/ue\.yaml$''']
+regexes = ['''^\s*key:\s+'465B5CE8B199B49FAA5F0A2EE238A6BC'\s*$''']

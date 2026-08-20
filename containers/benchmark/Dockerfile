@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.18
 
-FROM alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f
+FROM alpine:3.22.5@sha256:7c8cb692ae09657cbc4a3f3cbd0e8d5a2690ba38386aaaf252dbb060bf5eb2e6
 
 LABEL org.opencontainers.image.title="CN5G Controlled Benchmark Tool" \
       org.opencontainers.image.description="Pinned iperf3 and network diagnostics for Phase 7 experiments" \

@@ -39,7 +39,7 @@ Compose and cleanup gate passes.
 | Open5GS Network Functions | [Open5GS v2.7.7](https://github.com/open5gs/open5gs/releases/tag/v2.7.7) | Commit `318eeb49a7dcdff733dec60e02d9c60aefca2fb9`; archive SHA-256 `a1b47110982a00fa66b639e08ad124803c72fc8228c0f7fb886abbb059752c58` | GNU Affero General Public License 3.0 |
 | UERANSIM gNodeB and UE | [UERANSIM v3.2.8](https://github.com/aligungr/UERANSIM/releases/tag/v3.2.8) | Commit `ca1a66fffe282767bb08618af9f848e3b68ea47b`; archive SHA-256 `69c3162cd6f325b97b494f29a6510af14e039ce26193b7cdbc14df831a664ece` | GNU Affero General Public License 3.0 or commercial license |
 | Build/runtime base | Ubuntu 24.04 | Linux/AMD64 manifest `sha256:52df9b1ee71626e0088f7d400d5c6b5f7bb916f8f0c82b474289a4ece6cf3faf` | Ubuntu package licenses |
-| Controlled endpoint base | Alpine 3.22.1 | Linux/AMD64 manifest `sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f` | Alpine package licenses |
+| Controlled endpoint base | Alpine 3.22.5 | Linux/AMD64 manifest `sha256:7c8cb692ae09657cbc4a3f3cbd0e8d5a2690ba38386aaaf252dbb060bf5eb2e6` | Alpine package licenses |
 | Controlled endpoint HTTP applet | Alpine `busybox-extras` | Package version `1.37.0-r20` from the Alpine 3.22 main repository | GNU General Public License 2.0 only |
 | Subscriber database | [MongoDB Docker Official Image](https://hub.docker.com/_/mongo) 8.0.28 Noble | Linux/AMD64 manifest `sha256:0b9ff6be307c4860f66d9555cd951c9fa13fdb6536d9dd808c137dcdc6d888a5` | Server Side Public License plus component licenses |
 
@@ -143,16 +143,18 @@ observers run with `NET_RAW`; unprivileged transport Pods and the controlled
 data endpoint retain zero effective capabilities. No probe uses privileged
 mode, a host port, a Docker socket, or the Ubuntu host network namespace.
 
-## Verified Local Build
+## Verified Local Builds
 
-The Linux/AMD64 build completed on 2026-08-01 with the following local Open
-Container Initiative image identities:
+The Linux/AMD64 baseline build completed on 2026-08-01. Phase 9 rebuilt the
+data-network endpoint on 2026-08-20 from the Alpine 3.22.5 security-maintenance
+manifest, rejected fixed high/critical findings, and regenerated its SPDX
+Software Bill of Materials before promotion.
 
 | Image | Local image ID | Unpacked image size |
 | --- | --- | ---: |
 | `cn5g/open5gs:2.7.7` | `sha256:56b1a5aec5f3736c819b5f2edbbb1c61357740136c09c7d253dcca03f0da6cc8` | 48,037,139 bytes |
 | `cn5g/ueransim:3.2.8` | `sha256:60de10ecd55a9b96d4863319bd102d776622fcc3211f7f1b1c1a4d8026bc7f58` | 40,489,225 bytes |
-| `cn5g/data-network:0.1.0` | `sha256:c4770c4c6934e6b4f207a00304131f805b9c214ac8c9b8c365306bb58cce2b18` | 5,649,954 bytes |
+| `cn5g/data-network:0.1.0` | `sha256:7a5f7ab23fe5eefb12a6a2de097d01c4dbdc939be741561dc90e8e7b3c3d4bb8` | 5,114,825 bytes |
 
 All three images carry the project ownership URL, target `linux/amd64`, and
 passed the post-cleanup resource check. No Compose container, network, or

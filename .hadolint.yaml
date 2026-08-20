@@ -1,0 +1,8 @@
+failure-threshold: warning
+ignored:
+  # Ubuntu repository revisions change when security updates are published.
+  # Reproducibility is anchored by the base-image digest and source checksums;
+  # Trivy evaluates the resulting installed package set.
+  - DL3008
+trusted-registries:
+  - docker.io

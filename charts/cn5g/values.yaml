@@ -27,7 +27,7 @@ images:
     repository: cn5g/data-network
     tag: 0.1.0
     pullPolicy: Never
-    expectedImageID: sha256:c4770c4c6934e6b4f207a00304131f805b9c214ac8c9b8c365306bb58cce2b18
+    expectedImageID: sha256:7a5f7ab23fe5eefb12a6a2de097d01c4dbdc939be741561dc90e8e7b3c3d4bb8
   mongodb:
     repository: mongo
     tag: 8.0.28-noble
