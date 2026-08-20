@@ -4767,7 +4767,7 @@ session repair restored it. The resumed promotion then passed all five UE
 registrations and PDU sessions, both DNNs, cross-DNN denial, unique F-SEIDs,
 bidirectional tunnel counters, metrics, logs, and six dashboards.
 
-### 35.6 Accepted local evidence and remaining boundary
+### 35.6 Accepted local and hosted evidence
 
 The local Phase 9 gate accepted:
 
@@ -4784,8 +4784,15 @@ The local Phase 9 gate accepted:
 This proves repeatable controls for this repository and accepted local lab. It
 does **not** prove the absence of every vulnerability, signed provenance,
 registry security, production hardening, multi-node availability, or carrier-
-grade security. The hosted workflow must still pass for the exact proposed
-commit before Phase 9 is complete.
+grade security.
+
+GitHub Actions run `32419738287` independently evaluated implementation commit
+`75e346c330edf35c9f8310ea291d267062f4d24b`. Its safe job passed in 50 seconds;
+its five-image build, scan, and SPDX SBOM job passed in 7 minutes 48 seconds;
+and the aggregate release gate passed only after both jobs succeeded. Review of
+the two retained artifact bundles confirmed zero Gitleaks findings, zero
+unresolved fixed high/critical Trivy findings, zero reported image secrets,
+and five structurally valid SPDX 2.3 inventories.
 
 The detailed sources are:
 
@@ -4802,4 +4809,4 @@ The compact mental model is:
 
 > Hosted CI proves that the proposed artifacts obey the repository contract;
 > the local privileged gate proves that those artifacts preserve the real 5G
-> and observability behavior. Phase 9 requires both before release.
+> and observability behavior. Phase 9 accepted both boundaries before release.

@@ -226,10 +226,12 @@ class Phase09StaticTests(unittest.TestCase):
         self.assertNotIn("/home/", public)
         self.assertNotIn("fawaz", public.lower())
 
-    def test_report_does_not_overclaim_pending_hosted_or_privileged_results(self):
+    def test_report_records_hosted_and_privileged_results_without_overclaim(self):
         report = REPORT.read_text(encoding="utf-8")
-        self.assertIn("Pending Acceptance Evidence", report)
-        self.assertIn("GitHub-hosted workflow results", report)
+        self.assertIn("Accepted Hosted Evidence", report)
+        self.assertIn("75e346c330edf35c9f8310ea291d267062f4d24b", report)
+        self.assertIn("32419738287", report)
+        self.assertNotIn("Pending Acceptance Evidence", report)
         self.assertIn(
             "A skipped or unavailable gate is never recorded as passing", report
         )

@@ -48,13 +48,22 @@ artifact signing, multi-node availability, or automated deployment.
 - Reports and SBOMs remain ignored and permission-restricted; public results
   contain reviewed summaries rather than raw findings.
 
-## Pending Acceptance Evidence
+## Accepted Hosted Evidence
 
-The following remain pending until the feature branch completes its release
-sequence:
+GitHub Actions run `32419738287` evaluated implementation commit
+`75e346c330edf35c9f8310ea291d267062f4d24b` on an Ubuntu 24.04 hosted runner.
 
-- GitHub-hosted workflow results for the exact reviewed commit; and
-- final review of the GitHub-hosted artifacts for that commit.
+| Hosted boundary | Accepted result |
+| --- | --- |
+| Safe deterministic gates | Passed in 50 seconds, including 190 tests, manifest schema and policy checks, secret history, repository scanning, and four negative controls |
+| Image supply-chain gate | Passed in 7 minutes 48 seconds; five images were rebuilt, scanned, and inventoried without a registry push |
+| Aggregate release gate | Passed only after both independent jobs succeeded |
+| Repository artifacts | Gitleaks reported zero findings; Trivy reported zero unresolved fixed high/critical vulnerabilities and zero secrets |
+| Image artifacts | Five Trivy reports contained zero unresolved fixed high/critical vulnerabilities and zero secrets |
+| Inventory artifacts | Five structurally valid SPDX 2.3 SBOMs described 430 total packages |
 
-This report must be updated with the exact accepted evidence before Phase 9 is
-merged. A skipped or unavailable gate is never recorded as passing.
+The two retained artifact bundles were reviewed for structure and bounded
+finding counts. Raw reports remain in the workflow's restricted artifact
+storage rather than Git.
+
+A skipped or unavailable gate is never recorded as passing.
