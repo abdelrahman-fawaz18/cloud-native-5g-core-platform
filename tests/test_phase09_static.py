@@ -118,6 +118,8 @@ class Phase09StaticTests(unittest.TestCase):
             "actions/checkout@main", "FROM alpine:latest",
             "privileged: true", "SYNTHETIC_TEST_TOKEN",
             "phase09_negative_controls=pass",
+            "printf -v cleanup 'rm -rf -- %q' \"$temp\"",
+            "trap - RETURN",
         ):
             self.assertIn(required, self.lifecycle)
 

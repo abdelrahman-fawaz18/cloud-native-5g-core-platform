@@ -631,10 +631,13 @@ test_controls() {
   ensure_normal_user
   require_tools
   require_command cp grep mkdir mktemp rm
-  local temp
+  local temp cleanup
   mkdir -p "$report_root"
   temp=$(mktemp -d "$report_root/control-test.XXXXXX")
-  trap 'rm -rf -- "$temp"' RETURN
+  printf -v cleanup 'rm -rf -- %q' "$temp"
+  # Expand the shell-escaped, validated path now so RETURN never depends on locals.
+  # shellcheck disable=SC2064
+  trap "$cleanup" RETURN
 
   mkdir -p "$temp/.github/workflows" "$temp/containers/bad" "$temp/secret"
   cp "$project_root/.github/workflows/ci.yml" "$temp/.github/workflows/ci.yml"
@@ -677,6 +680,8 @@ test_controls() {
     printf 'error: synthetic secret negative control was accepted\n' >&2
     return 1
   fi
+  rm -rf -- "$temp"
+  trap - RETURN
   printf 'phase09_negative_controls=pass workflow=unpinned image=floating manifest=privileged secret=synthetic\n'
 }
 
