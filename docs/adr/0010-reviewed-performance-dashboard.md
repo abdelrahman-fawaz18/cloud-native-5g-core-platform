@@ -6,8 +6,8 @@ Accepted on 2026-08-06.
 
 ## Context
 
-Phase 7 produced one accepted nine-condition performance campaign, then
-deliberately removed its benchmark sidecars and restored the permanent Phase 5
+Performance campaign produced one accepted nine-condition performance campaign, then
+deliberately removed its benchmark sidecars and restored the permanent platform
 service. Prometheus retains only 24 hours of local samples. A durable Grafana
 view therefore cannot depend on the temporary benchmark targets or on raw time
 series that will expire.
@@ -21,10 +21,10 @@ Kubernetes makes their StatefulSet claim-template specification immutable.
 ## Decision
 
 Generate a bounded Prometheus text fixture deterministically from the tracked
-`reviewed_complete` Phase 7 summary. The generator validates the schema, the
+`reviewed_complete` performance campaign summary. The generator validates the schema, the
 1/3/5 UE levels, three repetitions per level, nine accepted conditions, and the
 resource summary before producing exactly 556
-`cn5g_phase07_reviewed_*` gauge series under a hard limit of 600.
+`cn5g_performance_reviewed_*` gauge series under a hard limit of 600.
 
 Serve the fixture from a dedicated observability Deployment and ClusterIP
 Service. The exporter receives no Kubernetes token, runs as a non-root fixed
@@ -71,7 +71,7 @@ identity and Helm's native server dry run. Never use force-conflict takeover.
 - Helm's native server dry run passed after the immutable lineage correction;
 - observability revision 6 deployed with one Ready token-free exporter and
   replaceable Service ClusterIP `10.96.38.108`;
-- the complete Phase 5/6 validator found one healthy reviewed-results target,
+- the complete platform and observability validator found one healthy reviewed-results target,
   nine accepted conditions, three repetitions, 556 series, and five dashboards;
 - all three alert scenarios fired and resolved; and
 - a 2,101-second interactive Grafana soak recorded zero restarts and a 407.2
@@ -96,8 +96,8 @@ lifecycles, and an interactive Grafana gate.
 
 Roll back only the observability Helm release to its recorded prior revision,
 then verify the two retained telemetry claim identities and rerun the complete
-Phase 5 validator. Removing the exporter and fifth dashboard does not require
+Platform validator. Removing the exporter and fifth dashboard does not require
 changing the core release, host networking, subscriber Secret, MongoDB claim,
-or accepted Phase 7 report. A future long-term evidence backend may replace the
+or accepted performance campaign report. A future long-term evidence backend may replace the
 static exporter only after it preserves the same reviewed/raw distinction,
 privacy boundary, and reproducible traceability.

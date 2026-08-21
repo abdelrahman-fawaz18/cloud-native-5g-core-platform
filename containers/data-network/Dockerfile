@@ -9,7 +9,7 @@ LABEL org.opencontainers.image.title="Cloud-Native 5G Core Data Network Endpoint
       org.opencontainers.image.version="0.1.0" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-# The base digest and accepted image ID preserve the Phase 9 security rebuild;
+# The base digest and accepted image ID preserve the Supply-chain assurance security rebuild;
 # Trivy scans the actual installed package set before local acceptance.
 # hadolint ignore=DL3018
 RUN apk add --no-cache busybox-extras=1.37.0-r20 iproute2 su-exec \

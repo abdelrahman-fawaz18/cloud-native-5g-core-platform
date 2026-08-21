@@ -1,0 +1,107 @@
+{{- if .Values.observability.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cn5g.fullname" . }}-ue-probe
+  labels:
+    {{- include "cn5g.componentLabels" (dict "root" . "component" "ue-probe") | nindent 4 }}
+data:
+  probe.py: |-
+    import http.client
+    import os
+    import socket
+    import struct
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    POD_NAME = os.environ["POD_NAME"]
+    ORDINAL = int(POD_NAME.rsplit("-", 1)[1])
+    if ORDINAL in (0, 1, 2):
+        DNN = "internet"
+        ENDPOINT = "{{ include "cn5g.componentName" (dict "root" . "component" "data-internet") }}"
+    elif ORDINAL in (3, 4):
+        DNN = "enterprise"
+        ENDPOINT = "{{ include "cn5g.componentName" (dict "root" . "component" "data-enterprise") }}"
+    else:
+        raise RuntimeError("unexpected UE Pod ordinal")
+
+    lock = threading.Lock()
+    state = {"success": 0, "duration": 0.0, "rx": 0, "tx": 0}
+
+    def interface_ipv4(name):
+        request = struct.pack("256s", name[:15].encode("ascii"))
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            import fcntl
+            response = fcntl.ioctl(sock.fileno(), 0x8915, request)
+        return socket.inet_ntoa(response[20:24])
+
+    def counter(direction):
+        path = f"/sys/class/net/uesimtun0/statistics/{direction}_packets"
+        try:
+            with open(path, encoding="ascii") as handle:
+                return int(handle.read().strip())
+        except (FileNotFoundError, ValueError):
+            return 0
+
+    def probe_loop():
+        while True:
+            started = time.monotonic()
+            success = 0
+            try:
+                source = interface_ipv4("uesimtun0")
+                connection = http.client.HTTPConnection(
+                    ENDPOINT, 8080, timeout=10, source_address=(source, 0)
+                )
+                connection.request("GET", "/healthz")
+                response = connection.getresponse()
+                response.read()
+                success = int(response.status == 200)
+                connection.close()
+            except (OSError, http.client.HTTPException):
+                success = 0
+            with lock:
+                state.update(
+                    success=success,
+                    duration=time.monotonic() - started,
+                    rx=counter("rx"),
+                    tx=counter("tx"),
+                )
+            time.sleep({{ .Values.observability.probeIntervalSeconds }})
+
+    def exposition():
+        with lock:
+            snapshot = state.copy()
+        labels = f'ordinal="{ORDINAL}",dnn="{DNN}"'
+        return "\n".join((
+            "# HELP cn5g_ue_user_plane_probe_success Last synthetic UE user-plane probe result.",
+            "# TYPE cn5g_ue_user_plane_probe_success gauge",
+            "cn5g_ue_user_plane_probe_success{%s} %s" % (labels, snapshot["success"]),
+            "# HELP cn5g_ue_user_plane_probe_duration_seconds Duration of the last synthetic UE user-plane probe.",
+            "# TYPE cn5g_ue_user_plane_probe_duration_seconds gauge",
+            "cn5g_ue_user_plane_probe_duration_seconds{%s} %.6f" % (labels, snapshot["duration"]),
+            "# HELP cn5g_ue_tun_packets_total Packets observed on the UE TUN interface.",
+            "# TYPE cn5g_ue_tun_packets_total gauge",
+            "cn5g_ue_tun_packets_total{%s,direction=\"rx\"} %s" % (labels, snapshot["rx"]),
+            "cn5g_ue_tun_packets_total{%s,direction=\"tx\"} %s" % (labels, snapshot["tx"]),
+            "",
+        )).encode("utf-8")
+
+    class MetricsHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path not in ("/", "/metrics"):
+                self.send_error(404)
+                return
+            body = exposition()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format, *_arguments):
+            return
+
+    threading.Thread(target=probe_loop, daemon=True).start()
+    ThreadingHTTPServer(("0.0.0.0", {{ .Values.observability.metricsPort }}), MetricsHandler).serve_forever()
+{{- end }}

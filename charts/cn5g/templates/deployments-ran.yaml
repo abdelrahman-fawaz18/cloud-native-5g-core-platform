@@ -125,14 +125,14 @@ spec:
           emptyDir: {medium: Memory, sizeLimit: 16Mi}
 ---
 apiVersion: apps/v1
-kind: {{ if .Values.phase05.enabled }}StatefulSet{{ else }}Deployment{{ end }}
+kind: {{ if .Values.platform.enabled }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
   name: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
   labels:
     {{- include "cn5g.componentLabels" (dict "root" . "component" "ue") | nindent 4 }}
 spec:
-  replicas: {{ if .Values.phase05.enabled }}{{ .Values.phase05.ueReplicas }}{{ else }}1{{ end }}
-  {{- if .Values.phase05.enabled }}
+  replicas: {{ if .Values.platform.enabled }}{{ .Values.platform.ueReplicas }}{{ else }}1{{ end }}
+  {{- if .Values.platform.enabled }}
   serviceName: {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}
   podManagementPolicy: Parallel
   updateStrategy:
@@ -166,7 +166,7 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |-
-              {{- if .Values.phase05.enabled }}
+              {{- if .Values.platform.enabled }}
               case "$POD_NAME" in
                 {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}-[0-4]) ordinal=${POD_NAME##*-} ;;
                 *) echo "unexpected UE Pod identity" >&2; exit 2 ;;
@@ -185,7 +185,7 @@ spec:
                 sleep 2;
               done;
               exit 1
-          {{- if .Values.phase05.enabled }}
+          {{- if .Values.platform.enabled }}
           env:
             - name: POD_NAME
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
@@ -214,7 +214,7 @@ spec:
                 sleep 2;
               done;
               test -n "${GNB_IP:-}";
-              {{- if .Values.phase05.enabled }}
+              {{- if .Values.platform.enabled }}
               case "$POD_NAME" in
                 {{ include "cn5g.componentName" (dict "root" . "component" "ue") }}-[0-4]) ordinal=${POD_NAME##*-} ;;
                 *) echo "unexpected UE Pod identity" >&2; exit 2 ;;
@@ -227,7 +227,7 @@ spec:
                 "$ue_config" \
                 > /etc/ueransim/ue.yaml;
               test -s /etc/ueransim/ue.yaml
-          {{- if .Values.phase05.enabled }}
+          {{- if .Values.platform.enabled }}
           env:
             - name: POD_NAME
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
@@ -266,7 +266,7 @@ spec:
             failureThreshold: 30
           readinessProbe:
             exec:
-              {{- if .Values.phase05.enabled }}
+              {{- if .Values.platform.enabled }}
               command:
                 - /bin/sh
                 - -ec
@@ -301,7 +301,7 @@ spec:
             - {name: iproute2, mountPath: /etc/iproute2}
             - {name: logs, mountPath: /opt/ueransim/logs}
             - {name: tmp, mountPath: /tmp}
-        {{- if .Values.phase06.enabled }}
+        {{- if .Values.observability.enabled }}
         - name: user-plane-metrics
           image: {{ include "cn5g.image" .Values.images.ueProbe }}
           imagePullPolicy: {{ .Values.images.ueProbe.pullPolicy }}
@@ -310,7 +310,7 @@ spec:
             - name: POD_NAME
               valueFrom: {fieldRef: {fieldPath: metadata.name}}
           ports:
-            - {name: metrics, containerPort: {{ .Values.phase06.metricsPort }}, protocol: TCP}
+            - {name: metrics, containerPort: {{ .Values.observability.metricsPort }}, protocol: TCP}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -332,11 +332,11 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.phase06.resources | nindent 12 }}
+            {{- toYaml .Values.observability.resources | nindent 12 }}
           volumeMounts:
             - {name: ue-probe, mountPath: /opt/cn5g, readOnly: true}
         {{- end }}
-        {{- if .Values.phase07.enabled }}
+        {{- if .Values.performance.enabled }}
         - name: benchmark-client
           image: {{ include "cn5g.image" .Values.images.benchmark }}
           imagePullPolicy: {{ .Values.images.benchmark.pullPolicy }}
@@ -363,7 +363,7 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.phase07.resources | nindent 12 }}
+            {{- toYaml .Values.performance.resources | nindent 12 }}
           volumeMounts:
             - {name: benchmark-tmp, mountPath: /tmp}
         {{- end }}
@@ -372,8 +372,8 @@ spec:
           hostPath: {path: /dev/net/tun, type: CharDevice}
         - name: subscriber-secret
           secret:
-            secretName: {{ if .Values.phase05.enabled }}{{ .Values.phase05.subscriberSecret.existingSecret }}{{ else }}{{ .Values.subscriberSecret.existingSecret }}{{ end }}
-            {{- if not .Values.phase05.enabled }}
+            secretName: {{ if .Values.platform.enabled }}{{ .Values.platform.subscriberSecret.existingSecret }}{{ else }}{{ .Values.subscriberSecret.existingSecret }}{{ end }}
+            {{- if not .Values.platform.enabled }}
             items:
               - {key: {{ .Values.subscriberSecret.ueConfigKey }}, path: {{ .Values.subscriberSecret.ueConfigKey }}}
               - {key: {{ .Values.subscriberSecret.imsiKey }}, path: {{ .Values.subscriberSecret.imsiKey }}}
@@ -386,13 +386,13 @@ spec:
           emptyDir: {sizeLimit: 32Mi}
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 64Mi}
-        {{- if .Values.phase06.enabled }}
+        {{- if .Values.observability.enabled }}
         - name: ue-probe
           configMap:
             name: {{ include "cn5g.fullname" . }}-ue-probe
             defaultMode: 0444
         {{- end }}
-        {{- if .Values.phase07.enabled }}
+        {{- if .Values.performance.enabled }}
         - name: benchmark-tmp
           emptyDir: {medium: Memory, sizeLimit: 16Mi}
         {{- end }}

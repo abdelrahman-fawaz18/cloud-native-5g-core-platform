@@ -30,7 +30,7 @@ fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 project_root=$(cd -- "$script_dir/.." && pwd -P)
-versions_file="$project_root/versions/phase-04.env"
+versions_file="$project_root/versions/platform-runtime.env"
 
 if [[ ! -r $versions_file ]]; then
   printf 'error: version manifest is missing or unreadable: %s\n' \
@@ -38,7 +38,7 @@ if [[ ! -r $versions_file ]]; then
   exit 2
 fi
 
-# shellcheck source=../versions/phase-04.env
+# shellcheck source=../versions/platform-runtime.env
 source "$versions_file"
 
 required_version_variables=(

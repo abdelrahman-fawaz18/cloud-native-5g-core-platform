@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Cloud-native 5G core platform overview</title>
+  <desc id="desc">Five simulated user equipments connect through a gNodeB to an Open5GS core. The user plane reaches two isolated data networks. Prometheus and Loki collect evidence displayed by Grafana. Helm and Kubernetes manage the platform.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8Z" fill="#425466"/>
+    </marker>
+    <style>
+      .bg{fill:#f7f8fa}.boundary{fill:#fff;stroke:#aeb8c2;stroke-width:1.5}.group{fill:#eef2f5;stroke:#aeb8c2;stroke-width:1.5}.core{fill:#e8f0f7;stroke:#466b8c;stroke-width:1.5}.ran{fill:#f6efe5;stroke:#a16a32;stroke-width:1.5}.data{fill:#edf3ea;stroke:#5d7d50;stroke-width:1.5}.obs{fill:#f1eef6;stroke:#6d5b85;stroke-width:1.5}.label{font-family:Arial,sans-serif;font-size:16px;font-weight:600;fill:#1d2730}.small{font-family:Arial,sans-serif;font-size:13px;fill:#43515e}.tiny{font-family:Arial,sans-serif;font-size:12px;fill:#536270}.title{font-family:Arial,sans-serif;font-size:25px;font-weight:700;fill:#17212a}.line{fill:none;stroke:#425466;stroke-width:2;marker-end:url(#arrow)}.dash{fill:none;stroke:#6d5b85;stroke-width:1.7;stroke-dasharray:7 6;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1280" height="720"/>
+  <text class="title" x="40" y="43">Cloud-native 5G core platform</text>
+  <text class="small" x="40" y="68">Accepted default: five synthetic UEs, two isolated DNNs, and a separate observability release</text>
+
+  <rect class="boundary" x="40" y="92" width="1200" height="496" rx="8"/>
+  <text class="label" x="60" y="120">Kubernetes on a single local kind node</text>
+  <text class="tiny" x="1018" y="120">Pod CIDR 10.244.0.0/16</text>
+
+  <rect class="group" x="68" y="150" width="180" height="278" rx="6"/>
+  <text class="label" x="88" y="180">UERANSIM UEs</text>
+  <text class="small" x="88" y="205">StatefulSet: 5 Pods</text>
+  <rect class="ran" x="88" y="224" width="140" height="42" rx="4"/><text class="small" x="103" y="250">UE 0 · internet</text>
+  <rect class="ran" x="88" y="276" width="140" height="42" rx="4"/><text class="small" x="103" y="302">UE 1 · internet</text>
+  <rect class="ran" x="88" y="328" width="140" height="42" rx="4"/><text class="small" x="103" y="354">UE 2 · internet</text>
+  <rect class="ran" x="88" y="380" width="140" height="42" rx="4"/><text class="small" x="103" y="406">UE 3–4 · enterprise</text>
+  <text class="tiny" x="88" y="451">uesimtun0 session addresses</text>
+  <text class="tiny" x="88" y="469">10.60.0.0/24 · 10.61.0.0/24</text>
+
+  <rect class="ran" x="293" y="246" width="150" height="102" rx="6"/>
+  <text class="label" x="339" y="278">gNodeB</text>
+  <text class="small" x="315" y="303">UERANSIM Pod</text>
+  <text class="tiny" x="313" y="326">N2 + N3 endpoint</text>
+
+  <rect class="core" x="493" y="150" width="390" height="278" rx="6"/>
+  <text class="label" x="513" y="180">Open5GS 5G Standalone core</text>
+  <rect class="boundary" x="513" y="202" width="350" height="70" rx="4"/>
+  <text class="small" x="530" y="230">Control plane</text>
+  <text class="tiny" x="530" y="252">NRF · SCP · AMF · AUSF · UDM · UDR · PCF · NSSF · SMF</text>
+  <rect class="boundary" x="513" y="294" width="164" height="106" rx="4"/>
+  <text class="label" x="555" y="326">MongoDB</text>
+  <text class="small" x="532" y="351">Synthetic subscribers</text>
+  <text class="small" x="532" y="375">PersistentVolumeClaim</text>
+  <rect class="core" x="699" y="294" width="164" height="106" rx="4"/>
+  <text class="label" x="760" y="326">UPF</text>
+  <text class="small" x="720" y="351">N3 GTP-U · UDP/2152</text>
+  <text class="small" x="720" y="375">N4 PFCP · UDP/8805</text>
+
+  <rect class="data" x="933" y="176" width="270" height="105" rx="6"/>
+  <text class="label" x="953" y="207">internet DNN</text>
+  <text class="small" x="953" y="232">controlled endpoint · HTTP/8080</text>
+  <text class="tiny" x="953" y="255">UE pool 10.60.0.0/24</text>
+  <rect class="data" x="933" y="319" width="270" height="105" rx="6"/>
+  <text class="label" x="953" y="350">enterprise DNN</text>
+  <text class="small" x="953" y="375">controlled endpoint · HTTP/8080</text>
+  <text class="tiny" x="953" y="398">UE pool 10.61.0.0/24</text>
+
+  <path class="line" d="M248 297H293"/><text class="tiny" x="254" y="286">radio simulation</text>
+  <path class="line" d="M443 273H493"/><text class="tiny" x="451" y="259">N2</text>
+  <path class="line" d="M443 323H478V418H688V347H699"/><text class="tiny" x="487" y="413">N3</text>
+  <path class="line" d="M595 272V294"/><text class="tiny" x="603" y="287">DB</text>
+  <path class="line" d="M863 320C892 294 901 229 933 229"/><text class="tiny" x="868" y="283">N6 routed IPv4</text>
+  <path class="line" d="M863 374C890 374 907 371 933 371"/>
+
+  <rect class="obs" x="68" y="494" width="1135" height="70" rx="6"/>
+  <text class="label" x="88" y="524">Operational evidence</text>
+  <text class="small" x="88" y="548">Prometheus metrics + alert rules</text>
+  <text class="small" x="390" y="548">Loki logs · Alloy collection</text>
+  <text class="small" x="704" y="548">kube-state-metrics</text>
+  <text class="small" x="963" y="548">Grafana dashboards</text>
+  <path class="dash" d="M368 348V493"/><path class="dash" d="M688 428V493"/><path class="dash" d="M1068 424V493"/>
+
+  <rect class="boundary" x="40" y="616" width="1200" height="70" rx="8"/>
+  <text class="label" x="60" y="645">Management boundary</text>
+  <text class="small" x="60" y="670">cn5g-platform.sh → Helm releases → Kubernetes controllers → Pods and persistent volumes</text>
+  <text class="small" x="798" y="657">No NodePort or LoadBalancer</text>
+  <text class="small" x="798" y="677">Grafana: explicit 127.0.0.1 port-forward only</text>
+</svg>

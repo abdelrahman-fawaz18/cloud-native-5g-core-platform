@@ -18,11 +18,11 @@ texts or legal advice.
 | kube-state-metrics 2.18.0 | Kubernetes object metrics | [Apache-2.0](https://github.com/kubernetes/kube-state-metrics/blob/v2.18.0/LICENSE) |
 | Alpine Linux 3.22.5 packages | Data-network and benchmark runtime packages | [Package-specific licenses](https://pkgs.alpinelinux.org/packages?branch=v3.22) |
 | Ubuntu 24.04 packages | Open5GS and UERANSIM build/runtime packages | [Package-specific copyright records](https://packages.ubuntu.com/noble/) |
-| iperf3 3.19.1 | Controlled Phase 7 traffic measurement | [BSD-style license](https://github.com/esnet/iperf/blob/3.19.1/LICENSE) |
+| iperf3 3.19.1 | Controlled Performance campaign traffic measurement | [BSD-style license](https://github.com/esnet/iperf/blob/3.19.1/LICENSE) |
 
 The exact source commits, archive checksums, base-image manifests, local image
 identities, and distribution boundary are recorded in
-[`docs/image-provenance.md`](docs/image-provenance.md). Phase 9 SPDX Software
+[`docs/image-provenance.md`](docs/image-provenance.md). Supply-chain assurance SPDX Software
 Bills of Materials and scanner reports are generated into ignored local or
 hosted-workflow artifacts; they are not hand-maintained in this notice.
 

@@ -1,0 +1,9 @@
+# Accepted local platform: five UEs, two isolated DNNs, and telemetry probes.
+platform:
+  enabled: true
+
+observability:
+  enabled: true
+
+performance:
+  enabled: false

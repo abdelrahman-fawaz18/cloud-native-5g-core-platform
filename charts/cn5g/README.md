@@ -1,199 +1,94 @@
 # CN5G Helm Chart
 
-For a system-level visual explanation of where this chart runs and how its
-objects, 5G interfaces, address domains, lifecycle, persistence, and validation
-fit together, see the
-[complete Phase 4 system guide](../../docs/README.md#23-phase-4-complete-system-and-operational-model)
-the [accepted Phase 5 multi-UE model](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model),
-and the [accepted Phase 6 observability model](../../docs/README.md#32-phase-6-observability-and-operational-mental-model).
+This chart packages Open5GS, MongoDB, UERANSIM, and two controlled data
+networks as the `cn5g` Kubernetes release. Its default values represent the
+accepted platform: five synthetic UEs, two DNNs, bounded UE telemetry, and no
+benchmark sidecars.
 
-This chart packages the verified Open5GS, MongoDB, UERANSIM, and controlled
-data-network images as one Kubernetes release. The baseline deliberately runs
-one replica of each 5G function, one gNodeB, and one synthetic UE.
+The [complete system architecture](../../docs/architecture/complete-system-architecture.md)
+explains how the rendered objects, protocols, addresses, storage, and
+Observability paths connect.
 
-`values-phase05.yaml` is the accepted multi-UE overlay. It keeps the default
-Phase 4 render intact for controlled rollback
-while changing the UE controller to a five-replica StatefulSet and adding the
-`enterprise` DNN, `10.61.0.0/24` session pool, `ogstun2`, and a second
-controlled endpoint. The runtime gate in the
-[system guide](../../docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
-passed on 2026-08-05.
+## Profiles
 
-`values-phase06.yaml` composes with the Phase 5 overlay and adds one bounded
-user-plane metrics sidecar to each UE Pod plus a headless metrics port. The
-sidecar binds its synthetic HTTP request to `uesimtun0`, exposes only fixed
-ordinal/DNN labels, mounts no subscriber material, has no API token, and drops
-all capabilities. The separate `cn5g-observability` chart owns every metrics,
-logging, dashboard, and alert backend.
+Profile files live at the repository root so the unified lifecycle and direct
+Helm users select the same contracts.
 
-The Phase 6 overlay passed the complete Phase 5 regression validator plus
-live target, telecom-metric, user-plane probe, cardinality, log-ingestion,
-dashboard-provisioning, and alert-lifecycle gates on 2026-08-05.
+| Profile | Purpose |
+| --- | --- |
+| [`default`](../../profiles/default.yaml) | five UEs, `internet` + `enterprise`, observability-compatible telemetry |
+| [`core-only`](../../profiles/core-only.yaml) | the same 5G topology without deploying the separate observability release |
+| [`resource-limited`](../../profiles/resource-limited.yaml) | full 5G topology with a smaller local database reservation |
+| [`single-ue`](../../profiles/single-ue.yaml) | minimal one-UE/one-DNN compatibility profile |
+| [`performance`](../../profiles/performance.yaml) | temporary zero-capability benchmark sidecars and ports 5201–5205 |
 
-`values-phase07.yaml` composes with both accepted overlays and adds an idle
-`benchmark-client` sidecar to each UE plus a listening `benchmark-server`
-sidecar to each DNN endpoint. All benchmark containers run as UID/GID 65532,
-drop every capability, use a read-only root filesystem, and receive bounded
-resources. Each DNN Service exposes TCP and UDP ports 5201-5205 only inside
-the cluster, one independent server port per UE ordinal. This overlay is an
-experiment mechanism; it is not accepted until
-the gated runtime pilot and later repeated matrix pass.
+The default chart render is intentionally the full topology. The single-UE
+configuration must be requested explicitly.
 
-Non-sensitive configuration is rendered through ConfigMaps. The chart never
-templates subscriber authentication material; `subscriberSecret.existingSecret`
-must name a Secret created from the ignored files produced by
-`scripts/generate-subscriber-secret.sh`.
-
-Project-built workload images use `imagePullPolicy: Never` and must be loaded
-into the named kind node only after their local identities match the Phase 2
-manifest. The Phase 6 Python sidecar uses an upstream version-and-digest-pinned
-image with `IfNotPresent`; its immutable registry identity is recorded in the
-Phase 6 version manifest. MongoDB's
-upstream `tag@digest` is verified before its fixed-version tag is imported;
-the imported containerd image ID is then compared with that accepted digest.
-This two-sided gate is required because kind's Docker-image import preserves
-the tag and content identity but does not preserve the upstream RepoDigest
-alias. Kubernetes therefore cannot pull an unreviewed replacement at runtime.
-For project-built OCI indexes, the loader first accepts the recorded index
-digest and then reads the runtime configuration digest from the same Docker
-archive consumed by kind. That digest is compared with the image ID reported
-by the container runtime through CRI. Index, platform-manifest, attestation,
-and runtime-configuration digests are distinct OCI objects and are never
-compared as though they were equivalent. Repository digests are not used for
-this post-import comparison because kind assigns local `import-*` repository
-aliases while retaining the configuration identity.
-
-Open5GS, UERANSIM, and the data endpoint use Deployments. MongoDB uses a
-StatefulSet and a dynamically provisioned data PersistentVolumeClaim (PVC).
-Subscriber provisioning uses a revision-scoped idempotent Job. Workloads use a
-ServiceAccount with no Role or RoleBinding because they do not need Kubernetes
-Application Programming Interface (API) access.
-
-Resource requests are grounded in two ten-second cgroup v2 observations of
-the validated single-UE steady state, including a second sample after the
-requests were applied by a fresh install. MongoDB averaged 143-170
-millicores (mCPU), used 217-222 MiB current memory, and reached 380-381 MiB
-peak memory, so its reservation is 200 mCPU and 256 MiB while its 500
-mCPU/768 MiB limit retains startup headroom. The shared Open5GS profile
-observed 12-22 mCPU and 6-40 MiB across its functions; its reservation is
-therefore 25 mCPU/64 MiB. The data endpoint observed 6-8 mCPU, 3 MiB current
-memory, and 7-8 MiB peak memory; its reservation is 10 mCPU/16 MiB. The
-existing UPF and UERANSIM reservations already exceeded their observed
-steady-state use and remain unchanged. A later five-UE observation measured
-each UE at 17-19 mCPU and 5-10 MiB current memory, both data endpoints at 8-9
-mCPU and 2-3 MiB, and MongoDB at 162 mCPU and 241 MiB current/691 MiB peak
-memory. These local observations are scheduling evidence, not production
-capacity guidance.
-
-`helm lint` and `helm template` validate package structure and deterministic
-rendering. They do not prove SCTP, NGAP, PFCP, GTP-U, TUN, N6 routing, UE
-registration, PDU-session establishment, persistence, upgrade, or rollback.
-
-## Runtime Object And Network Model
-
-The release renders the following responsibility hierarchy:
+## Object model
 
 ```text
-cn5g Helm release in namespace cn5g
-├── ConfigMaps: non-secret Open5GS and gNB configuration
-├── pre-existing Secret: UE and subscriber material (not chart-owned)
-├── ServiceAccount: mounted API token disabled; no RBAC grants
+Helm release cn5g · namespace cn5g
 ├── Deployments
-│   ├── nine Open5GS SBI control-plane functions
-│   ├── UPF
-│   ├── gNB and UE
-│   └── controlled data-network endpoint
-├── StatefulSet: MongoDB
-│   └── retained PersistentVolumeClaim -> local-path PersistentVolume
-├── revision-scoped subscriber initialization Job
-└── cluster-internal Services and EndpointSlices
+│   ├── NRF, SCP, AMF, AUSF, UDM, UDR, PCF, NSSF, SMF, UPF
+│   ├── UERANSIM gNodeB
+│   └── internet and enterprise data endpoints
+├── StatefulSets
+│   ├── MongoDB + retained 2 GiB PVC
+│   └── five ordinal-bound UE Pods
+├── revision-scoped subscriber convergence Job
+├── cluster-internal and headless Services
+├── non-secret ConfigMaps
+└── reference to a pre-created synthetic subscriber Secret
 ```
 
-Every Pod gets a replaceable `10.244.0.0/16` address. ClusterIP Services use
-the separate `10.96.0.0/16` range and provide stable DNS discovery. SBI
-functions advertise their stable fully qualified Service names, while N2,
-N3, and N4 listeners bind to the Pod address inserted at container startup.
-The UE session subnet `10.60.0.0/24` is neither a Pod nor a Service network: it
-exists on the UERANSIM and UPF TUN interfaces and is returned through one
-project-marked route inside the kind node.
+The chart never templates authentication keys. The lifecycle generates them
+under ignored, permission-restricted storage and supplies a pre-existing
+Secret named by `platform.subscriberSecret.existingSecret`.
 
-```text
-UE application
-  -> uesimtun0 (10.60.0.x, MTU 1400)
-  -> simulated radio -> gNB
-  -> N3 GTP-U/UDP 2152 -> UPF Pod
-  -> ogstun (10.60.0.1) -> N6 -> data-network Pod
+## Network contract
 
-Return packet
-  -> data Pod default gateway -> kind node
-  -> exact 10.60.0.0/24 route -> current UPF Pod veth
-  -> ogstun -> N3 GTP-U -> gNB -> UE -> uesimtun0
-```
+| Interface | Protocol and port | Peers |
+| --- | --- | --- |
+| SBI | HTTP/2 TCP/7777 | Open5GS network functions |
+| N2 | NGAP SCTP/38412 | gNodeB ↔ AMF |
+| N4 | PFCP UDP/8805 | SMF ↔ UPF |
+| N3 | GTP-U UDP/2152 | gNodeB ↔ UPF |
+| N6 | routed IPv4 | UPF ↔ controlled data endpoint |
+| UE radio simulation | UDP/4997 | UE ↔ gNodeB |
+| UE telemetry | HTTP/TCP 9101 | Prometheus ↔ sidecar |
 
-SBI communication uses TCP/7777, N2 uses SCTP/38412, N4 uses UDP/8805, and
-N3 uses UDP/2152. Services are cluster-internal; the chart defines no
-NodePort, LoadBalancer, host port, or host-network workload.
+`internet` sessions use `10.60.0.0/24` through `ogstun`; `enterprise`
+sessions use `10.61.0.0/24` through `ogstun2`. UPF source-policy tables 1060
+and 1061 permit only the intended endpoint and reject other destinations.
 
-## Lifecycle And Recovery Semantics
+All Services are cluster-internal. The chart defines no NodePort,
+LoadBalancer, host port, or host-network workload.
 
-Deployments use one replica because this phase proves orchestration and
-protocol correctness rather than availability. Open5GS functions use
-`Recreate` during the accepted revision transition so replaceable Pods do not
-briefly advertise two endpoints. The lifecycle helper handles the Helm 4
-server-side-apply transition between `RollingUpdate` and `Recreate` with
-ownership checks and server-side previews.
+## Security boundary
 
-Open5GS caches peers and session state. A simple Pod-ready result is therefore
-not sufficient after an address-changing rollout. Convergence verifies nine
-stable NRF profiles and, when required, restarts UPF, then SMF, then gNB, then
-UE so PFCP and GTP-U state is rebuilt against current Pod addresses. The
-complete validator must pass after install, upgrade, rollback, and reinstall.
+- UPF receives only `NET_ADMIN` and `/dev/net/tun`.
+- UE containers receive only `NET_ADMIN`, `NET_RAW`, and `/dev/net/tun`.
+- Data endpoints, benchmark sidecars, metrics sidecars, and ordinary core
+  functions run with all capabilities dropped.
+- Workload service-account token mounting is disabled and the chart creates no
+  Role or RoleBinding.
+- Containers disable privilege escalation and use `RuntimeDefault` seccomp;
+  root filesystems are read-only where the application permits.
 
-MongoDB's claim carries a keep policy. The accepted tests proved the same
-claim UID and backing volume across Pod recreation, controlled upgrade,
-rollback, and Helm uninstall/reinstall. This does not imply survival across
-kind-cluster deletion or provide replicated database availability.
+## Image identity
 
-## Security Boundary
+Third-party images are version-and-digest pinned. Project images are built
+from pinned sources, compared with recorded local identities, and loaded into
+the exact kind node with `imagePullPolicy: Never`. OCI index, platform
+manifest, attestation, and runtime configuration digests are treated as
+different objects; the loader compares the runtime configuration identity
+reported by containerd.
 
-All containers drop Linux capabilities before narrowly adding requirements.
-UPF adds only `NET_ADMIN`; UE adds `NET_ADMIN` and `NET_RAW`; ordinary
-Open5GS, MongoDB, subscriber Job, gNB, and data-network containers receive no
-added network capability. `/dev/net/tun` is mounted only into UPF and UE. No
-container is privileged, workload API-token mounting is disabled, and no
-Role or RoleBinding is created.
+## Validation boundary
 
-## Accepted Scope
-
-The default values are accepted as a local, single-node, single-UE integration
-baseline. The Phase 5 overlay is accepted for exactly five concurrent UEs and
-two differentiated DNN contracts. Together they prove Kubernetes packaging,
-real 5G signalling and user-plane operation, state persistence, controlled
-release lifecycle, deterministic identity mapping, and cross-DNN isolation.
-They do not claim general multi-UE capacity, multi-node scheduling, high
-availability, production storage or security controls, carrier-grade
-performance, or geographic redundancy.
-
-## Phase 5 Overlay Contract
-
-The overlay consumes the pre-existing `cn5g-subscribers-phase05` Secret. The
-chart neither generates nor owns its authentication values. StatefulSet Pod
-ordinal `N` selects `imsi-N`, `dnn-N`, and `ue-N.yaml`, and the subscriber Job
-consumes one batch provisioning script. The values schema fixes the replica
-count at five and fixes both DNN network contracts so an unreviewed values
-override cannot silently move a subscriber pool, gateway, TUN device,
-endpoint, or route-policy table.
-
-The UPF setup init container creates `ogstun` and `ogstun2`, then installs one
-source-policy table per DNN. Each table contains only the intended headless
-endpoint route plus an unreachable default. It receives only `NET_ADMIN` and
-the existing TUN device mount. Endpoint containers remain non-root with all
-capabilities dropped. The overlay does not add a host port, NodePort,
-LoadBalancer, host-network Pod, or RBAC grant.
-
-Phase 5 also adds the headless `cn5g-upf-pfcp` discovery Service for N4. The
-SMF resolves this name directly to the ready UPF Pod address. This deliberately
-bypasses ClusterIP UDP proxying for PFCP, whose association and session state
-is tied to the peer transport address. The normal `cn5g-upf` ClusterIP Service
-remains available for the other declared UPF ports and preserves the Phase 4
-object contract.
+`helm lint` and deterministic `helm template` rendering prove package
+structure only. Runtime acceptance additionally requires SCTP association,
+NG Setup, 5G-AKA, NAS security, PDU sessions, PFCP and GTP-U state,
+session-bound HTTP/ICMP, unique addresses and F-SEIDs, tunnel counter deltas,
+cross-DNN denial, and effective capability checks.

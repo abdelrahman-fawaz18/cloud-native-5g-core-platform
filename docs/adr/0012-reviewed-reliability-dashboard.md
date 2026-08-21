@@ -2,12 +2,12 @@
 
 ## Status
 
-Accepted on 2026-08-07 after deterministic analysis accepted all nine Phase 8
+Accepted on 2026-08-07 after deterministic analysis accepted all nine resilience campaign
 conditions.
 
 ## Context
 
-The Phase 8 experiments retained detailed Kubernetes events, Prometheus
+The resilience campaign experiments retained detailed Kubernetes events, Prometheus
 ranges, Loki logs, Pod identities, and validation output locally. Those raw
 artifacts are valuable for audit and troubleshooting but are unsuitable for a
 stable public dashboard: they contain ephemeral identities, expire with the
@@ -25,9 +25,9 @@ permit partial or exploratory attempts to look like accepted evidence.
 ## Decision
 
 Generate an immutable, bounded Prometheus fixture only from
-`benchmarks/phase-08/results/summary.json` after its campaign state is
+`benchmarks/resilience/results/summary.json` after its campaign state is
 `reviewed_complete`. A separate least-privileged exporter serves exactly 75
-`cn5g_phase08_reviewed_*` gauge series. The exporter has no Kubernetes API
+`cn5g_resilience_reviewed_*` gauge series. The exporter has no Kubernetes API
 token, drops every Linux capability, uses a read-only root filesystem, and
 receives only the generated metric ConfigMap.
 
@@ -41,11 +41,11 @@ Recovery Time Objective.
 
 Advance the observability chart to `0.3.0`. Preserve the immutable Prometheus
 and Loki claim-template lineage labels at `0.1.0`; only mutable workload and
-release labels advance to the current chart version.
+Release labels advance to the current chart version.
 
 ## Alternatives Considered
 
-### Keep Phase 8 only in the Markdown report
+### Keep resilience campaign only in the Markdown report
 
 This is safe but makes the most important recovery boundaries harder to
 compare and leaves the provisioned dashboard family incomplete.
@@ -61,10 +61,10 @@ Rejected because the experiment windows have expired and repeating static
 gauges is different from repeating controlled faults. A dashboard must not
 invent historical timing from current steady-state signals.
 
-### Merge Phase 7 and Phase 8 into one reviewed-results exporter
+### Merge performance campaign and resilience campaign into one reviewed-results exporter
 
 Rejected because separate targets make provenance, cardinality, health, and
-rollback boundaries explicit. Each phase can be regenerated and validated
+rollback boundaries explicit. Each capability can be regenerated and validated
 independently.
 
 ## Evidence
@@ -73,7 +73,7 @@ independently.
 - The deterministic analyzer generated two CSV files, one JSON summary, three
   SVG plots, and one reliability report.
 - All AMF, SMF, and UPF attempts preserved the MongoDB PVC and restored the
-  complete Phase 5/6 baseline.
+  complete platform and observability baseline.
 - The generated metric fixture contains exactly 75 series under a hard limit
   of 100 and contains no subscriber identity, Pod identity, PVC UID, or local
   path.
@@ -87,13 +87,13 @@ independently.
 - One additional tiny Deployment, Service, ConfigMap, and Prometheus target
   are added to the observability namespace.
 - The dashboard is historical reviewed evidence, not a live incident timeline.
-- A new Phase 8 campaign requires deterministic re-analysis and metric
+- A new resilience campaign requires deterministic re-analysis and metric
   regeneration before the displayed values change.
 
 ## Reversal Or Migration
 
 Roll back only the `cn5g-observability` Helm release to its prior revision.
 Prometheus and Loki PVC identities remain unchanged because their retained
-claim-template specifications are not modified. Re-run the complete Phase 6
+claim-template specifications are not modified. Re-run the complete observability stack
 validator after rollback. Removing the reviewed dashboard does not change the
-5G Core release, subscriber state, host routes, or raw Phase 8 evidence.
+5G Core release, subscriber state, host routes, or raw resilience campaign evidence.

@@ -3,7 +3,7 @@
 ## Scope
 
 The Compose baseline uses two locally built telecom images, one locally built
-test endpoint, and the reviewed MongoDB Docker Official Image. Phase 3 adds a
+test endpoint, and the reviewed MongoDB Docker Official Image. Networking qualification adds a
 project-owned feasibility probe derived from the exact accepted UERANSIM
 runtime image. No unreviewed community telecom image is used.
 
@@ -122,11 +122,11 @@ Read-only root filesystems prevent runtime mutation of image content.
 Configuration is bind-mounted read-only; writable transient state is confined
 to `tmpfs`; persistent state is confined to the two named MongoDB volumes.
 
-## Phase 3 Feasibility Probe
+## Networking qualification Feasibility Probe
 
 `cn5g/feasibility-probe:0.1.0` compiles one small C probe in a separate
 digest-pinned Ubuntu build stage and copies only the stripped executable into
-the accepted Phase 2 UERANSIM runtime. Its accepted local identity is
+the accepted Compose reference UERANSIM runtime. Its accepted local identity is
 `sha256:19c9bc6ea22dde8acbfe14cae00e655603994be057fce4d1d50cea88c429a963`,
 its platform is Linux/AMD64, and its image-default user is numeric
 `65532:65532`.
@@ -145,7 +145,7 @@ mode, a host port, a Docker socket, or the Ubuntu host network namespace.
 
 ## Verified Local Builds
 
-The Linux/AMD64 baseline build completed on 2026-08-01. Phase 9 rebuilt the
+The Linux/AMD64 baseline build completed on 2026-08-01. supply-chain assurance rebuilt the
 data-network endpoint on 2026-08-20 from the Alpine 3.22.5 security-maintenance
 manifest, rejected fixed high/critical findings, and regenerated its SPDX
 Software Bill of Materials before promotion.
@@ -163,7 +163,7 @@ volume existed at final verification time.
 These local IDs identify BuildKit-exported OCI indexes that include provenance
 attestations. A later export can produce a different index ID even when its
 pinned source, runtime layers, and reported runtime size are unchanged. A
-release records the verified export used for its tests; source commits,
+Release records the verified export used for its tests; source commits,
 archive checksums, base manifests, configuration, and functional evidence
 remain the reproducibility contract.
 
@@ -172,4 +172,4 @@ remain the reproducibility contract.
 Open5GS and UERANSIM source distribution obligations apply if built images are
 published. Dockerfiles, exact upstream source links, commits, checksums,
 licenses, patches if any, and build instructions must remain available with a
-public image release. Phase 2 does not publish container images.
+public image release. Compose reference does not publish container images.

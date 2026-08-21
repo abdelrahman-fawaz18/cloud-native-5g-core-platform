@@ -1,0 +1,9 @@
+# Five-UE/two-DNN core without the UE telemetry sidecars.
+platform:
+  enabled: true
+
+observability:
+  enabled: false
+
+performance:
+  enabled: false

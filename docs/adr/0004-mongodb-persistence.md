@@ -41,7 +41,7 @@ provide production-grade distributed storage or high availability.
 - Host MongoDB is active and must not be reused or stopped by default.
 - The project requires persistence and recovery tests but makes no
   high-availability claim.
-- Phase 2 proved that the two named MongoDB volumes survive container/network
+- Compose reference proved that the two named MongoDB volumes survive container/network
   teardown, preserve an independent synthetic marker, and support a complete
   protocol revalidation after recreation.
 - Confirmed cleanup removed only the two project volumes and left host MongoDB

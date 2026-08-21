@@ -1,6 +1,6 @@
 {{- $root := . -}}
 {{- $endpoints := list (dict "component" "data-network" "identity" "baseline") -}}
-{{- if .Values.phase05.enabled -}}
+{{- if .Values.platform.enabled -}}
 {{- $endpoints = list
       (dict "component" "data-internet" "identity" "internet")
       (dict "component" "data-enterprise" "identity" "enterprise") -}}
@@ -31,7 +31,7 @@ spec:
       terminationGracePeriodSeconds: 10
       securityContext:
         seccompProfile: {type: RuntimeDefault}
-      {{- if $root.Values.phase05.enabled }}
+      {{- if $root.Values.platform.enabled }}
       initContainers:
         - name: render-content
           image: {{ include "cn5g.image" $root.Values.images.dataNetwork }}
@@ -87,11 +87,11 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml $root.Values.dataNetwork.resources | nindent 12 }}
-          {{- if $root.Values.phase05.enabled }}
+          {{- if $root.Values.platform.enabled }}
           volumeMounts:
             - {name: rendered-content, mountPath: /srv, readOnly: true}
           {{- end }}
-        {{- if $root.Values.phase07.enabled }}
+        {{- if $root.Values.performance.enabled }}
         - name: benchmark-server
           image: {{ include "cn5g.image" $root.Values.images.benchmark }}
           imagePullPolicy: {{ $root.Values.images.benchmark.pullPolicy }}
@@ -105,8 +105,8 @@ spec:
                 test -z "$pids" || wait $pids 2>/dev/null || true
               }
               trap cleanup TERM INT EXIT
-              {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
-              iperf3 --server --port {{ add ($root.Values.phase07.iperfPort | int) $ordinal }} &
+              {{- range $ordinal := until ($root.Values.performance.iperfPortCount | int) }}
+              iperf3 --server --port {{ add ($root.Values.performance.iperfPort | int) $ordinal }} &
               pids="$pids $!"
               {{- end }}
               while sleep 5; do
@@ -117,9 +117,9 @@ spec:
           env:
             - {name: TMPDIR, value: /tmp}
           ports:
-            {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
-            - {name: iperf-tcp-{{ $ordinal }}, containerPort: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, protocol: TCP}
-            - {name: iperf-udp-{{ $ordinal }}, containerPort: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, protocol: UDP}
+            {{- range $ordinal := until ($root.Values.performance.iperfPortCount | int) }}
+            - {name: iperf-tcp-{{ $ordinal }}, containerPort: {{ add ($root.Values.performance.iperfPort | int) $ordinal }}, protocol: TCP}
+            - {name: iperf-udp-{{ $ordinal }}, containerPort: {{ add ($root.Values.performance.iperfPort | int) $ordinal }}, protocol: UDP}
             {{- end }}
           securityContext:
             runAsNonRoot: true
@@ -135,8 +135,8 @@ spec:
                 - /bin/sh
                 - -ec
                 - |-
-                  {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
-                  ss -H -lnt | grep -q ':{{ add ($root.Values.phase07.iperfPort | int) $ordinal }} '
+                  {{- range $ordinal := until ($root.Values.performance.iperfPortCount | int) }}
+                  ss -H -lnt | grep -q ':{{ add ($root.Values.performance.iperfPort | int) $ordinal }} '
                   {{- end }}
             periodSeconds: 2
             failureThreshold: 30
@@ -146,8 +146,8 @@ spec:
                 - /bin/sh
                 - -ec
                 - |-
-                  {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
-                  ss -H -lnt | grep -q ':{{ add ($root.Values.phase07.iperfPort | int) $ordinal }} '
+                  {{- range $ordinal := until ($root.Values.performance.iperfPortCount | int) }}
+                  ss -H -lnt | grep -q ':{{ add ($root.Values.performance.iperfPort | int) $ordinal }} '
                   {{- end }}
             periodSeconds: 5
             failureThreshold: 6
@@ -157,15 +157,15 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
           resources:
-            {{- toYaml $root.Values.phase07.resources | nindent 12 }}
+            {{- toYaml $root.Values.performance.resources | nindent 12 }}
           volumeMounts:
             - {name: benchmark-tmp, mountPath: /tmp}
         {{- end }}
-      {{- if $root.Values.phase05.enabled }}
+      {{- if $root.Values.platform.enabled }}
       volumes:
         - name: rendered-content
           emptyDir: {medium: Memory, sizeLimit: 1Mi}
-        {{- if $root.Values.phase07.enabled }}
+        {{- if $root.Values.performance.enabled }}
         - name: benchmark-tmp
           emptyDir: {medium: Memory, sizeLimit: 16Mi}
         {{- end }}

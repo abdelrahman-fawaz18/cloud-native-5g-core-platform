@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "experiment_id": "cn5g-performance-local-kind-v1",
+  "purpose": "Measure the bounded local five-UE platform without extrapolating to production capacity.",
+  "topology": {
+    "cluster": "kind single-node Kubernetes 1.36.1",
+    "ue_levels": [1, 3, 5],
+    "dnn_by_ordinal": {
+      "0": "internet",
+      "1": "internet",
+      "2": "internet",
+      "3": "enterprise",
+      "4": "enterprise"
+    },
+    "traffic_path_required": "benchmark-client -> uesimtun0 using source-policy table 1000 (named rt_uesimtun0 inside the UE container) -> UERANSIM gNB -> GTP-U -> Open5GS UPF -> intended DNN benchmark-server",
+    "forbidden_path": "direct Kubernetes Pod-network traffic from a UE benchmark client to a DNN endpoint"
+  },
+  "controls": {
+    "repetitions": 3,
+    "warm_up_seconds": 3,
+    "measurement_seconds": 15,
+    "cool_down_seconds": 10,
+    "idle_baseline_seconds": 30,
+    "iperf_parallel_streams": 1,
+    "iperf_server_port_by_ordinal": {"0": 5201, "1": 5202, "2": 5203, "3": 5204, "4": 5205},
+    "tcp_window": "system default",
+    "mtu": 1400,
+    "run_order": "ascending UE level within each repetition",
+    "session_state_reset": {
+      "scope": "before_each_condition",
+      "method": "Both DNN benchmark-server restarts followed by the platform dependency-ordered 5G session-chain restart so UPF policy tables resolve the current DNN Pod addresses",
+      "purpose": "Prevent stale PFCP, GTP-U, NGAP, address-pool, or iperf3 state from carrying between load levels or repetitions"
+    },
+    "restore_replicas_after_each_run": 5
+  },
+  "traffic": {
+    "tcp": {
+      "directions": ["forward", "reverse"],
+      "forward_offered_rate": "unbounded",
+      "reverse_offered_rate_per_ue_bits_per_second": 10000000,
+      "report": ["throughput_bits_per_second", "retransmits"]
+    },
+    "udp": {
+      "offered_rate_per_ue_bits_per_second": 1000000,
+      "report": ["throughput_bits_per_second", "lost_percent", "jitter_milliseconds"]
+    },
+    "icmp": {
+      "packets_per_ue": 10,
+      "interval_seconds": 0.2,
+      "report": ["packet_loss_percent", "rtt_min_milliseconds", "rtt_average_milliseconds", "rtt_max_milliseconds"]
+    }
+  },
+  "procedure_metrics": {
+    "registration": "timestamp from Sending Initial Registration to Initial Registration is successful",
+    "pdu_session": "timestamp from PDU Session Establishment Request to PDU Session establishment is successful",
+    "success_denominator": "expected active UE Pods in that run"
+  },
+  "resource_metrics": {
+    "source": "Prometheus range queries aligned to each measurement window",
+    "components": ["amf", "smf", "upf", "gnb", "ue", "data-internet", "data-enterprise"],
+    "measurements": ["cpu", "working_set_memory", "restarts", "network_receive", "network_transmit"]
+  },
+  "abort_thresholds": {
+    "host_available_memory_mib": 3072,
+    "docker_free_space_mib": 6144,
+    "new_container_restarts": 0,
+    "oom_kills": 0,
+    "unexpected_not_ready_workloads": 0,
+    "route_bypass_allowed": false
+  },
+  "pilot": {
+    "ue_level": 1,
+    "measurement_seconds": 15,
+    "reverse_offered_rate_bits_per_second": 10000000,
+    "udp_rate_bits_per_second": 1000000,
+    "required_before_full_matrix": true
+  },
+  "publication": {
+    "raw_data": "ignored",
+    "reviewed_summary": "tracked only after validation",
+    "failures_and_outliers": "retained and explained",
+    "prohibited_claims": ["carrier capacity", "production sizing", "high availability", "multi-node performance"]
+  }
+}

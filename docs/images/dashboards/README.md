@@ -14,5 +14,5 @@ Git-provisioned Grafana dashboards. A capture must:
 - agree with the accepted machine-readable reports and dashboard JSON.
 
 The required final set covers the service overview, telecom session/DNN view,
-reviewed Phase 7 performance, and reviewed Phase 8 recovery. Screenshots are
+reviewed performance, and reviewed recovery. Screenshots are
 visual summaries; commands, tests, and reports remain the source of truth.

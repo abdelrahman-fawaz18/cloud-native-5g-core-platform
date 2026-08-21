@@ -44,7 +44,7 @@ host would create an unacceptable security boundary.
   CI blast radius.
 - `.github/workflows/ci.yml` now runs two hosted, unprivileged jobs with
   read-only repository permissions and immutable Action identities.
-- `scripts/phase09-lab.sh privileged-gate` runs the accepted Phase 5 and Phase
+- `scripts/supply-chain-assurance.sh privileged-gate` runs the accepted platform and capability
   6 integration validators locally and records a restricted JSON result.
 - The hosted workflow contains no deployment, secret consumption, or
   self-hosted runner registration.

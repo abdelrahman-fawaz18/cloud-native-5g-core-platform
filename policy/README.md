@@ -1,6 +1,6 @@
 # Kubernetes Policy Gate
 
-The Phase 9 Conftest policy evaluates fully rendered Helm resources. It rejects
+The Conftest policy evaluates fully rendered Helm resources. It rejects
 privileged containers, host namespace sharing, privilege escalation, unexpected
 Linux capabilities, unexpected host paths, unnecessary service-account tokens,
 and images that are not pinned by digest.
@@ -26,5 +26,5 @@ network identities are pinned in the version manifests; MongoDB is pulled and
 verified by repository digest before its tag is loaded into the kind node.
 
 No exception permits `privileged: true`, host networking, host PID/IPC access,
-or an arbitrary host path. Negative controls in `phase09-lab.sh test-controls`
+or an arbitrary host path. Negative controls in `supply-chain-assurance.sh test-controls`
 prove that those boundaries fail closed.

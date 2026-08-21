@@ -29,9 +29,9 @@ ordinal with its Data Network Name (DNN), successful source-bound probe,
 duration, and tunnel counters. Three UEs use `internet`; two use `enterprise`.
 Synthetic subscriber identities and credentials never enter telemetry.
 
-## Reviewed Phase 7 Performance Experiment
+## Reviewed Performance Experiment
 
-![Reviewed Phase 7 performance experiment](images/dashboards/phase07-performance-reviewed.png)
+![Reviewed performance experiment](images/dashboards/performance-reviewed.png)
 
 This is a durable projection of the accepted 1, 3, and 5 concurrent-UE
 campaign—not a live speed test. The capture makes the experiment contract
@@ -40,9 +40,9 @@ measurement interval, a 30-second idle baseline, and zero new workload
 restarts. Detailed panels compare aggregate and per-UE traffic with procedure
 and resource evidence.
 
-## Reviewed Phase 8 Reliability Experiment
+## Reviewed Recovery Experiment
 
-![Reviewed Phase 8 reliability experiment](images/dashboards/phase08-reliability-reviewed.png)
+![Reviewed recovery experiment](images/dashboards/resilience-reviewed.png)
 
 The recovery dashboard keeps Kubernetes replacement time separate from actual
 5G service restoration. All nine AMF, SMF, and UPF fault conditions were
@@ -52,7 +52,7 @@ recovery evidence, not a high-availability or automatic-failover claim.
 
 ## Evidence Boundary
 
-The captures were taken after the Phase 10 local privileged gate revalidated
+The captures were taken after the release qualification local privileged gate revalidated
 the five-UE/two-DNN service and observability stack. Each PNG is at least
 1200 by 600 pixels, stripped of textual and EXIF metadata, and checksum-bound
 to its manifest. They intentionally exclude browser chrome, terminal output,

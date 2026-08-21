@@ -1,0 +1,9 @@
+# Focused protocol smoke test. This is not the advertised platform default.
+platform:
+  enabled: false
+
+observability:
+  enabled: false
+
+performance:
+  enabled: false

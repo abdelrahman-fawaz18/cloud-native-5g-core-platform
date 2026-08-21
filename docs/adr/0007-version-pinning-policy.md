@@ -4,8 +4,8 @@
 
 Accepted
 
-Acceptance covers the Phase 2 runtime, Phase 3 Kubernetes, Phase 4 Helm, and
-Phase 6 observability inputs. Continuous Integration pins remain provisional
+Acceptance covers the Compose reference, Kubernetes networking qualification, single-UE Helm profile, and
+Observability stack observability inputs. Continuous Integration pins remain provisional
 until their gate passes.
 
 ## Context
@@ -25,20 +25,20 @@ rather than permanent stagnation.
   SHA pins for third-party actions in the released baseline.
 - Maintain one machine-readable version/provenance manifest containing source,
   version, digest/checksum, retrieval date, license, and update notes.
-- Treat the Phase 1 version matrix as candidates, not final pins.
+- Treat the Host baseline version matrix as candidates, not final pins.
 - Review updates on a planned cadence and immediately for relevant security
   advisories. Change one dependency group at a time, rebuild, scan, and rerun
   affected functional, networking, cleanup, and performance checks.
 - Never use a floating `latest` tag in the verified baseline.
 
-Phase 2 accepted Docker Engine 29.7.1, containerd 2.2.6, Buildx 0.36.0, Docker
+Compose reference accepted Docker Engine 29.7.1, containerd 2.2.6, Buildx 0.36.0, Docker
 Compose 5.3.1, Open5GS 2.7.7, UERANSIM 3.2.8, MongoDB 8.0.28, and their
 recorded package versions, source checksums, base manifests, and image
-identities. Phase 3 accepted kind 0.32.0 and Kubernetes/kubectl 1.36.1; Phase
-4 accepted Helm 4.2.0; and Phase 6 accepted the exact Prometheus, Grafana,
+identities. Networking qualification accepted kind 0.32.0 and Kubernetes/kubectl 1.36.1; capability
+4 accepted Helm 4.2.0; and observability stack accepted the exact Prometheus, Grafana,
 Loki, Alloy, kube-state-metrics, and UE probe image identities recorded in
-`versions/phase-06.env`. Later Continuous Integration inputs remain candidates
-until their phase gate passes.
+`versions/observability-runtime.env`. Later Continuous Integration inputs remain candidates
+until their acceptance gate passes.
 
 ## Alternatives Considered
 
@@ -58,11 +58,11 @@ until their phase gate passes.
   per-platform checksums and signatures.
 - Kubernetes currently supports the 1.36, 1.35, and 1.34 minor branches; the
   candidate remains inside the supported window.
-- `versions/phase-02.env` records the accepted Docker package strings,
+- `versions/compose-runtime.env` records the accepted Docker package strings,
   application commits/checksums, base manifests, MongoDB manifest, and tested
   local image IDs.
-- `versions/phase-03.env`, `versions/phase-04.env`, and
-  `versions/phase-06.env` record the accepted Kubernetes, Helm, and
+- `versions/kubernetes-runtime.env`, `versions/platform-runtime.env`, and
+  `versions/observability-runtime.env` record the accepted Kubernetes, Helm, and
   observability artifacts and immutable identities.
 
 ## Consequences

@@ -47,10 +47,10 @@ Base64 encoding does not encrypt a Kubernetes Secret.
   requires additional controls for confidentiality.
 - Project publication rules prohibit live secrets, kubeconfigs, keys, and
   credentials in Git or evidence.
-- Phase 4 created a pre-existing subscriber Secret from ignored local files,
+- single-UE profile created a pre-existing subscriber Secret from ignored local files,
   verified its content hash and project ownership without printing values,
   and retained it independently of the Helm release.
-- Phase 5 committed only a synthetic non-secret identity/DNN plan. A local
+- platform committed only a synthetic non-secret identity/DNN plan. A local
   mode-`0600` seed derives five K and OPc values with HMAC-SHA256 into ignored
   files; repeated generation is byte-identical and rejects tampered or
   unexpected output.

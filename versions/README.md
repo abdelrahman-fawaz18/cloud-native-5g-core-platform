@@ -10,20 +10,20 @@ Each manifest must identify:
 - a checksum or immutable digest when the artifact format supports one;
 - the date on which availability was verified;
 - relevant license or provenance notes; and
-- the phase whose tests accepted the version.
+- the capability whose tests accepted the version.
 
-A value in a phase manifest is a candidate until that phase's runtime and
+A value in a version manifest is a candidate until the relevant runtime and
 cleanup exit gate passes. Floating `latest` tags are not release inputs.
 
 Current manifests:
 
-- `phase-02.env`: accepted container-runtime and Compose baseline inputs and
+- `compose-reference.env`: accepted container-runtime and Compose baseline inputs and
   verified local image identities.
-- `phase-03.env`: accepted kind, Kubernetes, kubectl, node-image, ownership,
+- `networking.env`: accepted kind, Kubernetes, kubectl, node-image, ownership,
   cluster-network, probe-image, and cleanup inputs for the Kubernetes
   feasibility baseline.
-- `phase-04.env`: accepted Helm artifact identity and project-owned release,
+- `single-ue.env`: accepted Helm artifact identity and project-owned release,
   namespace, chart-version, and N6 route contract for the single-UE platform.
-- `phase-06.env`: accepted Prometheus, Grafana, Loki, Alloy,
+- `observability.env`: accepted Prometheus, Grafana, Loki, Alloy,
   kube-state-metrics, and UE probe runtime versions plus immutable registry
   index digests for the observability baseline.

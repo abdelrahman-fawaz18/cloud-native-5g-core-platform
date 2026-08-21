@@ -2,8 +2,8 @@
 
 ## Scope And Accepted State
 
-This guide reconstructs the complete local platform after the Phase 7
-acceptance rollback on 2026-08-06. It connects four views that are often
+This guide reconstructs the complete accepted local platform. It connects four
+views that are often
 confused:
 
 1. **management:** Helm submits versioned Kubernetes objects;
@@ -20,15 +20,15 @@ The accepted end state is:
 | --- | --- |
 | Host | one Ubuntu workstation; existing unrelated host labs remain outside this project boundary |
 | Cluster | Kubernetes v1.36.1; single control-plane kind node `cn5g-control-plane` at `172.18.0.2`; containerd 2.3.1 inside Docker |
-| Core release | Helm release `cn5g`, namespace `cn5g`, revision 16 with description `Rollback to 12` |
-| Observability release | Helm release `cn5g-observability`, namespace `cn5g-observability`, revision 3 |
+| Core release | Helm release `cn5g`, namespace `cn5g`; the revision is runtime-assigned |
+| Observability release | Helm release `cn5g-observability`, namespace `cn5g-observability` |
 | Subscribers | five synthetic UEs: ordinals 0-2 on `internet`, ordinals 3-4 on `enterprise` |
 | Data networks | two isolated controlled endpoint Pods |
 | Persistent state | one 2 GiB MongoDB PVC, one 2 GiB Prometheus PVC, one 2 GiB Loki PVC |
-| Phase 7 overlay | removed after acceptance; benchmark image and reviewed results retained |
+| Experiment overlays | absent from the default runtime; reviewed performance and resilience results remain queryable |
 | External exposure | no workload NodePort, LoadBalancer, host network, or host port; Grafana is available only through an explicit loopback port-forward |
 
-This is a local integration and learning platform, not a production reference
+This is a local integration platform, not a production reference
 topology. Addresses beginning with `10.244` and ordinary Service ClusterIPs
 are runtime allocations. They are included as an accepted snapshot so the
 reader can connect the diagram to a real cluster, but software must use stable
@@ -49,13 +49,13 @@ would hide the relationships it is meant to teach:
 
 Numbered arrows in Diagrams 2 and 3 are explained immediately below each
 diagram. Solid arrows carry management or service traffic. Dotted arrows carry
-telemetry or represent the temporary Phase 7 overlay.
+telemetry or represent the temporary performance campaign overlay.
 
 ## Diagram 1 — Management, Kubernetes Objects, Pods, And Containers
 
 ```mermaid
 flowchart TB
-    OP["Operator and lifecycle scripts\nhelm / kubectl / phaseXX-lab.sh"]
+    OP["Operator and lifecycle command\ncn5g-platform.sh / helm / kubectl"]
 
     subgraph HOST["Ubuntu host"]
         DOCKER["Docker Engine"]
@@ -98,11 +98,11 @@ flowchart TB
             ALLOYPOD["Alloy Deployment Pod\nalloy container"]
             KSMPOD["kube-state-metrics Deployment Pod\nkube-state-metrics container"]
             ALERTPOD["alert-exercise Deployment Pod\nexporter container"]
-            RESULTSPOD["Phase 7 reviewed-results Deployment Pod\ntoken-free static metrics exporter"]
+            RESULTSPOD["performance campaign reviewed-results Deployment Pod\ntoken-free static metrics exporter"]
             PROMPVC["Prometheus PVC\n2 GiB / 24 h and 1 GB retention limits"]
             LOKIPVC["Loki PVC\n2 GiB / 24 h retention"]
             GRAFSEC["pre-created Grafana admin Secret"]
-            OBSCFG["ConfigMaps\nscrapes / alerts / Alloy / Loki / 5 dashboards\n556 reviewed Phase 7 gauges"]
+            OBSCFG["ConfigMaps\nscrapes / alerts / Alloy / Loki / 6 dashboards\nreviewed performance + resilience gauges"]
             OBSSVC["6 ClusterIP Services"]
             RBAC["project-scoped ServiceAccounts and RBAC\nPrometheus / KSM / Alloy"]
         end
@@ -192,7 +192,7 @@ The supporting Kubernetes components have distinct jobs:
 A normal ClusterIP Service has a stable name and virtual IP. Its selector and
 EndpointSlices identify Ready Pods, and kube-proxy sends traffic to one of
 those endpoints. A headless Service has `clusterIP: None`; CoreDNS returns the
-endpoint Pod IP instead. Phase 5 deliberately uses headless discovery for
+endpoint Pod IP instead. platform deliberately uses headless discovery for
 PFCP, gNB, UE metrics, and both DNN endpoints where the real peer address
 matters. Headless DNS normally follows endpoint readiness; `cn5g-ue` explicitly
 sets `publishNotReadyAddresses` so each stable ordinal can be discovered while
@@ -232,13 +232,13 @@ flowchart LR
         API["Kubernetes API\n10.96.0.1:443\nnode + cAdvisor proxy"]
         ALLOY["16. Grafana Alloy\nhealth TCP 12345"]
         LOKI[("17. Loki\nHTTP TCP 3100\ngRPC 9096 internal")]
-        GRAF["18. Grafana\nTCP 3000\n5 dashboards / 2 data sources"]
+        GRAF["18. Grafana\nTCP 3000\n6 dashboards / 2 data sources"]
         ALERT["alert-exercise\nTCP 8080"]
-        RESULTS["reviewed Phase 7 results\nTCP 8080\n556 bounded gauges"]
+        RESULTS["reviewed experiment results\nperformance: 556 gauges\nresilience: 75 gauges\nTCP 8080"]
     end
 
     USER["Operator browser\n127.0.0.1:13000"]
-    BENCH["Temporary Phase 7 sidecars\nUE client + DNN servers\nTCP/UDP 5201-5205"]
+    BENCH["Temporary performance campaign sidecars\nUE client + DNN servers\nTCP/UDP 5201-5205"]
 
     UE -->|"1 simulated radio / UDP 4997"| GNB
     GNB -->|"2 N2 NGAP / SCTP 38412"| AMF
@@ -274,7 +274,7 @@ flowchart LR
     GRAF -->|"10 PromQL :9090"| PROM
     GRAF -->|"10 LogQL :3100"| LOKI
     USER -->|"11 loopback-only port-forward"| GRAF
-    BENCH -. "12 installed only during Phase 7" .-> UE
+    BENCH -. "12 installed only during performance campaign" .-> UE
     BENCH -. "12 forced through UE TUN and GTP-U" .-> INET
     BENCH -. "12 forced through UE TUN and GTP-U" .-> ENT
 ```
@@ -302,18 +302,18 @@ flowchart LR
 7. Two ownership-marked routes inside the kind node send endpoint responses
    for the UE pools back through the current UPF Pod. These routes are not
    installed in the Ubuntu host namespace.
-8. Prometheus pulls numeric metrics. The Phase 7 reviewed-results target serves
-   immutable gauges generated from the accepted summary; unlike UE and NF
-   targets, it describes a completed experiment rather than current service
-   state. Prometheus does not carry registration or user traffic and cannot
-   make the service healthy.
+8. Prometheus pulls numeric metrics. The reviewed-results targets serve
+   immutable gauges generated from accepted performance and resilience
+   summaries; unlike UE and NF targets, they describe completed experiments
+   rather than current service state. Prometheus does not carry registration
+   or user traffic and cannot make the service healthy.
 9. Alloy reads Pod logs and Events through project-scoped Kubernetes API
    permissions, then pushes them to Loki.
 10. Grafana queries Prometheus with PromQL and Loki with LogQL. Its dashboards
     are provisioned from Git; Grafana is not the source of the measurements.
 11. The browser reaches Grafana only while `kubectl port-forward` binds
     `127.0.0.1:13000` to the internal Grafana Service on port 3000.
-12. Phase 7 temporarily added benchmark sidecars. The final rollback removed
+12. performance campaign temporarily added benchmark sidecars. The final rollback removed
     them, so the dotted benchmark nodes describe the accepted experiment
     mechanism rather than a currently running container.
 
@@ -350,10 +350,11 @@ Confusing these addresses produces the most dangerous false result in the
 project: direct `eth0` traffic can reach another Pod without traversing the
 gNB, GTP-U, or UPF.
 
-### Accepted post-rollback Service snapshot
+### Validated Service snapshot
 
-The DNS names are the stable contracts. Numeric ClusterIPs below are the
-accepted 2026-08-06 snapshot and may change if a Service is recreated.
+The DNS names are the stable contracts. Numeric ClusterIPs below are one
+validated snapshot and may change whenever the cluster or a Service is
+recreated.
 
 | Namespace | Service DNS label | Snapshot ClusterIP | Ports |
 | --- | --- | --- | --- |
@@ -378,13 +379,14 @@ accepted 2026-08-06 snapshot and may change if a Service is recreated.
 | `cn5g-observability` | `cn5g-observability-grafana` | `10.96.149.234` | 3000/TCP |
 | `cn5g-observability` | `cn5g-observability-kube-state-metrics` | `10.96.13.72` | 8080/TCP |
 | `cn5g-observability` | `cn5g-observability-alert-exercise` | `10.96.228.244` | 8080/TCP |
-| `cn5g-observability` | `cn5g-observability-phase07-results` | `10.96.38.108` | 8080/TCP |
+| `cn5g-observability` | `cn5g-observability-performance-results` | `10.96.38.108` | 8080/TCP |
+| `cn5g-observability` | `cn5g-observability-resilience-results` | runtime-assigned | 8080/TCP |
 
 `cn5g-nrf.cn5g.svc.cluster.local` is an example fully qualified Service name.
 The other Services use the same `<service>.<namespace>.svc.cluster.local`
 pattern. Headless Services have no virtual IP; DNS returns selected Pod IPs.
 
-### Accepted post-rollback Pod and UE-session snapshot
+### Validated Pod and UE-session snapshot
 
 Pod names containing a ReplicaSet hash and every `10.244` address are
 replaceable. StatefulSet ordinal names are stable. This table exists to make
@@ -433,9 +435,10 @@ project Helm release:
 | `kube-system` | CoreDNS replica 2 | `10.244.0.5` | DNS 53/UDP,TCP; metrics 9153; health 8080/8181 |
 | `local-path-storage` | local-path provisioner | `10.244.0.4` | provisions `standard` local-path PVCs; no Service |
 
-The revision-12 subscriber Job completed on a finite Pod at `10.244.0.75`.
-A historical revision-2 Job Pod remains at `10.244.0.166`. Completed Job Pods
-are retained evidence, not long-running service endpoints.
+Subscriber initialization runs as a revision-scoped finite Job. Completed Job
+Pods can remain temporarily as lifecycle evidence, but they are not
+long-running service endpoints and their Pod IPs are never configuration
+inputs.
 
 To refresh replaceable values without modifying the cluster:
 
@@ -473,8 +476,8 @@ kubectl --kubeconfig artifacts/kubernetes/cn5g.kubeconfig get services -A
 | 8081 | TCP | kube-state-metrics Pod only | readiness telemetry listener |
 | 12345 | TCP | Alloy Pod only | Alloy health/readiness HTTP server |
 | 8080 | TCP | alert-exercise | controlled metric fixture for alert lifecycle tests |
-| 8080 | TCP | Phase 7 reviewed-results exporter | immutable accepted experiment gauges |
-| 5201-5205 | TCP and UDP | Phase 7 DNN benchmark sidecars | one temporary iperf3 port per UE ordinal; absent after rollback |
+| 8080 | TCP | performance campaign reviewed-results exporter | immutable accepted experiment gauges |
+| 5201-5205 | TCP and UDP | performance campaign DNN benchmark sidecars | one temporary iperf3 port per UE ordinal; absent after rollback |
 | `ogstun` | TUN | UPF Pod | Internet DNN gateway `10.60.0.1/24` |
 | `ogstun2` | TUN | UPF Pod | Enterprise DNN gateway `10.61.0.1/24` |
 | `uesimtun0` | TUN | every UE Pod | assigned PDU-session address; MTU 1400 |
@@ -484,9 +487,9 @@ Temporary host loopback ports used by lifecycle helpers are not Services:
 | Loopback port | Forward target | When used |
 | --- | --- | --- |
 | `127.0.0.1:13000` | Grafana Service `:3000` | interactive dashboard command |
-| `127.0.0.1:19090` | Prometheus Service `:9090` | Phase 6 validation and alert lifecycle |
-| `127.0.0.1:13100` | Loki Service `:3100` | Phase 6 log validation |
-| `127.0.0.1:19097` | Prometheus Service `:9090` | Phase 7 time-aligned range queries |
+| `127.0.0.1:19090` | Prometheus Service `:9090` | observability stack validation and alert lifecycle |
+| `127.0.0.1:13100` | Loki Service `:3100` | observability stack log validation |
+| `127.0.0.1:19097` | Prometheus Service `:9090` | performance campaign time-aligned range queries |
 
 ## Workload, Container, Init, And Sidecar Inventory
 
@@ -505,9 +508,10 @@ Temporary host loopback ports used by lifecycle helpers are not Services:
 | Alloy Deployment | 1 | none | `alloy` | no PVC; bounded `emptyDir` state |
 | kube-state-metrics Deployment | 1 | none | `kube-state-metrics` | none |
 | alert-exercise Deployment | 1 | none | `exporter` | none |
-| Phase 7 reviewed-results Deployment | 1 | none | token-free static metrics `exporter` | none; generated ConfigMap and 2 MiB memory `emptyDir` |
-| Phase 7 temporary UE extension | up to 5 | unchanged | adds `benchmark-client` sidecar | none; 16 MiB memory `/tmp` |
-| Phase 7 temporary DNN extension | 2 | unchanged | adds `benchmark-server` sidecar | none; 16 MiB memory `/tmp` |
+| performance campaign reviewed-results Deployment | 1 | none | token-free static metrics `exporter` | none; generated ConfigMap and 2 MiB memory `emptyDir` |
+| resilience campaign reviewed-results Deployment | 1 | none | token-free static metrics `exporter` | none; generated ConfigMap and 2 MiB memory `emptyDir` |
+| performance campaign temporary UE extension | up to 5 | unchanged | adds `benchmark-client` sidecar | none; 16 MiB memory `/tmp` |
+| performance campaign temporary DNN extension | 2 | unchanged | adds `benchmark-server` sidecar | none; 16 MiB memory `/tmp` |
 
 An init container must finish before long-running containers start. A sidecar
 runs beside the main container for the Pod's lifetime. This distinction is why
@@ -525,7 +529,7 @@ and `versions/` manifests.
 | --- | --- |
 | `cn5g/open5gs:2.7.7` | all ten Open5GS NF containers and their config/network init containers |
 | `cn5g/ueransim:3.2.8` | gNB, five UE containers, and UERANSIM config init containers |
-| `cn5g/data-network:0.1.0` | two controlled DNN endpoints, alert-exercise fixture, and reviewed Phase 7 results exporter |
+| `cn5g/data-network:0.1.0` | two controlled DNN endpoints, alert-exercise fixture, and reviewed performance campaign results exporter |
 | `mongo:8.0.28-noble` with pinned digest | MongoDB, subscriber Job, and subscriber wait init containers |
 | `python:3.13.7-alpine3.22` with pinned digest | five UE user-plane metric sidecars |
 | `prom/prometheus:v3.13.1` with pinned digest | Prometheus |
@@ -533,7 +537,7 @@ and `versions/` manifests.
 | `grafana/loki:3.7.2` with pinned digest | Loki |
 | `grafana/alloy:v1.18.0` with pinned digest | Alloy |
 | `kube-state-metrics:v2.18.0` with pinned digest | kube-state-metrics |
-| `cn5g/benchmark:0.1.0` | temporary Phase 7 benchmark client/server sidecars; not running after rollback |
+| `cn5g/benchmark:0.1.0` | temporary performance campaign benchmark client/server sidecars; not running after rollback |
 
 ## 5G Core Function Responsibilities
 
@@ -557,13 +561,13 @@ topology contains five. A configuration ceiling is not a measured capacity.
 
 | Component | Reads from | Writes/serves | Important boundary |
 | --- | --- | --- | --- |
-| Prometheus | itself; AMF/PCF/SMF/UPF; five UE sidecars; kube-state-metrics; alert fixture; reviewed Phase 7 exporter; Kubernetes node and cAdvisor proxy | time series, PromQL API, and local alert states on 9090 | pulls metrics every 15 seconds; does not send external notifications |
+| Prometheus | itself; AMF/PCF/SMF/UPF; five UE sidecars; kube-state-metrics; alert fixture; reviewed performance campaign exporter; Kubernetes node and cAdvisor proxy | time series, PromQL API, and local alert states on 9090 | pulls metrics every 15 seconds; does not send external notifications |
 | kube-state-metrics | selected Pods, Deployments, StatefulSets, Jobs, and PVCs in the two project namespaces | object-state metrics on 8080 | translates API fields; does not measure CPU or understand 5G |
 | Grafana Alloy | project Pod log streams and Kubernetes Events | pushes labeled streams to Loki | mounts no host log directory or runtime socket |
 | Loki | Alloy pushes | LogQL API and retained log chunks on 3100 | 24-hour local retention; diagnostic logs are separate from metrics |
 | Grafana | Prometheus and Loki Services | five provisioned dashboards on 3000 | stores no source-of-truth measurement; UI changes are disabled for provisioned dashboards |
 | alert exercise | controlled in-memory metric values | Prometheus text metrics on 8080 | tests firing/resolution without stopping a real 5G workload |
-| Phase 7 reviewed results | generated, tracked metrics ConfigMap | 556 bounded Prometheus text gauges on 8080 | describes one completed reviewed campaign; does not run traffic or emit live capacity |
+| performance campaign reviewed results | generated, tracked metrics ConfigMap | 556 bounded Prometheus text gauges on 8080 | describes one completed reviewed campaign; does not run traffic or emit live capacity |
 
 The accepted Stage B installation gives Prometheus 15 active scrape targets: itself,
 four native Open5GS metric endpoints, five UE endpoints, kube-state-metrics,
@@ -581,7 +585,7 @@ The five Git-controlled Grafana dashboards are:
    Out-of-Memory evidence, and scrape health; and
 4. **project logs:** bounded Loki panels for component logs, Kubernetes Events,
    and procedure-oriented troubleshooting; and
-5. **performance and capacity experiments:** reviewed Phase 7 throughput,
+5. **performance and capacity experiments:** reviewed performance campaign throughput,
    procedure, fairness, packet, and resource evidence with explicit local-lab
    limitations.
 
@@ -605,9 +609,9 @@ different questions. Startup/readiness/liveness affect Pod lifecycle;
 | Alloy | none | HTTP `/-/ready` on 12345 | HTTP `/-/healthy` on 12345 |
 | kube-state-metrics | `/healthz` on 8080 | `/readyz` on 8081 | `/livez` on 8080 |
 | alert-exercise | none | HTTP `/metrics` | none |
-| Phase 7 reviewed results | HTTP `/metrics` | HTTP `/metrics` | HTTP `/metrics` |
-| Phase 7 benchmark client | none; image executables are verified before install | `uesimtun0` exists in the shared network namespace | PID 1 lives |
-| Phase 7 benchmark server | all five TCP listeners exist | all five TCP listeners exist | supervisor PID 1 lives |
+| performance campaign reviewed results | HTTP `/metrics` | HTTP `/metrics` | HTTP `/metrics` |
+| performance campaign benchmark client | none; image executables are verified before install | `uesimtun0` exists in the shared network namespace | PID 1 lives |
+| performance campaign benchmark server | all five TCP listeners exist | all five TCP listeners exist | supervisor PID 1 lives |
 
 A Ready UE is stronger than a running process but still not the complete
 acceptance result. Repository validation additionally checks live PFCP/GTP-U
@@ -660,8 +664,8 @@ locations are explicit PVCs or bounded `emptyDir` volumes.
 ## Diagram 3 — Example: From A Stopped UE To A Returned Ping
 
 This sequence uses UE ordinal 0 on the `internet` DNN. Its exact session
-address can vary within `10.60.0.0/24`; in the accepted post-rollback snapshot
-it received `10.60.0.4`.
+address can vary within `10.60.0.0/24`; `10.60.0.4` is used as a concrete
+validated example.
 
 ```mermaid
 sequenceDiagram
@@ -756,21 +760,21 @@ If a Pod is merely Running but any of these protocol steps is missing, the
 full validator fails. Kubernetes process health, 5G signalling, session state,
 user-plane traffic, isolation, and telemetry are related but distinct facts.
 
-## Phase 7 In The Whole-System Picture
+## Experiment overlays in the whole-system picture
 
-Phase 7 temporarily changed only the measurement boundary:
+Performance campaign temporarily changed only the measurement boundary:
 
 ```text
-accepted Phase 6 UE Pod
+accepted observability stack UE Pod
   ue + user-plane-metrics
 
-temporary Phase 7 UE Pod
+temporary performance campaign UE Pod
   ue + user-plane-metrics + benchmark-client
 
-accepted Phase 6 DNN Pod
+accepted observability stack DNN Pod
   data-network
 
-temporary Phase 7 DNN Pod
+temporary performance campaign DNN Pod
   data-network + benchmark-server (ports 5201-5205)
 ```
 
@@ -781,11 +785,12 @@ Prometheus telemetry, restored five UEs, and retained raw evidence under an
 ignored path. The deterministic analyzer converted only a complete accepted
 campaign into tracked CSV, JSON, SVG, and Markdown outputs.
 
-Rollback restored revision 12's rendered configuration as new Helm revision
-16 and reran both the Phase 5 service validator and Phase 6 observability
-validator. Therefore the diagram's solid topology is the current accepted
-system; the dotted Phase 7 overlay is a reproducible tool that can be applied
-again when a new controlled experiment is justified.
+Campaign rollback removes benchmark sidecars and reruns both the platform and
+Observability validators. Therefore the diagram's solid topology is the
+accepted default system; the dotted performance overlay is a reproducible
+tool applied only for a controlled experiment. resilience campaigns do not
+add a workload overlay: they delete one exact AMF, SMF, or UPF Pod, measure the
+replacement and service recovery, and restore the accepted baseline.
 
 ## Compact Mental Model
 
@@ -798,7 +803,7 @@ UERANSIM owns the simulated UE/gNB radio behavior.
 Linux TUN, policy routing, kindnet, and node routes carry UE packets.
 Prometheus and Loki retain numeric and diagnostic evidence.
 Grafana presents that evidence; it does not create service truth.
-Phase 7 temporarily applies controlled load, then removes itself.
+Performance campaign temporarily applies controlled load, then removes itself.
 Repository validators decide whether the combined system is accepted.
 ```
 

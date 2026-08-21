@@ -151,7 +151,7 @@ data:
           - address: __POD_IP__
         client:
           upf:
-            - address: {{ include "cn5g.componentName" (dict "root" . "component" (ternary "upf-pfcp" "upf" .Values.phase05.enabled)) }}
+            - address: {{ include "cn5g.componentName" (dict "root" . "component" (ternary "upf-pfcp" "upf" .Values.platform.enabled)) }}
       gtpc:
         server:
           - address: __POD_IP__
@@ -162,8 +162,8 @@ data:
         server:
           - {address: __POD_IP__, port: 9090}
       session:
-        {{- if .Values.phase05.enabled }}
-        {{- range .Values.phase05.sessions }}
+        {{- if .Values.platform.enabled }}
+        {{- range .Values.platform.sessions }}
         - {subnet: {{ .pool }}, gateway: {{ .gateway }}, dnn: {{ .name }}}
         {{- end }}
         {{- else }}
@@ -173,8 +173,8 @@ data:
       info:
         - s_nssai:
             - sst: {{ .Values.global.slice.sst }}
-              {{- if .Values.phase05.enabled }}
-              dnn: [{{ range $index, $session := .Values.phase05.sessions }}{{ if $index }}, {{ end }}{{ $session.name }}{{ end }}]
+              {{- if .Values.platform.enabled }}
+              dnn: [{{ range $index, $session := .Values.platform.sessions }}{{ if $index }}, {{ end }}{{ $session.name }}{{ end }}]
               {{- else }}
               dnn: [{{ .Values.global.dnn }}]
               {{- end }}
@@ -190,8 +190,8 @@ data:
         server:
           - address: __POD_IP__
       session:
-        {{- if .Values.phase05.enabled }}
-        {{- range .Values.phase05.sessions }}
+        {{- if .Values.platform.enabled }}
+        {{- range .Values.platform.sessions }}
         - {subnet: {{ .pool }}, gateway: {{ .gateway }}, dnn: {{ .name }}, dev: {{ .tunDevice }}}
         {{- end }}
         {{- else }}

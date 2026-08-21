@@ -9,7 +9,7 @@ Usage: scripts/install-docker-engine.sh --check|--install
   --check    Validate the supported host and print the pinned package plan.
              This mode does not require root and does not change the host.
   --install  Configure Docker's official Ubuntu repository and install only
-             the exact versions in versions/phase-02.env. Run with sudo.
+             the exact versions in versions/compose-runtime.env. Run with sudo.
 
 The script never removes conflicting packages, changes firewall rules directly,
 adds users to the docker group, or deletes Docker data.
@@ -29,7 +29,7 @@ fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 project_root=$(cd -- "$script_dir/.." && pwd -P)
-versions_file="$project_root/versions/phase-02.env"
+versions_file="$project_root/versions/compose-runtime.env"
 
 if [[ ! -r $versions_file ]]; then
   printf 'error: version manifest is missing or unreadable: %s\n' \
@@ -37,7 +37,7 @@ if [[ ! -r $versions_file ]]; then
   exit 2
 fi
 
-# shellcheck source=../versions/phase-02.env
+# shellcheck source=../versions/compose-runtime.env
 source "$versions_file"
 
 required_version_variables=(

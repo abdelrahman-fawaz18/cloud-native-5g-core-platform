@@ -8,7 +8,7 @@ and required Linux capabilities.
 Runtime secrets and host-specific configuration must not be built into image
 layers.
 
-## Phase 2 Images
+## Compose reference Images
 
 - `open5gs/` builds the Open5GS Network Function runtime from the official
   `v2.7.7` source commit.
@@ -16,7 +16,7 @@ layers.
   official `v3.2.8` source commit.
 - `data-network/` provides the controlled HTTP endpoint used to validate the
   N6 user-plane path.
-- `feasibility-probe/` provides the Phase 3-only transport, TUN, routing, and
+- `feasibility-probe/` provides the Networking qualification-only transport, TUN, routing, and
   packet-observation binary. It is not a 5G network function, and its synthetic
   payloads do not constitute protocol-semantic validation.
 

@@ -2,7 +2,7 @@
   "uid": "cn5g-platform",
   "title": "CN5G Service Overview",
   "description": "Operational entry point for the local five-UE, two-DNN CN5G platform. Status is derived from live Kubernetes, Open5GS, Prometheus, UE-probe, and Loki telemetry.",
-  "tags": ["cn5g", "phase-06", "operations"],
+  "tags": ["cn5g", "observability", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 3,
@@ -22,7 +22,7 @@
   "panels": [
     {
       "id": 1, "type": "text", "title": "How to read this dashboard", "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
-      "options": {"mode": "markdown", "content": "### Service first, infrastructure second\nThe top row answers whether the **local five-UE/two-DNN service contract** is operating. Continue downward to locate workload, resource, scrape, or log symptoms. Green means the measured contract is currently satisfied; it is not a production availability claim. The separate **Performance Experiments** and **Reliability And Recovery** dashboards present reviewed Phase 7 and Phase 8 campaigns as immutable evidence."}
+      "options": {"mode": "markdown", "content": "### Service first, infrastructure second\nThe top row answers whether the **local five-UE/two-DNN service contract** is operating. Continue downward to locate workload, resource, scrape, or log symptoms. Green means the measured contract is currently satisfied; it is not a production availability claim. The separate **Performance Experiments** and **Reliability And Recovery** dashboards present reviewed performance campaign and resilience campaigns as immutable evidence."}
     },
     {
       "id": 2, "type": "stat", "title": "Core workload readiness", "description": "Available Deployment replicas plus Ready StatefulSet replicas divided by their desired replicas in namespace cn5g.", "gridPos": {"h": 5, "w": 4, "x": 0, "y": 4},
@@ -46,7 +46,7 @@
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
-      "id": 5, "type": "stat", "title": "Registered UEs", "description": "Current AMF session gauge. The accepted Phase 5 contract is five concurrent UEs.", "gridPos": {"h": 5, "w": 4, "x": 12, "y": 4},
+      "id": 5, "type": "stat", "title": "Registered UEs", "description": "Current AMF session gauge. The accepted platform contract is five concurrent UEs.", "gridPos": {"h": 5, "w": 4, "x": 12, "y": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [{"refId": "A", "expr": "max(amf_session)", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 5, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 4}, {"color": "green", "value": 5}]}, "color": {"mode": "thresholds"}}, "overrides": []},

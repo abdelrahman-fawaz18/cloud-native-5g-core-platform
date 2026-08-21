@@ -35,7 +35,7 @@ spec:
     - {name: n4-pfcp, protocol: UDP, port: 8805, targetPort: n4-pfcp}
     - {name: n3-gtpu, protocol: UDP, port: 2152, targetPort: n3-gtpu}
     - {name: metrics, protocol: TCP, port: 9090, targetPort: metrics}
-{{- if .Values.phase05.enabled }}
+{{- if .Values.platform.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -78,7 +78,7 @@ spec:
     {{- include "cn5g.selectorLabels" (dict "root" . "component" "gnb") | nindent 4 }}
   ports:
     - {name: radio, protocol: UDP, port: 4997, targetPort: radio}
-{{- if .Values.phase05.enabled }}
+{{- if .Values.platform.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -91,14 +91,14 @@ spec:
   publishNotReadyAddresses: true
   selector:
     {{- include "cn5g.selectorLabels" (dict "root" . "component" "ue") | nindent 4 }}
-  {{- if .Values.phase06.enabled }}
+  {{- if .Values.observability.enabled }}
   ports:
-    - {name: metrics, protocol: TCP, port: {{ .Values.phase06.metricsPort }}, targetPort: metrics}
+    - {name: metrics, protocol: TCP, port: {{ .Values.observability.metricsPort }}, targetPort: metrics}
   {{- end }}
 {{- end }}
 {{- $root := . }}
-{{- if .Values.phase05.enabled }}
-{{- range $session := .Values.phase05.sessions }}
+{{- if .Values.platform.enabled }}
+{{- range $session := .Values.platform.sessions }}
 ---
 apiVersion: v1
 kind: Service
@@ -112,10 +112,10 @@ spec:
     {{- include "cn5g.selectorLabels" (dict "root" $root "component" $session.endpoint) | nindent 4 }}
   ports:
     - {name: http, protocol: TCP, port: 8080, targetPort: http}
-    {{- if $root.Values.phase07.enabled }}
-    {{- range $ordinal := until ($root.Values.phase07.iperfPortCount | int) }}
-    - {name: iperf-tcp-{{ $ordinal }}, protocol: TCP, port: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, targetPort: iperf-tcp-{{ $ordinal }}}
-    - {name: iperf-udp-{{ $ordinal }}, protocol: UDP, port: {{ add ($root.Values.phase07.iperfPort | int) $ordinal }}, targetPort: iperf-udp-{{ $ordinal }}}
+    {{- if $root.Values.performance.enabled }}
+    {{- range $ordinal := until ($root.Values.performance.iperfPortCount | int) }}
+    - {name: iperf-tcp-{{ $ordinal }}, protocol: TCP, port: {{ add ($root.Values.performance.iperfPort | int) $ordinal }}, targetPort: iperf-tcp-{{ $ordinal }}}
+    - {name: iperf-udp-{{ $ordinal }}, protocol: UDP, port: {{ add ($root.Values.performance.iperfPort | int) $ordinal }}, targetPort: iperf-udp-{{ $ordinal }}}
     {{- end }}
     {{- end }}
 {{- end }}

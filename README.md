@@ -1,612 +1,221 @@
-# Cloud-Native Multi-UE 5G Core Platform
+# Cloud-Native 5G Core Platform
 
-## Overview
+[![Release qualification](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-3b5266)](LICENSE)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.36.1-466b8c)](versions/kubernetes-runtime.env)
 
-This repository implements a reproducible, containerized 5G Standalone (5G
-SA) Core platform. It deploys Open5GS, MongoDB, and UERANSIM on a local
-Kubernetes environment, exercises multiple synthetic User Equipments (UEs),
-and preserves measured evidence for signalling, user-plane traffic, lifecycle,
-isolation, recovery, metrics, logs, dashboards, alert behavior, and controlled
-load. It also preserves reviewed evidence from controlled AMF, SMF, and UPF
-failure-and-recovery experiments.
+A reproducible Open5GS and UERANSIM 5G Standalone platform on Kubernetes,
+built to demonstrate real signalling, isolated user-plane traffic,
+observability, controlled performance experiments, and recovery engineering.
 
-The project extends the validated protocol baseline documented in the
-[5G SA Core Protocol Lab](https://github.com/abdelrahman-fawaz18/5g-sa-core-protocol-lab).
-It focuses on packaging, orchestration, repeatability, operational visibility,
-and reliability rather than repeating the original single-host installation.
+![Platform overview](docs/images/platform-overview.svg)
 
-## Current Status
+## What this system does
 
-Phases 0-10 are complete. Phase 10 accepted the bounded public claim contract,
-clean-checkout reproduction, a fresh-cluster deployment and scoped teardown,
-local privileged integration, repository privacy checks, and four sanitized
-dashboard captures. Phase 9 accepted both its local privileged integration
-gate and its GitHub-hosted CI and supply-chain gates. Phase 7 retained its
-exploratory failures, passed a
-route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
-produced deterministic reviewed summaries and plots, and passed its scoped
-rollback with the Phase 5/6 regression gates intact. The accepted runtime has
-therefore returned to the non-benchmark Phase 6 configuration: Open5GS,
-MongoDB, one
-UERANSIM gNodeB, five concurrent UERANSIM UEs, and two isolated controlled
-data endpoints in a disposable single-node kind cluster. A separate
-observability release provides Prometheus metrics and alert evaluation,
-Grafana dashboards, Loki logs, Grafana Alloy collection, and Kubernetes
-object/resource telemetry. The platform has passed real N2 SCTP/NGAP, 5G-AKA,
-NAS security, per-UE registration and PDU sessions, N4 PFCP, N3 GTP-U,
-bidirectional N6 traffic, two-DNN selection/isolation, negative access,
-partial-provisioning recovery, persistence, rollback/rerun, least-privilege,
-bounded-cardinality, centralized-log, dashboard-provisioning, alert-lifecycle,
-and controlled recovery gates. Phase 8 accepted nine AMF/SMF/UPF fault
-conditions, preserved MongoDB state, rejected invalid configurations, and
-published a sixth reviewed reliability dashboard. See the [project
-status](docs/project-status.md), [container report](reports/02_container_baseline.md),
-and [architecture decisions](docs/adr/README.md).
+The default deployment creates a complete local mobile network inside a
+single-node [kind](https://kind.sigs.k8s.io/) cluster:
 
-## Visual Proof
+- five synthetic User Equipments (UEs) register through one UERANSIM gNodeB;
+- Open5GS provides the 5G core control and user-plane functions;
+- three UEs use the `internet` Data Network Name (DNN), while two use the
+  isolated `enterprise` DNN;
+- every UE receives a unique session address and reaches only its intended
+  controlled data endpoint;
+- Prometheus, Grafana, Loki, Alloy, and kube-state-metrics expose the
+  platform's service, resource, log, experiment, and recovery evidence; and
+- lifecycle commands validate, test, and remove only resources proven to be
+  owned by this project.
 
-| Healthy five-UE service | Reviewed performance evidence |
+This is an engineering integration platform, not a carrier production
+topology. Its scope is deliberately bounded to one local Kubernetes node, one
+gNodeB, one User Plane Function (UPF), five synthetic subscribers, and two
+controlled data networks.
+
+## Operational views
+
+The dashboards are provisioned from Git and validated against live or
+reviewed machine-readable evidence. Screenshots are sanitized and checksum
+bound to their source dashboards.
+
+| Live service health | Per-UE and DNN behavior |
 | --- | --- |
-| ![Healthy CN5G service overview](docs/images/dashboards/service-overview-healthy.png) | ![Reviewed Phase 7 performance experiment](docs/images/dashboards/phase07-performance-reviewed.png) |
+| [![CN5G service overview](docs/images/dashboards/service-overview-healthy.png)](docs/images/dashboards/service-overview-healthy.png) | [![5G UE and DNN view](docs/images/dashboards/telecom-sessions-and-dnns-healthy.png)](docs/images/dashboards/telecom-sessions-and-dnns-healthy.png) |
 
-These Grafana views are generated from version-controlled dashboards and
-checked against accepted machine-readable evidence. The
-[dashboard evidence gallery](docs/dashboard-gallery.md) also shows the
-per-UE/two-DNN service contract and reviewed recovery experiment, with the
-scope and limitations of every capture.
-
-## Verified Phase 2 Baseline
-
-Phase 2 establishes the protocol-correct container reference that later
-Kubernetes work must preserve. The declared topology contains 15 services on
-two internal Docker networks, with the UE session subnet routed through a TUN
-interface in the UPF rather than implemented as a Docker bridge.
-
-```mermaid
-flowchart LR
-    UE["UERANSIM UE\n10.60.0.x"]
-    GNB["UERANSIM gNodeB"]
-    AMF["Open5GS AMF"]
-    CP["Open5GS control plane\nNRF/SCP/AUSF/UDM/UDR/PCF/NSSF/SMF"]
-    DB[("MongoDB")]
-    UPF["Open5GS UPF\nogstun 10.60.0.1"]
-    DN["Controlled N6 endpoint\n10.62.0.10"]
-
-    UE <-->|"simulated radio"| GNB
-    GNB <-->|"N2: NGAP/SCTP"| AMF
-    AMF <-->|"HTTP/2 SBI"| CP
-    CP <--> DB
-    CP <-->|"N4: PFCP"| UPF
-    GNB <-->|"N3: GTP-U"| UPF
-    UPF <-->|"N6: routed IPv4"| DN
-```
-
-Verified properties:
-
-- source commits, archives, base images, runtime packages, and local output
-  identities are pinned or recorded;
-- health-gated startup reaches 14 healthy long-running containers plus one
-  successful subscriber-initialization job;
-- one synthetic UE completes authentication, registration, and an IPv4
-  Protocol Data Unit session for DNN `internet` and SST `1`;
-- HTTP and Internet Control Message Protocol traffic traverses the UE tunnel,
-  simulated radio path, N3 GTP-U tunnel, UPF, and controlled N6 return route;
-- positive receive and transmit counter deltas provide bidirectional tunnel
-  evidence without publishing a raw packet capture;
-- MongoDB data survives container/network recreation; and
-- exact destruction removes all project containers, networks, and volumes
-  while leaving host Open5GS, MongoDB, LXC, routes, and firewall structure
-  intact.
-
-The full technical model is documented in [Phase 2 Docker Compose
-architecture](docs/architecture/phase-02-compose-topology.md). Reproduction,
-diagnostics, persistence testing, and cleanup are covered by the [Compose
-runbook](docs/runbooks/compose-baseline.md).
-
-## Verified Phase 3 Kubernetes Feasibility
-
-Phase 3 tested the networking primitives before attempting a full Kubernetes
-deployment of Open5GS and UERANSIM. This isolates cluster-network behavior from
-5G application configuration and startup behavior.
-
-### Deployment hierarchy
-
-```text
-Ubuntu host
-└── Docker Engine
-    └── kind node container: cn5g-control-plane (172.18.0.2)
-        ├── Kubernetes control plane and containerd
-        ├── kindnet Pod network (10.244.0.0/16)
-        │   ├── transport client and server Pods
-        │   ├── minimum-capability TUN Pods
-        │   └── synthetic UE, N6 router, and data endpoint Pods
-        └── Kubernetes Service network (10.96.0.0/16)
-```
-
-The kind node is a Docker container, but Kubernetes Pods run inside that node
-through its containerd runtime. Each Pod receives a distinct `10.244.0.0/16`
-address and a node-side virtual Ethernet (`veth`) route. ClusterIP Services
-provide stable virtual addresses and DNS names from `10.96.0.0/16`. The
-Kubernetes API is published only on a random loopback port and no workload
-port is exposed on the Ubuntu host.
-
-### Feasibility results
-
-| Question | Verified result |
+| Reviewed performance campaign | Reviewed recovery campaign |
 | --- | --- |
-| Ordinary Pod transport | Direct Pod-IP and ClusterIP Service paths passed for TCP and UDP |
-| N2 transport prerequisite | SCTP port `38412` passed through direct Pod and ClusterIP Service paths |
-| N4 transport prerequisite | UDP port `8805` passed through direct Pod and ClusterIP Service paths |
-| N3 transport prerequisite | UDP port `2152` passed through direct Pod and ClusterIP Service paths |
-| TUN access | Access failed without `NET_ADMIN` and succeeded with only `NET_ADMIN` plus `/dev/net/tun` |
-| N6 routing | A controlled TCP request and response crossed two TUN interfaces and a synthetic UDP/2152 tunnel |
-| Packet visibility | UDP/2152 outer packets were observed in both the router Pod and kind-node network contexts |
-| Privilege | No privileged container was used; ordinary transport and the data endpoint ran with zero effective capabilities |
-| Cleanup | Probe resources, the node route, cluster container, kubeconfig, and empty kind bridge were removed by exact ownership checks |
+| [![Performance evidence](docs/images/dashboards/performance-reviewed.png)](docs/images/dashboards/performance-reviewed.png) | [![Resilience evidence](docs/images/dashboards/resilience-reviewed.png)](docs/images/dashboards/resilience-reviewed.png) |
 
-The N6 feasibility path was:
+See the [dashboard evidence gallery](docs/dashboard-gallery.md) for panel
+scope, provenance, and limitations.
+
+## Architecture at a glance
 
 ```text
-application in synthetic UE Pod
-  -> cn5gue0 (10.60.0.2/24, MTU 1400)
-  -> synthetic IP-over-UDP tunnel on port 2152
-  -> cn5gupf0 (10.60.0.1/24, MTU 1400) in router Pod
-  -> data endpoint Pod (TCP/8080)
-  -> data Pod default gateway (10.244.0.1)
-  -> exact kind-node return route for 10.60.0.0/24
-  -> router Pod -> tunnel -> synthetic UE Pod
+UE StatefulSet (5 Pods)
+   │ simulated radio
+   ▼
+UERANSIM gNodeB
+   ├── N2: NGAP over SCTP/38412 ──> AMF ──> Open5GS control plane
+   └── N3: GTP-U over UDP/2152 ───> UPF
+                                         ├── N6 ──> internet endpoint
+                                         └── N6 ──> enterprise endpoint
+
+Open5GS + UE probes + Kubernetes API
+   ├── metrics ──> Prometheus ──┐
+   └── logs ─────> Alloy ─> Loki├──> Grafana
+Kubernetes objects ─> kube-state-metrics ─┘
 ```
 
-The synthetic tunnel proved Kubernetes routing, TUN, capability, return-path,
-and packet-observation behavior. It was not an implementation of GTP-U; Phase
-4 subsequently proved the real NGAP, PFCP, and GTP-U semantics with the
-Helm-managed Open5GS/UERANSIM platform.
+Helm renders and submits the desired state; Kubernetes controllers create
+Deployments, StatefulSets, Services, Jobs, ConfigMaps, Secrets, and
+PersistentVolumeClaims. The 5G protocols then run between Pods—the Helm and
+Kubernetes management path is separate from the mobile signalling and user
+traffic paths.
 
-## Verified Phase 4 Helm Platform
+The detailed [complete system architecture](docs/architecture/complete-system-architecture.md)
+maps ownership, Pods and sidecars, stable service names, runtime address
+domains, every relevant port, telemetry flow, and one end-to-end example from
+a stopped UE to a returned ping.
 
-Phase 4 packages the single-UE topology as the `cn5g` Helm release in the
-`cn5g` namespace. Kubernetes manages thirteen Deployments, one MongoDB
-StatefulSet with a 2 GiB PersistentVolumeClaim, one revision-scoped subscriber
-Job, thirteen internal Services, non-secret ConfigMaps, and a workload
-ServiceAccount with no Kubernetes API permissions. Synthetic subscriber
-material is generated into ignored, permission-restricted files and supplied
-through a pre-created Secret; Helm never renders or stores those values in the
-repository.
+## Verified engineering claims
 
-```text
-Helm release: cn5g
-├── stable SBI Services/DNS ──> NRF, SCP, AMF, AUSF, UDM, UDR, PCF, NSSF, SMF
-├── N2 SCTP/38412 ────────────> gNB <-> AMF
-├── N4 UDP/8805 ──────────────> SMF <-> UPF
-├── N3 GTP-U UDP/2152 ────────> gNB <-> UPF
-├── UE session network ───────> uesimtun0 10.60.0.2 <-> ogstun 10.60.0.1
-├── exact kind-node route ────> 10.60.0.0/24 via the current UPF Pod
-├── N6 data path ─────────────> UPF <-> controlled data-network Pod
-└── persistent state ─────────> MongoDB StatefulSet -> retained PVC/PV
+| Capability | Accepted evidence | Scope boundary |
+| --- | --- | --- |
+| 5G control plane | 5G-AKA authentication, NAS security, registration, unique PDU sessions, nine stable NRF profiles | Synthetic subscribers on one local cluster |
+| User plane | N4 PFCP, N3 GTP-U, bidirectional tunnel counters, HTTP and ICMP through `uesimtun0` | One gNodeB and one UPF |
+| Network separation | 3 `internet` UEs, 2 `enterprise` UEs, fail-closed source policy, every cross-DNN request denied | Exactly two controlled DNNs |
+| Performance | Nine accepted conditions: three repetitions at 1, 3, and 5 UEs; deterministic reports and plots | Local comparative experiment, not carrier capacity |
+| Recovery | Nine controlled AMF, SMF, and UPF failures with measured detection and restoration | Single replicas; recovery was operator-assisted, not high availability |
+| Observability | Six dashboards, bounded metric cardinality, centralized logs, and three alerts proven through firing and resolution | Single-replica local telemetry stack |
+| Persistence | MongoDB subscriber state survives Pod recreation and controlled release lifecycle tests | Local-path PersistentVolume, not replicated storage |
+| Supply chain | Pinned inputs, High/Critical image scan gates, SPDX SBOMs, policy checks, secret scanning, and read-only hosted CI | Local images; no production registry or signing claim |
+| Release lifecycle | Clean-cluster installation from tracked inputs and exact project-owned teardown both passed | Documented Ubuntu/AMD64 environment |
+
+Reviewed measurements and their limitations are preserved under
+[`reports/`](reports/README.md). Raw scanner output, credentials, kubeconfigs,
+packet-level diagnostics, and host snapshots remain local and excluded from
+Git.
+
+## Deploy the default platform
+
+The default profile is the strongest accepted configuration: five UEs, two
+DNNs, and the observability stack. Smaller configurations are explicit
+options, not steps that must be run first.
+
+```bash
+git clone https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform.git
+cd cloud-native-5g-core-platform
+
+sudo ./scripts/cn5g-platform.sh preflight
+sudo ./scripts/cn5g-platform.sh deploy
+sudo ./scripts/cn5g-platform.sh validate
 ```
 
-Pod addresses and node-side `veth` names change after replacement. SBI
-consumers therefore use stable Service DNS names, while runtime configuration
-advertises stable SBI names and explicit Pod-local transport addresses where
-the 5G protocols require them. The N6 return route is ownership-marked and
-reconciled inside the disposable kind node, never in the Ubuntu host network
-namespace.
+Open the provisioned Grafana dashboards:
 
-The lifecycle helper performs image-identity checks, server-side dry runs,
-ordered readiness, stable NRF-profile validation, deterministic session-chain
-reconciliation, full protocol validation, and identity-gated cleanup. A
-controlled upgrade reached revision 10, rollback created revision 11 from the
-accepted revision-7 configuration, and a subsequent uninstall/reinstall
-restarted release history at revision 1 while preserving the exact MongoDB
-claim and its synthetic evidence marker.
-
-Resource requests are based on two ten-second cgroup v2 observations of the
-validated single-UE steady state. The accepted requests are 200 mCPU/256 MiB
-for MongoDB, 25 mCPU/64 MiB for the shared Open5GS control-plane profile,
-20 mCPU/64 MiB for UPF, 10 mCPU/16 MiB for the data endpoint, and
-25 mCPU/96 MiB for each UERANSIM workload. Limits retain startup and transient
-headroom. These figures are a local single-UE scheduling baseline, not a
-production-capacity result.
-
-The [complete Phase 4 system guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
-provides layered deployment, object-ownership, component-connectivity,
-address-domain, signalling-sequence, user-plane, security, persistence,
-lifecycle, recovery, validation, and resource visuals for this accepted
-architecture.
-
-## Verified Phase 5 Multi-UE And DNN Platform
-
-Phase 5 keeps the Phase 4 chart as its rollback baseline and applies an
-explicit overlay. The UE changes from one Deployment to a five-replica
-StatefulSet so Pod ordinal, synthetic subscriber identity, UERANSIM
-configuration, and requested Data Network Name (DNN) remain deterministic
-across Pod replacement. Ordinals 0-2 select `internet`; ordinals 3-4 select
-`enterprise`.
-
-```mermaid
-flowchart LR
-    PLAN["Synthetic five-UE plan"] --> JOB["Idempotent subscriber Job"]
-    PLAN --> SS["UE StatefulSet<br/>ordinals 0-4"]
-    JOB --> DB[("MongoDB<br/>five managed records")]
-    SS --> GNB["one UERANSIM gNB"]
-    GNB -->|"N2 / SCTP"| AMF["AMF and 5G control plane"]
-    AMF --> SMF["SMF"]
-    SMF -->|"N4 / PFCP<br/>direct endpoint DNS"| UPF["UPF"]
-    GNB -->|"N3 / GTP-U"| UPF
-    UPF -->|"10.60.0.0/24<br/>table 1060"| INTERNET["internet endpoint"]
-    UPF -->|"10.61.0.0/24<br/>table 1061"| ENTERPRISE["enterprise endpoint"]
+```bash
+sudo ./scripts/cn5g-platform.sh dashboard
 ```
 
-The two DNNs are separate network contracts, not labels alone:
+Grafana is forwarded only to `127.0.0.1:13000`; ending that command closes the
+connection. No workload uses a NodePort, LoadBalancer, host port, or host
+network.
 
-| DNN | UE session pool | UPF interface | Policy table | Permitted endpoint |
-| --- | --- | --- | ---: | --- |
-| `internet` | `10.60.0.0/24` | `ogstun` | 1060 | `data-internet` |
-| `enterprise` | `10.61.0.0/24` | `ogstun2` | 1061 | `data-enterprise` |
+Remove the exact project-owned cluster and its local PersistentVolumes:
 
-Each source-policy table contains one exact endpoint route and an
-`unreachable default`, so a packet cannot fall through to the ordinary Pod
-route when it targets the other DNN. A dedicated headless `cn5g-upf-pfcp`
-Service resolves directly to the UPF Pod and avoids virtual-IP translation on
-the stateful UDP PFCP association path.
-
-Runtime acceptance proved five concurrent registrations and sessions, three
-unique `internet` addresses, two unique `enterprise` addresses, five unique
-control-plane and user-plane F-SEIDs, correct endpoint identity for every UE,
-cross-DNN denial for every UE, and positive receive/transmit counter deltas on
-all five UE tunnels. An unprovisioned sixth UE was denied without affecting
-the accepted set. A deliberately removed subscriber was restored by the
-idempotent Job and the entire session chain reconverged.
-
-The release was rolled back to the single-UE Phase 4 baseline without changing
-the MongoDB claim, then migrated to Phase 5 again as Helm revision 8 with the
-same acceptance result. The [Phase 5 implementation and visual model](docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
-and [sanitized validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
-document the full evidence and limitations.
-
-## Verified Phase 6 Observability Platform
-
-Phase 6 adds an independent telemetry lifecycle around the accepted Phase 5
-service. Prometheus pulls Kubernetes, node, container, Open5GS, UE-probe, and
-reviewed Phase 7/8 result metrics; Alloy sends project-scoped logs to Loki;
-and Grafana renders six version-controlled dashboards from Prometheus and
-Loki.
-
-```mermaid
-flowchart LR
-    CORE["Five-UE 5G platform"] -->|"native 5G metrics"| PROM["Prometheus"]
-    UE["Five source-bound UE probes"] -->|"bounded /metrics"| PROM
-    K8S["Kubernetes API + kubelet"] --> KSM["kube-state-metrics"] --> PROM
-    K8S -->|"node/container metrics"| PROM
-    LOGS["Project Pod logs + Events"] --> ALLOY["Grafana Alloy"] --> LOKI["Loki"]
-    RESULTS["Reviewed Phase 7/8 summaries\nbounded gauges"] --> PROM
-    PROM --> GRAFANA["Grafana\n6 provisioned dashboards"]
-    LOKI --> GRAFANA
-    PROM --> ALERTS["Prometheus alert rules"]
+```bash
+sudo ./scripts/cn5g-platform.sh destroy --confirm
 ```
 
-Runtime acceptance verified:
+Prerequisites, expected runtime, troubleshooting, controlled tests, and
+cleanup behavior are documented in [Platform operations](docs/platform-operations.md).
 
-- all 13 required Prometheus targets healthy, including five UE targets;
-- five AMF sessions, five PFCP sessions, and five successful user-plane
-  probes;
-- 20 custom UE series against a hard limit of 30;
-- recent centralized logs, two provisioned data sources, and the original
-  four Phase 6 dashboards;
-- target-down, registered-UE mismatch, and user-plane failure alerts each
-  firing and resolving; and
-- two Bound 2 GiB telemetry claims, zero final observability restarts, and the
-  complete Phase 5 regression gate still passing.
+## Deployment profiles
 
-The accepted pre-Phase-7 hardening upgrade reorganizes those four dashboards
-into 48 operational panels with bounded UE/DNN filters, normalized Kubernetes
-pressure, OOM/restart and scrape evidence, procedure-focused logs, Events, and
-cross-dashboard navigation. Grafana now uses a measured 192 MiB request and
-768 MiB limit with runtime plugin preinstallation/update behavior disabled.
-A 2,568-second interactive soak kept the same Pod with zero restart increase
-and peaked at 473.2 MiB, below the enforced 80% ceiling. These figures describe
-this local topology and are not production sizing guidance.
+| Profile | Topology | Intended use |
+| --- | --- | --- |
+| `default` | 5 UEs, 2 DNNs, observability | Normal deployment and demonstration |
+| `core-only` | 5 UEs, 2 DNNs | Protocol work without the telemetry stack |
+| `resource-limited` | 5 UEs, 2 DNNs, reduced database reservation | Constrained local host |
+| `single-ue` | 1 UE, 1 DNN | Minimal compatibility and diagnosis |
 
-Grafana remains cluster-internal and is exposed only by an explicit loopback
-port-forward. The [Phase 6 architecture](docs/architecture/phase-06-observability.md),
-[runbook](docs/runbooks/phase-06-observability.md), and [sanitized validation
-summary](reports/README.md#phase-6-observability-validation-summary) describe
-the signal model, limits, lifecycle, recovery, and accepted evidence. These
-results do not claim throughput, packet loss, high availability, long-term
-retention, or production monitoring scale.
+Example:
 
-The post-Phase-7 dashboard extension adds **CN5G Performance And Capacity
-Experiments**. A deterministic generator converts the accepted nine-condition
-summary into 556 bounded `cn5g_phase07_reviewed_*` gauges served by a
-least-privileged, token-free exporter. This preserves reviewed results after
-the temporary benchmark sidecars are rolled back and the 24-hour Prometheus
-history expires. Its instant-value panels compare 1, 3, and 5 UE conditions;
-they are historical local-lab evidence, not a live speed test or carrier
-capacity claim. Runtime acceptance on 2026-08-06 verified one healthy exporter,
-556 reviewed series, all five dashboard definitions, the complete Phase 5/6
-regression, all three alert lifecycles, and a 2,101-second interactive Grafana
-soak with zero restarts and a 407.2 MiB peak under the 768 MiB limit.
-
-## Verified Phase 7 Controlled Performance Experiment
-
-Phase 7 measured this exact single-host platform under 1, 3, and 5 concurrent
-UEs, with three independent repetitions at every level. A restricted iperf3
-sidecar in each active UE Pod bound traffic to the UE session address. Route
-checks rejected any condition that did not traverse `uesimtun0`, the simulated
-radio path, N3 GTP-U, the UPF, and the UE's intended DNN endpoint.
-
-```mermaid
-flowchart LR
-    RUNNER["Resumable experiment runner\n1, 3, 5 UEs x 3 repetitions"]
-    CLIENT["UE benchmark sidecar\nzero Linux capabilities"]
-    TUN["uesimtun0\n10.60/10.61 session address"]
-    GNB["UERANSIM gNB"]
-    UPF["Open5GS UPF"]
-    DNN["Intended DNN server\ndedicated per-UE port"]
-    PROM["Prometheus\ntime-aligned resources"]
-    RAW["Ignored raw evidence"]
-    REVIEW["Deterministic analyzer\nCSV + JSON + SVG + report"]
-
-    RUNNER --> CLIENT --> TUN --> GNB -->|"N3 GTP-U"| UPF --> DNN
-    RUNNER --> PROM
-    CLIENT --> RAW
-    PROM --> RAW
-    RAW --> REVIEW
+```bash
+sudo ./scripts/cn5g-platform.sh deploy --profile core-only
 ```
 
-The accepted medians describe local contention, not commercial 5G capacity:
+Profile definitions live in [`profiles/`](profiles/). The Helm chart itself
+also defaults to the complete multi-UE topology, so direct rendering does not
+quietly fall back to the simpler model.
 
-| Concurrent UEs | Forward TCP aggregate | Forward TCP per-UE median | Jain fairness | Reverse target delivered | UDP loss | Registration / PDU success |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 114.70 Mbit/s | 114.70 Mbit/s | 1.0000 | 99.96% | 0% | 100% / 100% |
-| 3 | 79.38 Mbit/s | 26.19 Mbit/s | 0.9997 | 99.96% | 0% | 100% / 100% |
-| 5 | 91.70 Mbit/s | 17.61 Mbit/s | 0.9928 | 99.96% | 0% | 100% / 100% |
+## Optional engineering campaigns
 
-![Phase 7 throughput and fairness results](benchmarks/phase-07/results/plots/throughput.svg)
+Performance and resilience tests operate on the accepted default platform;
+they do not represent separate products.
 
-![Phase 7 procedure results](benchmarks/phase-07/results/plots/procedures.svg)
+```bash
+# Route-enforced traffic pilot, repeated matrix, deterministic analysis
+sudo ./scripts/cn5g-platform.sh campaign performance prepare
+sudo ./scripts/cn5g-platform.sh campaign performance pilot
+sudo ./scripts/cn5g-platform.sh campaign performance run
+sudo ./scripts/cn5g-platform.sh campaign performance analyze
 
-![Phase 7 resource results](benchmarks/phase-07/results/plots/resources.svg)
-
-Forward TCP was intentionally unbounded to expose local saturation behavior.
-Reverse TCP was a declared 10 Mbit/s per-UE service-load check, and UDP was a
-declared 1 Mbit/s per-UE check; neither is a maximum downlink-capacity claim.
-All accepted conditions completed with unique sessions, zero new container
-restarts, and recovery of the five-UE baseline. Median five-UE peak CPU was
-515.7 millicores across the UE runtime containers, 334.7 millicores at the
-single gNB, and 147.7 millicores at the UPF. The UE/gNB side is therefore the
-leading bottleneck candidate, not a proven isolated cause.
-
-The final lifecycle gate restored revision 12's configuration as Helm revision
-16, removed the benchmark overlay, preserved the MongoDB claim, and reran the
-complete Phase 5 and Phase 6 validators. See the
-[methodology](docs/architecture/phase-07-performance-methodology.md),
-[reviewed report](reports/07_phase07_performance.md), and
-[machine-readable summary](benchmarks/phase-07/results/summary.json) for the
-statistics, retained failures, limitations, and reproduction contract.
-
-## Verified Phase 8 Reliability And Recovery Experiment
-
-Phase 8 deleted exactly one project-owned AMF, SMF, or UPF Pod per condition
-and measured three separate boundaries: Kubernetes fault detection, the
-replacement Pod becoming Ready, and complete five-UE service recovery. Three
-repetitions per component produced one accepted nine-condition campaign.
-
-```mermaid
-flowchart LR
-    HEALTHY["Validated five-UE baseline"] --> FAULT["Delete one exact Pod\nAMF, SMF, or UPF"]
-    FAULT --> DETECT["Kubernetes detects change\nMTTD"]
-    DETECT --> READY["Replacement Pod Ready"]
-    READY --> AUTO{"Five-UE service\nrecovered?"}
-    AUTO -->|"No within 90 s"| REPAIR["Dependency-ordered\noperator repair"]
-    AUTO -->|"Yes"| VERIFY["Full Phase 5/6 validation"]
-    REPAIR --> VERIFY
-    VERIFY --> REVIEW["Reviewed CSV, JSON, SVG, report\nand bounded dashboard metrics"]
+# Component fault pilot, repeated recovery matrix, deterministic analysis
+sudo ./scripts/cn5g-platform.sh campaign resilience pilot-amf
+sudo ./scripts/cn5g-platform.sh campaign resilience run
+sudo ./scripts/cn5g-platform.sh campaign resilience analyze
 ```
 
-| Faulted component | Median MTTD | Median Pod Ready | Median validated MTTR | Median user-plane disruption | Recovery mode |
-| --- | ---: | ---: | ---: | ---: | --- |
-| AMF | 0.177 s | 4.481 s | 212.187 s | 119.406 s | 3/3 operator-assisted |
-| SMF | 0.177 s | 4.432 s | 210.757 s | 72.274 s | 3/3 operator-assisted |
-| UPF | 0.214 s | 6.581 s | 210.866 s | 155.825 s | 3/3 operator-assisted |
+Every condition has resource abort floors, exact fault or traffic boundaries,
+restoration gates, and retained failed-attempt evidence. Only accepted
+conditions enter reviewed summaries.
 
-![Phase 8 recovery boundary results](benchmarks/phase-08/results/plots/recovery-times.svg)
+## Repository map
 
-![Phase 8 recovery mode results](benchmarks/phase-08/results/plots/recovery-modes.svg)
+| Path | Purpose |
+| --- | --- |
+| [`charts/`](charts/README.md) | Helm-managed 5G core and observability releases |
+| [`profiles/`](profiles/) | Supported deployment configurations |
+| [`containers/`](containers/README.md) | Pinned local image builds and entrypoints |
+| [`scripts/`](scripts/README.md) | Unified lifecycle, validation, campaigns, and assurance tooling |
+| [`docs/`](docs/README.md) | Architecture, operations, runbooks, and design decisions |
+| [`reports/`](reports/README.md) | Sanitized reviewed evidence and measured limitations |
+| [`benchmarks/`](benchmarks/README.md) | Experiment contracts and accepted machine-readable results |
+| [`policy/`](policy/README.md) | Kubernetes admission-style security policy |
+| [`release/`](release/README.md) | Bounded public claims and visual evidence contracts |
 
-![Phase 8 user-plane disruption results](benchmarks/phase-08/results/plots/user-plane-disruption.svg)
+## Design principles
 
-Every attempt restored the complete Phase 5/6 baseline and preserved the
-MongoDB PersistentVolumeClaim identity. A separate MongoDB recreation kept all
-five subscriber records, while invalid Helm values and an invalid Kubernetes
-object were rejected without changing Helm revision 16. These results describe
-single-node, single-replica recovery with operator assistance; they do not
-claim high availability, zero downtime, or a production Recovery Time
-Objective.
+- **Evidence before claims.** Results are accepted only when the protocol,
+  traffic, recovery, or security behavior is reproducible and preserved.
+- **Least privilege.** No workload is privileged. UPF receives `NET_ADMIN`;
+  UE Pods receive only `NET_ADMIN` and `NET_RAW`; controlled data endpoints
+  run with no effective capabilities.
+- **Stable control, dynamic runtime.** Services and DNS provide stable
+  discovery while validators derive current Pod addresses and exact node-side
+  routes rather than assuming stale allocations.
+- **Scoped lifecycle.** Cleanup checks identity and ownership; scripts never
+  run broad Docker prunes, flush host firewall state, or remove unrelated
+  resources.
+- **Honest boundaries.** Single-node behavior is not presented as high
+  availability, local throughput is not presented as carrier capacity, and
+  simulated radio is not presented as RF performance.
 
-Deterministic analysis generated two CSV files, one JSON summary, three plots,
-and the reviewed report. The accepted sixth **Reliability And Recovery**
-dashboard projects that summary through exactly 75 bounded, sanitized
-`cn5g_phase08_reviewed_*` gauges. Runtime acceptance verified two reviewed
-results targets, all six dashboards, all three alert firing/resolution
-lifecycles, and a 2,606-second interactive Grafana soak with zero restarts and
-a 468.6 MiB peak under the 768 MiB limit. The final Phase 5/6 regression and
-post-Phase-8 host snapshot also passed. See the [methodology](docs/architecture/phase-08-reliability-methodology.md),
-[runbook](docs/runbooks/phase-08-recovery.md), [reviewed report](reports/08_phase08_reliability.md),
-and [machine-readable summary](benchmarks/phase-08/results/summary.json).
+## Documentation
 
-## Verified Phase 9 CI And Supply-Chain Gates
+Start with the [documentation portal](docs/README.md). Particularly useful
+deep dives are:
 
-Phase 9 separates checks that are safe on a GitHub-hosted runner from checks
-that require the local kind cluster, TUN devices, SCTP, and scoped networking
-capabilities. The hosted path uses read-only repository permissions and
-immutable action identities. It runs source, documentation, workflow, Helm,
-Kubernetes-schema, policy-as-code, secret, vulnerability, and image gates.
-
-Five locally built images passed fixed high/critical vulnerability and secret
-scanning and produced five SPDX 2.3 Software Bills of Materials. Four negative
-controls proved that the gates reject a mutable action, floating base image,
-privileged Pod, and synthetic secret. The data-network image was rebuilt from
-the accepted Alpine 3.22.5 manifest, promoted with exact rollback state, and
-passed the complete Phase 5/6 regression. The separate local privileged gate
-also verified all nine reviewed Phase 7 and nine reviewed Phase 8 conditions.
-
-GitHub Actions run `32434705350` accepted the final merged Phase 9 commit. This
-proves the declared repository and local-lab controls; it does not prove that
-all vulnerabilities are absent, that images are signed, or that the single-
-node lab has production security or availability. See the [security
-architecture](docs/architecture/phase-09-ci-security.md), [release-gate
-runbook](docs/runbooks/phase-09-release-gate.md), and [reviewed
-report](reports/09_phase09_security.md).
-
-## Implemented Capabilities
-
-- pinned and reproducible container images;
-- a reversible local Kubernetes environment;
-- Helm-managed Open5GS, MongoDB, and UERANSIM workloads;
-- meaningful startup, readiness, and liveness checks;
-- automated synthetic subscriber generation and provisioning;
-- concurrent UE registration and Protocol Data Unit (PDU) sessions;
-- two isolated Data Network Names (DNNs), without claiming network slicing;
-- Prometheus metrics and six version-controlled Grafana dashboards;
-- centralized, correlated operational logs;
-- repeatable throughput, latency, loss, and resource measurements;
-- controlled component-failure and recovery experiments;
-- Continuous Integration (CI) validation for source, configuration, charts,
-  tests, and container artifacts;
-- concise, sanitized evidence and operational runbooks.
-
-## Accepted Architecture
-
-```mermaid
-flowchart LR
-    UE["Multiple UERANSIM UEs"]
-    GNB["UERANSIM gNB"]
-    AMF["Open5GS AMF"]
-    CORE["Open5GS control-plane functions"]
-    SMF["Open5GS SMF"]
-    UPF["Open5GS UPF"]
-    DB[("MongoDB")]
-    DN["Controlled data network"]
-    PROM["Prometheus"]
-    GRAF["Grafana\n6 dashboards"]
-    LOKI["Loki"]
-    ALLOY["Grafana Alloy"]
-    KSM["kube-state-metrics"]
-
-    UE <-->|"Simulated radio"| GNB
-    GNB <-->|"N2: NGAP over SCTP"| AMF
-    AMF <-->|"Service-Based Interface"| CORE
-    CORE <--> DB
-    AMF <-->|"Session services"| SMF
-    SMF <-->|"N4: PFCP"| UPF
-    GNB <-->|"N3: GTP-U"| UPF
-    UPF <-->|"N6: IP"| DN
-    KSM --> PROM --> GRAF
-    ALLOY --> LOKI --> GRAF
-    AMF --> PROM
-    SMF --> PROM
-    UPF --> PROM
-    AMF --> ALLOY
-    SMF --> ALLOY
-    UPF --> ALLOY
-    GNB --> ALLOY
-    UE --> ALLOY
-```
-
-The accepted topology builds on the kind, Helm, and five-UE/two-DNN baseline.
-Phase 6 added operational metrics, dashboards, alerts, and correlated
-logs without changing the accepted subscriber or user-plane contracts. Phase
-7 added a temporary, route-enforced benchmark overlay, preserved reviewed
-results, and then rolled that overlay back to the accepted Phase 6 runtime.
-Phase 8 measured exact AMF, SMF, and UPF Pod recovery from that baseline and
-published the reviewed reliability dashboard without leaving a fault-injection
-overlay in the core release.
-
-## Repository Structure
-
-```text
-cloud-native-5g-core-platform/
-├── charts/                 Helm packaging
-├── containers/             Container build definitions
-├── configs/                Synthetic lab configuration
-├── scripts/                Lifecycle, test, and cleanup automation
-├── tools/                  Validation and reporting software
-├── tests/                  Unit, integration, and acceptance tests
-├── monitoring/             Prometheus rules and Grafana provisioning
-├── logging/                Centralized logging configuration
-├── benchmarks/             Reproducible experiment definitions and summaries
-├── docs/                   Architecture, decisions, operation, and analysis
-├── reports/                Sanitized validation and experiment reports
-├── release/                Claim and visual-evidence contracts
-├── versions/               Exact tool, image, and source provenance manifests
-├── captures/               Intentionally reviewed protocol evidence
-├── screenshots/            Selected visual evidence
-├── diagrams/               Architecture and call-flow sources
-└── .github/                Continuous Integration workflows
-```
-
-## Evidence Policy
-
-Only synthetic identities and credentials may be used. Raw logs, runtime data,
-local kubeconfigs, private keys, and packet captures are ignored by default.
-Selected captures may be added only after a documented content and privacy
-review. Performance and reliability claims must link to reproducible commands,
-machine-readable measurements, and concise reports.
-
-## Technical Documentation
-
-- [Current phase and gate status](docs/project-status.md)
-- [Phase 2 Docker Compose architecture](docs/architecture/phase-02-compose-topology.md)
-- [Container image provenance](docs/image-provenance.md)
-- [Docker Engine installation runbook](docs/runbooks/docker-engine-installation.md)
-- [Compose build, operation, validation, and cleanup runbook](docs/runbooks/compose-baseline.md)
-- [Phase 2 validation and host-safety report](reports/02_container_baseline.md)
-- [Phase 4 single-UE Kubernetes validation summary](reports/README.md#phase-4-single-ue-kubernetes-validation-summary)
-- [Complete Phase 4 visual system and operational guide](docs/README.md#23-phase-4-complete-system-and-operational-model)
-- [Phase 5 multi-UE and DNN validation summary](reports/README.md#phase-5-multi-ue-and-dnn-validation-summary)
-- [Phase 5 multi-UE visual and operational model](docs/README.md#31-phase-5-multi-ue-and-dnn-implementation-model)
-- [Phase 6 observability architecture](docs/architecture/phase-06-observability.md)
-- [Phase 6 observability runbook](docs/runbooks/phase-06-observability.md)
-- [Phase 6 sanitized validation summary](reports/README.md#phase-6-observability-validation-summary)
-- [Phase 6 visual and operational model](docs/README.md#32-phase-6-observability-and-operational-mental-model)
-- [Observability dashboard evolution and final visual-evidence plan](docs/architecture/observability-dashboard-evolution-plan.md)
-- [Phase 7 controlled performance methodology](docs/architecture/phase-07-performance-methodology.md)
-- [Phase 7 reviewed performance report](reports/07_phase07_performance.md)
-- [Phase 7 performance dashboard model](docs/README.md#3323-turning-the-accepted-report-into-a-reproducible-dashboard)
-- [Complete accepted-system architecture and end-to-end packet walkthrough](docs/architecture/complete-system-architecture.md)
-- [Phase 7 machine-readable experiment contract](benchmarks/phase-07/experiment.json)
-- [Phase 8 controlled recovery methodology](docs/architecture/phase-08-reliability-methodology.md)
-- [Phase 8 reviewed reliability report](reports/08_phase08_reliability.md)
-- [Phase 8 recovery runbook](docs/runbooks/phase-08-recovery.md)
-- [Phase 8 machine-readable experiment contract](benchmarks/phase-08/experiment.json)
-- [Phase 9 CI and supply-chain architecture](docs/architecture/phase-09-ci-security.md)
-- [Phase 9 release-gate runbook](docs/runbooks/phase-09-release-gate.md)
-- [Phase 9 reviewed security report](reports/09_phase09_security.md)
-- [Phase 9 detailed implementation model](docs/README.md#35-phase-9-continuous-integration-and-supply-chain-security)
-- [Phase 10 release-readiness architecture](docs/architecture/phase-10-release-readiness.md)
-- [Phase 10 release runbook](docs/runbooks/phase-10-release.md)
-- [Phase 10 release-readiness report](reports/10_release_readiness.md)
-- [Privacy-reviewed dashboard evidence gallery](docs/dashboard-gallery.md)
-- [Third-party software notices](THIRD_PARTY_NOTICES.md)
-- [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
-- [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
-- [Architecture Decision Records](docs/adr/README.md)
+- [Complete system architecture](docs/architecture/complete-system-architecture.md)
+- [Observability architecture](docs/architecture/observability.md)
+- [Performance engineering](docs/architecture/performance-engineering.md)
+- [Resilience engineering](docs/architecture/resilience-engineering.md)
+- [Supply-chain security](docs/architecture/supply-chain-security.md)
+- [Architecture decisions](docs/adr/README.md)
 
 ## License
 
-Original project material is licensed under the [Apache License 2.0](LICENSE).
-Open5GS, UERANSIM, MongoDB, observability components, base distributions, and
-other third-party software retain their own licenses; see
-[Third-Party Software Notices](THIRD_PARTY_NOTICES.md) and the [image
-provenance record](docs/image-provenance.md).
-
-## Authoritative References
-
-- [Open5GS documentation](https://open5gs.org/open5gs/docs/)
-- [Kubernetes concepts](https://kubernetes.io/docs/concepts/)
-- [kind documentation](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [Helm documentation](https://helm.sh/docs/)
-- [Prometheus documentation](https://prometheus.io/docs/introduction/overview/)
-- [Grafana documentation](https://grafana.com/docs/grafana/latest/)
-- [GitHub Actions documentation](https://docs.github.com/en/actions)
+Project-authored material is licensed under the [Apache License 2.0](LICENSE).
+Upstream Open5GS, UERANSIM, container images, and tools retain their own
+licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

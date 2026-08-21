@@ -53,13 +53,13 @@ subscriberSecret:
   subscriberScriptKey: subscriber-init.js
   imsiKey: imsi
 
-# Phase 5 is an explicit overlay so the accepted single-UE Phase 4 release can
-# still be rendered and restored without reconstructing historical values.
-phase05:
-  enabled: false
+# The accepted five-UE/two-DNN topology is the chart default. A separate
+# single-UE profile is retained only for focused protocol smoke tests.
+platform:
+  enabled: true
   ueReplicas: 5
   subscriberSecret:
-    existingSecret: cn5g-subscribers-phase05
+    existingSecret: cn5g-subscribers
     planKey: plan.json
     subscriberScriptKey: subscriber-init.js
   sessions:
@@ -78,22 +78,23 @@ phase05:
       routeTable: 1061
       rulePriority: 1061
 
-# Phase 6 adds one least-privileged metrics sidecar to each Phase 5 UE Pod.
+# The default platform exposes bounded per-UE operational metrics. The separate
+# observability chart collects these metrics together with cluster telemetry.
 # The sidecar performs a bounded, synthetic user-plane request through the
 # existing UE TUN and exposes only ordinal/DNN labels; subscriber identities
 # never enter the metric label set.
-phase06:
-  enabled: false
+observability:
+  enabled: true
   probeIntervalSeconds: 15
   metricsPort: 9101
   resources:
     requests: {cpu: 5m, memory: 8Mi}
     limits: {cpu: 50m, memory: 32Mi}
 
-# Phase 7 adds an idle benchmark client to each UE network namespace and one
+# performance campaigns add an idle benchmark client to each UE network namespace and one
 # iperf3 server to each controlled DNN endpoint. The lifecycle helper starts
 # traffic only inside explicit, bounded experiment windows.
-phase07:
+performance:
   enabled: false
   iperfPort: 5201
   iperfPortCount: 5

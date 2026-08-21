@@ -3,8 +3,8 @@ name: cn5g-observability
 description: Project-scoped metrics, logs, dashboards, and alert rules for the CN5G platform
 type: application
 version: 0.3.0
-appVersion: "phase-08-dashboard"
+appVersion: "resilience-dashboard"
 kubeVersion: ">=1.36.0-0"
 annotations:
-  cn5g.io/phase: "08-dashboard"
+  cn5g.io/domain: observability
   artifacthub.io/license: Apache-2.0

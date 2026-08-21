@@ -4,7 +4,7 @@
 
 Accepted
 
-Acceptance covers the Phase 2 Compose baseline. Public image release scanning
+Acceptance covers the Docker Compose reference baseline. Public image release scanning
 and distribution controls remain pending.
 
 ## Context
@@ -42,14 +42,14 @@ requires more than a movable image tag.
 ## Evidence
 
 - [Open5GS releases](https://github.com/open5gs/open5gs/releases) identify
-  2.7.7 as the current tagged upstream release reviewed during Phase 1.
+  2.7.7 as the current tagged upstream release reviewed during Host baseline.
 - [UERANSIM releases](https://github.com/aligungr/UERANSIM/releases) identify
-  3.2.8 as the current tagged upstream release reviewed during Phase 1.
+  3.2.8 as the current tagged upstream release reviewed during Host baseline.
 - Both projects use the GNU Affero General Public License; source and image
   distribution obligations must be reviewed before public release.
 - The host package versions are evidence about the predecessor topology, not a
   valid image provenance record for this topology.
-- Phase 2 built Open5GS 2.7.7 and UERANSIM 3.2.8 from checksummed source
+- Compose reference built Open5GS 2.7.7 and UERANSIM 3.2.8 from checksummed source
   archives on digest-pinned Ubuntu, used a digest-pinned MongoDB 8.0.28 image,
   and recorded the accepted local image IDs and sizes.
 - The complete Compose health, registration, PDU-session, user-plane,

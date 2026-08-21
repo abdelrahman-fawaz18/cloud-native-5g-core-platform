@@ -53,7 +53,7 @@ spec:
           args:
             - --quiet
             - mongodb://{{ include "cn5g.componentName" (dict "root" . "component" "mongodb") }}:27017/open5gs
-            - /secret/{{ if .Values.phase05.enabled }}{{ .Values.phase05.subscriberSecret.subscriberScriptKey }}{{ else }}{{ .Values.subscriberSecret.subscriberScriptKey }}{{ end }}
+            - /secret/{{ if .Values.platform.enabled }}{{ .Values.platform.subscriberSecret.subscriberScriptKey }}{{ else }}{{ .Values.subscriberSecret.subscriberScriptKey }}{{ end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 999
@@ -69,10 +69,10 @@ spec:
       volumes:
         - name: subscriber-secret
           secret:
-            secretName: {{ if .Values.phase05.enabled }}{{ .Values.phase05.subscriberSecret.existingSecret }}{{ else }}{{ .Values.subscriberSecret.existingSecret }}{{ end }}
+            secretName: {{ if .Values.platform.enabled }}{{ .Values.platform.subscriberSecret.existingSecret }}{{ else }}{{ .Values.subscriberSecret.existingSecret }}{{ end }}
             items:
-              {{- if .Values.phase05.enabled }}
-              - {key: {{ .Values.phase05.subscriberSecret.subscriberScriptKey }}, path: {{ .Values.phase05.subscriberSecret.subscriberScriptKey }}}
+              {{- if .Values.platform.enabled }}
+              - {key: {{ .Values.platform.subscriberSecret.subscriberScriptKey }}, path: {{ .Values.platform.subscriberSecret.subscriberScriptKey }}}
               {{- else }}
               - {key: {{ .Values.subscriberSecret.subscriberScriptKey }}, path: {{ .Values.subscriberSecret.subscriberScriptKey }}}
               {{- end }}

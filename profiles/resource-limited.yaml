@@ -1,0 +1,16 @@
+# Reduced-footprint five-UE topology for constrained local hosts.
+# The 5G service contract is unchanged; the separate observability release is
+# intentionally omitted by the unified lifecycle when this profile is used.
+platform:
+  enabled: true
+
+observability:
+  enabled: false
+
+performance:
+  enabled: false
+
+mongodb:
+  resources:
+    requests: {cpu: 150m, memory: 192Mi}
+    limits: {cpu: 400m, memory: 640Mi}

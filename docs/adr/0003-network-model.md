@@ -36,7 +36,7 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   workloads. Re-check every range before creation.
 - Test packet sizes and effective Maximum Transmission Unit across nested
   encapsulation before accepting the model.
-- Keep the Phase 3 N6 return route in the disposable kind-node namespace,
+- Keep the Networking qualification N6 return route in the disposable kind-node namespace,
   where the upstream data-network router logically belongs. Discover the
   router Pod's node-side `veth` dynamically; Pod addresses and interface names
   are not stable configuration inputs.
@@ -101,9 +101,9 @@ subnet and an LXC bridge, and Docker/Kubernetes will add more routes and NAT.
   `10.60.0.0/24` through the current UPF Pod's dynamically discovered
   node-side `veth`; it refuses to replace or remove an unrecognized route.
 - UPF required only `NET_ADMIN`, UE required `NET_ADMIN` and `NET_RAW`, and
-  the data endpoint required no effective capabilities. No Phase 4 workload
+  the data endpoint required no effective capabilities. No single-UE profile workload
   used privileged mode.
-- Phase 5 ran five simultaneous UEs through one gNB and one UPF. Three unique
+- platform ran five simultaneous UEs through one gNB and one UPF. Three unique
   `10.60.0.x` sessions selected `internet`; two unique `10.61.0.x` sessions
   selected `enterprise`; five unique UP/CP F-SEID correlations and all five
   bidirectional TUN-counter checks passed.
@@ -125,7 +125,7 @@ endpoint.
 
 ## Reversal Or Migration
 
-A later phase may revise an individual interface to Multus, another Container
+A future architecture revision may move an individual interface to Multus, another Container
 Network Interface, or an external RAN only after a narrow requirement and a
 documented host-impact review. Remove only named project resources and exact
 owned routes, then repeat the host coexistence checks after reversal.

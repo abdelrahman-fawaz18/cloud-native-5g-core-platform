@@ -9,7 +9,7 @@ condition = "AND"
 targetRules = ["generic-api-key"]
 regexTarget = "line"
 paths = ['''^charts/cn5g/values\.yaml$''']
-regexes = ['''^\s*existingSecret:\s+cn5g-(subscriber|subscribers-phase05)\s*$''']
+regexes = ['''^\s*existingSecret:\s+cn5g-subscribers?\s*$''']
 
 [[allowlists]]
 description = "Published UERANSIM example uses the documented synthetic lab key"

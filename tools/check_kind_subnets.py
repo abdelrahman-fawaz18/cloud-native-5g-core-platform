@@ -81,7 +81,7 @@ def find_conflicts(
 
 
 def main() -> int:
-    manifest = parse_env(ROOT / "versions" / "phase-03.env")
+    manifest = parse_env(ROOT / "versions" / "kubernetes-runtime.env")
     candidates = (
         ipaddress.ip_network(manifest["KIND_POD_SUBNET"]),
         ipaddress.ip_network(manifest["KIND_SERVICE_SUBNET"]),

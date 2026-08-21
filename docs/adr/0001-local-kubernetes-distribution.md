@@ -16,7 +16,7 @@ the host kernel, and a local cluster can change bridges, routes, firewall
 rules, storage, and boot-time services.
 
 The host uses cgroup v2, has the required kernel primitives, and has sufficient
-initial resources. Phase 2 installed pinned Docker components and verified
+initial resources. Compose reference installed pinned Docker components and verified
 their coexistence with the host lab.
 
 ## Decision
@@ -71,12 +71,12 @@ requirement that the accepted feasibility tests did not model.
 The project gains a named, automatable local cluster without a permanent
 Kubernetes control-plane service. Networking remains nested inside Docker:
 Pods use per-Pod node-side `veth` routes, Services add virtual addresses, and
-5G tunnels add another encapsulation layer. Phase 4 therefore configures
+5G tunnels add another encapsulation layer. single-UE profile therefore configures
 advertised N2/N3/N4 addresses deliberately and retains the verified Maximum
 Transmission Unit, capability, return-routing, and packet-observation checks.
 
-The Phase 3 probe established transport feasibility rather than protocol
-semantics. Phase 4 supplied the required real single-UE Open5GS/UERANSIM
+The Networking qualification probe established transport feasibility rather than protocol
+semantics. single-UE profile supplied the required real single-UE Open5GS/UERANSIM
 validation, so kind is now accepted for the local Helm baseline. This does not
 make the single-node cluster a production or high-availability platform.
 

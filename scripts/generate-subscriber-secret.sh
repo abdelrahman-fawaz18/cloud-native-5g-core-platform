@@ -30,8 +30,8 @@ fi
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 project_root=$(cd -- "$script_dir/.." && pwd -P)
-template_dir="$project_root/configs/kubernetes/phase-04/secret-templates"
-output_dir="$project_root/artifacts/secrets/phase-04"
+template_dir="$project_root/configs/kubernetes/single-ue/secret-templates"
+output_dir="$project_root/artifacts/secrets/single-ue"
 ue_template="$template_dir/ue.yaml.tmpl"
 subscriber_template="$template_dir/subscriber-init.js.tmpl"
 ue_output="$output_dir/ue.yaml"

@@ -2,7 +2,7 @@
   "uid": "cn5g-logs",
   "title": "CN5G Logs And Troubleshooting",
   "description": "Bounded, variable-driven Loki views for component logs, telecom procedure signals, observability components, and Kubernetes Events.",
-  "tags": ["cn5g", "logs", "phase-06", "operations"],
+  "tags": ["cn5g", "logs", "observability", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 3,

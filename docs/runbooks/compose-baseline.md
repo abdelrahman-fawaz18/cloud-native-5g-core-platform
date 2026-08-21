@@ -3,7 +3,7 @@
 ## Objective
 
 This runbook builds, starts, validates, inspects, recreates, and removes the
-Phase 2 `cn5g-compose` integration environment. It operates only on resources
+Compose reference `cn5g-compose` integration environment. It operates only on resources
 declared in `compose.yaml` and preserves the host-based Open5GS/UERANSIM lab.
 
 The baseline contains 15 services: MongoDB, a one-shot subscriber initializer,
@@ -34,7 +34,7 @@ verification and a host-state comparison.
 ## Prerequisites
 
 1. Docker Engine, containerd, Buildx, and Docker Compose match
-   `versions/phase-02.env`.
+   `versions/compose-runtime.env`.
 2. `/dev/net/tun`, Stream Control Transmission Protocol (SCTP), and required
    kernel networking primitives passed the host preflight.
 3. Existing host Open5GS and MongoDB services are active.
@@ -69,7 +69,7 @@ verification and a host-state comparison.
 ## 1. Render The Configuration
 
 ```bash
-sudo ./scripts/compose-lab.sh config
+sudo ./scripts/compose-reference.sh config
 ```
 
 This runs `docker compose config --quiet` before listing image references. It
@@ -86,13 +86,13 @@ inspect the first Compose error and correct the source YAML.
 ## 2. Run The Read-Only Build Preflight
 
 ```bash
-sudo ./scripts/compose-lab.sh preflight-build
+sudo ./scripts/compose-reference.sh preflight-build
 ```
 
 Expected markers:
 
 ```text
-host_lab_services=active
+host_reference_services=active
 host_ran_or_simulation_processes=none
 project_image_tag_conflicts=none
 host_software_reuse=disabled_for_isolation
@@ -115,7 +115,7 @@ Failure interpretation:
 ## 3. Build Reproducible Images
 
 ```bash
-sudo ./scripts/compose-lab.sh build
+sudo ./scripts/compose-reference.sh build
 ```
 
 The build creates:
@@ -160,7 +160,7 @@ compiled build stage. Do not substitute `docker builder prune` or
 Before deployment, with no project resources present:
 
 ```bash
-sudo ./scripts/compose-lab.sh verify-images
+sudo ./scripts/compose-reference.sh verify-images
 ```
 
 For each project image, the helper records:
@@ -182,12 +182,12 @@ The output identity can change after an intentional image rebuild because
 BuildKit includes provenance metadata. The pinned source commit, archive
 checksum, base manifest, Dockerfile, configuration, and accepted validation
 are the reproducibility contract; the tested export identity is recorded in
-`versions/phase-02.env` and `docs/image-provenance.md`.
+`versions/compose-runtime.env` and `docs/image-provenance.md`.
 
 ## 5. Start And Wait For Readiness
 
 ```bash
-sudo ./scripts/compose-lab.sh up
+sudo ./scripts/compose-reference.sh up
 ```
 
 The helper:
@@ -207,7 +207,7 @@ If startup fails, do not repeatedly recreate the topology. Inspect state and
 the first unhealthy dependency:
 
 ```bash
-sudo ./scripts/compose-lab.sh status
+sudo ./scripts/compose-reference.sh status
 sudo docker compose \
   --project-name cn5g-compose \
   --file compose.yaml \
@@ -220,7 +220,7 @@ often means the downstream container was intentionally never started.
 ## 6. Validate The 5G Control And User Planes
 
 ```bash
-sudo ./scripts/compose-lab.sh validate
+sudo ./scripts/compose-reference.sh validate
 ```
 
 The validator fails on the first broken contract. A complete pass includes:
@@ -247,8 +247,8 @@ The counter evidence avoids publishing a raw packet capture.
 ## 7. Inspect Runtime State
 
 ```bash
-sudo ./scripts/compose-lab.sh status
-sudo ./scripts/compose-lab.sh logs
+sudo ./scripts/compose-reference.sh status
+sudo ./scripts/compose-reference.sh logs
 ```
 
 `status` includes stopped and one-shot containers. `logs` limits output to the
@@ -283,14 +283,14 @@ route through `uesimtun0`, and `ogstun` owns `10.60.0.1/24`.
 Create one synthetic marker in a dedicated MongoDB evidence collection:
 
 ```bash
-sudo ./scripts/compose-lab.sh prepare-persistence
+sudo ./scripts/compose-reference.sh prepare-persistence
 ```
 
 Remove project containers and networks while retaining volumes:
 
 ```bash
-sudo ./scripts/compose-lab.sh down
-sudo ./scripts/compose-lab.sh verify-down
+sudo ./scripts/compose-reference.sh down
+sudo ./scripts/compose-reference.sh verify-down
 ```
 
 `verify-down` requires:
@@ -306,9 +306,9 @@ scoped_down_verification=pass
 Recreate and verify the retained database state:
 
 ```bash
-sudo ./scripts/compose-lab.sh up
-sudo ./scripts/compose-lab.sh verify-persistence
-sudo ./scripts/compose-lab.sh validate
+sudo ./scripts/compose-reference.sh up
+sudo ./scripts/compose-reference.sh verify-persistence
+sudo ./scripts/compose-reference.sh validate
 ```
 
 `verify-persistence` must find the pre-teardown marker, then drops the dedicated
@@ -321,7 +321,7 @@ The destructive action below deletes the two project MongoDB volumes and their
 synthetic contents. It does not remove images or build cache:
 
 ```bash
-sudo ./scripts/compose-lab.sh destroy --confirm
+sudo ./scripts/compose-reference.sh destroy --confirm
 ```
 
 Expected removal scope is 15 containers, two networks, and these exact volumes:
@@ -332,7 +332,7 @@ Expected removal scope is 15 containers, two networks, and these exact volumes:
 Verify absence of all deployment resources while retaining verified images:
 
 ```bash
-sudo ./scripts/compose-lab.sh verify-images
+sudo ./scripts/compose-reference.sh verify-images
 ```
 
 Expected final resource markers:
@@ -354,7 +354,7 @@ packet counters are expected to advance.
 Only after project containers are absent:
 
 ```bash
-sudo ./scripts/compose-lab.sh remove-images --confirm
+sudo ./scripts/compose-reference.sh remove-images --confirm
 ```
 
 This removes only:
@@ -385,4 +385,4 @@ ownership may overlap other work and requires a separate reviewed decision.
 This runbook proves a local single-UE Compose reference. It does not establish
 Kubernetes compatibility, multiple UE scale, multiple DNN/slice behavior,
 external Internet access, performance, high availability, or production
-security. Those properties require separate measured phase gates.
+security. Those properties require separate measured acceptance gates.

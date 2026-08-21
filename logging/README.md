@@ -1,7 +1,7 @@
 # Centralized Logging
 
-Phase 6 uses Grafana Alloy and a single-replica Loki backend. Alloy discovers
-only `cn5g` and `cn5g-observability`, reads container streams and Events
+The observability stack uses Grafana Alloy and a single-replica Loki backend.
+Alloy discovers only `cn5g` and `cn5g-observability`, reads container streams and Events
 through the Kubernetes API, attaches bounded cluster/namespace/Pod/container/
 component context, and pushes to Loki.
 

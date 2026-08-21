@@ -59,7 +59,7 @@ spec:
           volumeMounts:
             - {name: config-source, mountPath: /config-source, readOnly: true}
             - {name: config-runtime, mountPath: /etc/open5gs}
-        {{- if and (eq $component "upf") $root.Values.phase05.enabled }}
+        {{- if and (eq $component "upf") $root.Values.platform.enabled }}
         - name: configure-dnn-network
           image: {{ include "cn5g.image" $root.Values.images.open5gs }}
           imagePullPolicy: {{ $root.Values.images.open5gs.pullPolicy }}
@@ -68,7 +68,7 @@ spec:
             - |-
               default_gateway=$(ip -4 route show default | awk 'NR == 1 {print $3}')
               test -n "$default_gateway"
-              {{- range $session := $root.Values.phase05.sessions }}
+              {{- range $session := $root.Values.platform.sessions }}
               if ! ip link show {{ $session.tunDevice }} >/dev/null 2>&1; then
                 ip tuntap add name {{ $session.tunDevice }} mode tun
               fi

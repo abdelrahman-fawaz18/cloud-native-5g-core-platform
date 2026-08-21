@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "accepted",
-  "capture_set": "phase-10-release-candidate",
+  "capture_set": "release-release-candidate",
   "captures": [
     {
       "role": "overview",
@@ -13,7 +13,7 @@
       "git_commit": "78a6cda9c67110d9f720cce38168d13395adb70e",
       "time_range": "Last 6 hours",
       "variables": {},
-      "scenario": "Healthy five-UE, two-DNN baseline after the Phase 10 privileged validation gate",
+      "scenario": "Healthy five-UE, two-DNN baseline after the release qualification privileged validation gate",
       "proof": "Shows 100% core workload readiness, 100% telemetry target health, zero active alerts, five registered UEs, five PFCP sessions, and five healthy user-plane paths.",
       "limitation": "A point-in-time local single-node lab view; it is not an availability or production-scale claim."
     },
@@ -36,7 +36,7 @@
     },
     {
       "role": "performance",
-      "file": "docs/images/dashboards/phase07-performance-reviewed.png",
+      "file": "docs/images/dashboards/performance-reviewed.png",
       "sha256": "0cbe9d980148b0235edb9085054c3ca6a93335585e7c583a26683953bdd69fad",
       "dashboard_uid": "cn5g-performance",
       "dashboard_title": "CN5G Performance And Capacity Experiments",
@@ -46,13 +46,13 @@
       "variables": {
         "ue_level": "5"
       },
-      "scenario": "Reviewed Phase 7 campaign projected from the accepted 1, 3, and 5 concurrent-UE matrix",
+      "scenario": "Reviewed performance campaign projected from the accepted 1, 3, and 5 concurrent-UE matrix",
       "proof": "Shows REVIEWED campaign state, nine accepted conditions, three repetitions per level, a 15-second measured interval, a 30-second idle baseline, and zero new restarts.",
       "limitation": "The values describe a controlled local experiment, not radio performance, carrier capacity, or a production service-level objective."
     },
     {
       "role": "reliability",
-      "file": "docs/images/dashboards/phase08-reliability-reviewed.png",
+      "file": "docs/images/dashboards/resilience-reviewed.png",
       "sha256": "5315790af43aee2ba8f729afef9986002b5e741f90de1027431a49b5fc062c0a",
       "dashboard_uid": "cn5g-reliability",
       "dashboard_title": "CN5G Reliability And Recovery",
@@ -62,7 +62,7 @@
       "variables": {
         "component": "upf"
       },
-      "scenario": "Reviewed Phase 8 AMF, SMF, and UPF recovery campaign with UPF selected for detailed panels",
+      "scenario": "Reviewed resilience campaign AMF, SMF, and UPF recovery campaign with UPF selected for detailed panels",
       "proof": "Shows REVIEWED campaign state, nine accepted conditions, nine operator-assisted recoveries, nine baseline restorations, and preserved MongoDB persistence.",
       "limitation": "This is single-replica operator-assisted recovery evidence; it does not claim high availability or automatic stateful failover."
     }

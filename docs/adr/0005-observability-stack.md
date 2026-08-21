@@ -30,12 +30,12 @@ Grafana Alloy for sending logs to Loki.
   limits from observed ingestion before performance testing.
 - Keep high-cardinality per-UE detail in logs and reports; expose bounded
   aggregate metrics unless a cardinality review approves otherwise.
-- Pin every image by version and release-baseline digest in Phase 6.
+- Pin every image by version and release-baseline digest in observability stack.
 - Run the stack as a separate `cn5g-observability` Helm release and namespace.
 - Collect node/container metrics through the authenticated API proxy and logs
   through the Kubernetes API rather than host mounts.
 - Defer Alertmanager until a notification receiver and credential boundary
-  are approved; Prometheus evaluates and tests rules in this phase.
+  are approved; Prometheus evaluates and tests rules in this capability.
 
 ## Alternatives Considered
 
@@ -56,10 +56,10 @@ Grafana Alloy for sending logs to Loki.
   recommends Alloy as the primary log-ingestion method.
 - [Grafana Alloy documentation](https://grafana.com/docs/alloy/latest/collect/logs-in-kubernetes/)
   documents Kubernetes log collection.
-- The accepted Phase 5 preflight observed about 8 GiB available memory and
+- The accepted platform preflight observed about 8 GiB available memory and
   28 GiB free Docker filesystem space, requiring bounded retention, explicit
   resource limits, and staged deployment.
-- Registry identities are pinned in `versions/phase-06.env`; both charts pass
+- Registry identities are pinned in `versions/observability-runtime.env`; both charts pass
   strict linting, deterministic rendering, and Kubernetes server-side dry-run.
 - Live acceptance on 2026-08-05 verified 14 active Prometheus targets, all 13
   required targets healthy, five UE probe targets, five AMF sessions, five

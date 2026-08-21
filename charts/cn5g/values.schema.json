@@ -3,7 +3,7 @@
   "title": "CN5G Helm values",
   "type": "object",
   "additionalProperties": false,
-  "required": ["global", "images", "subscriberSecret", "phase05", "phase06", "phase07", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
+  "required": ["global", "images", "subscriberSecret", "platform", "observability", "performance", "mongodb", "open5gs", "ueransim", "dataNetwork", "subscriberJob"],
   "properties": {
     "global": {
       "type": "object",
@@ -58,7 +58,7 @@
         "imsiKey": {"const": "imsi"}
       }
     },
-    "phase05": {
+    "platform": {
       "type": "object",
       "additionalProperties": false,
       "required": ["enabled", "ueReplicas", "subscriberSecret", "sessions"],
@@ -70,7 +70,7 @@
           "additionalProperties": false,
           "required": ["existingSecret", "planKey", "subscriberScriptKey"],
           "properties": {
-            "existingSecret": {"const": "cn5g-subscribers-phase05"},
+            "existingSecret": {"const": "cn5g-subscribers"},
             "planKey": {"const": "plan.json"},
             "subscriberScriptKey": {"const": "subscriber-init.js"}
           }
@@ -87,7 +87,7 @@
         }
       }
     },
-    "phase06": {
+    "observability": {
       "type": "object",
       "additionalProperties": false,
       "required": ["enabled", "probeIntervalSeconds", "metricsPort", "resources"],
@@ -98,7 +98,7 @@
         "resources": {"$ref": "#/$defs/resources"}
       }
     },
-    "phase07": {
+    "performance": {
       "type": "object",
       "additionalProperties": false,
       "required": ["enabled", "iperfPort", "iperfPortCount", "resources"],
@@ -127,7 +127,7 @@
     {
       "if": {
         "properties": {
-          "phase07": {
+          "performance": {
             "properties": {"enabled": {"const": true}},
             "required": ["enabled"]
           }
@@ -135,8 +135,8 @@
       },
       "then": {
         "properties": {
-          "phase05": {"properties": {"enabled": {"const": true}}},
-          "phase06": {"properties": {"enabled": {"const": true}}}
+          "platform": {"properties": {"enabled": {"const": true}}},
+          "observability": {"properties": {"enabled": {"const": true}}}
         }
       }
     }

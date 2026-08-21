@@ -1,4 +1,4 @@
-name: Phase 10 release gates
+name: release qualification
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: phase10-${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,15 +47,15 @@ jobs:
           install -m 0755 "$RUNNER_TEMP/linux-amd64/helm" "$RUNNER_TEMP/helm"
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Run the canonical safe gate
-        run: ./scripts/phase09-lab.sh safe-gate
+        run: ./scripts/supply-chain-assurance.sh safe-gate
       - name: Verify final publication evidence
-        run: ./scripts/check-phase10-release.py public-release
+        run: ./scripts/check-release.py public-release
       - name: Upload restricted machine-readable scan reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: phase09-repository-reports
-          path: artifacts/phase-09/scans/
+          name: supply-chain-repository-reports
+          path: artifacts/supply-chain/scans/
           if-no-files-found: warn
           retention-days: 14
 
@@ -74,17 +74,17 @@ jobs:
         with:
           python-version: "3.12.11"
       - name: Bootstrap checksum-verified security tools
-        run: ./scripts/phase09-lab.sh bootstrap-tools
+        run: ./scripts/supply-chain-assurance.sh bootstrap-tools
       - name: Build, scan, and inventory all released images
-        run: ./scripts/phase09-lab.sh image-gate
+        run: ./scripts/supply-chain-assurance.sh image-gate
       - name: Upload image scans and SPDX SBOMs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: phase09-image-supply-chain
+          name: image-supply-chain
           path: |
-            artifacts/phase-09/scans/images/
-            artifacts/phase-09/sbom/
+            artifacts/supply-chain/scans/images/
+            artifacts/supply-chain/sbom/
           if-no-files-found: warn
           retention-days: 14
 
@@ -96,5 +96,5 @@ jobs:
     steps:
       - name: Confirm the hosted boundary
         run: |
-          printf '%s\n' 'phase10_hosted_release_gate=pass'
+          printf '%s\n' 'hosted_release_gate=pass'
           printf '%s\n' 'privileged_5g_integration=not-run-see-local-gate'

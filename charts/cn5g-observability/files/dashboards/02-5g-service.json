@@ -2,7 +2,7 @@
   "uid": "cn5g-5g-service",
   "title": "CN5G Control, Sessions, UEs, And DNNs",
   "description": "Live control-plane, PFCP session, bounded per-UE, and Data Network Name views for the accepted five-UE topology.",
-  "tags": ["cn5g", "5g", "phase-06", "operations"],
+  "tags": ["cn5g", "5g", "observability", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 3,

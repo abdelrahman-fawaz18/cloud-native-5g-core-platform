@@ -1,9 +1,9 @@
 # Metrics And Dashboards
 
-Phase 6 implements Prometheus configuration and alert rules plus Grafana data
-source/dashboard provisioning in the `cn5g-observability` Helm chart. Four
-dashboards cover platform overview, 5G control/user planes, Kubernetes
-resources, and correlated project logs.
+The `cn5g-observability` Helm chart manages Prometheus configuration and alert
+rules together with Grafana data sources and six provisioned dashboards. The
+views cover service health, 5G control and user planes, Kubernetes resources,
+correlated logs, reviewed performance, and reviewed recovery evidence.
 
 Native Open5GS metrics remain authoritative for registrations and sessions. A
 bounded per-ordinal/DNN sidecar metric fills the user-plane reachability gap.
@@ -13,6 +13,6 @@ comes from project-scoped kube-state-metrics.
 All versions, retention, scrape intervals, dashboards, and rules are declared
 in Git. Runtime validation rejects missing targets, stale 5G counts, failed
 probes, absent provisioned views, and more than 30 custom UE series. Runtime
-acceptance verified 13 required targets, five UE targets, five AMF sessions,
+acceptance verified every required target, five UE targets, five AMF sessions,
 five PFCP sessions, 20 custom UE series, and three actionable alert rules each
 firing and resolving.

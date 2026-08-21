@@ -1,6 +1,6 @@
 The CN5G observability release was submitted to {{ .Release.Namespace }}.
 
-This confirms Kubernetes API submission only. Run the project Phase 6
+This confirms Kubernetes API submission only. Run the project observability stack
 validation and alert lifecycle exercises before accepting the release.
 
 Grafana remains cluster-internal. The lifecycle helper exposes it only through

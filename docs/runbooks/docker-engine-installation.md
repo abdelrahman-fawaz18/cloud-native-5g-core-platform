@@ -3,7 +3,7 @@
 ## Purpose
 
 Install the exact Docker Engine, command-line client, containerd runtime,
-Buildx builder, and Docker Compose plugin selected for the Phase 2 container
+Buildx builder, and Docker Compose plugin selected for the Compose reference container
 baseline.
 
 Docker Engine manages images, container processes, networks, mounts, and
@@ -13,13 +13,13 @@ and creates its services, networks, and volumes as one named project.
 
 ## Preconditions
 
-- Phase 0/1 passed.
+- Project definition/1 passed.
 - `artifacts/host-state/before-docker-complete/` exists and its checksums pass.
 - The host is Ubuntu 24.04 (`noble`) on x86-64/AMD64.
 - No conflicting Docker, containerd, or `runc` package is installed.
 - At least 15 GiB disk and 6 GiB available memory remain.
 - The operator has reviewed the exact versions in
-  `versions/phase-02.env`.
+  `versions/compose-runtime.env`.
 
 ## Host Impact
 

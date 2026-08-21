@@ -2,7 +2,7 @@
   "uid": "cn5g-kubernetes",
   "title": "CN5G Kubernetes Resources",
   "description": "Kubernetes desired state, restarts, termination reasons, resource pressure, persistent claims, and Prometheus scrape health for both project namespaces.",
-  "tags": ["cn5g", "kubernetes", "phase-06", "operations"],
+  "tags": ["cn5g", "kubernetes", "observability", "operations"],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 3,

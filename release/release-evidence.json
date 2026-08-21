@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "release_candidate": "v1.0.0",
+  "status": "accepted",
+  "claims": [
+    {
+      "id": "reproducible-container-baseline",
+      "claim": "The project builds an isolated, pinned Open5GS and UERANSIM container baseline with scoped lifecycle controls.",
+      "scope_limit": "Validated on the documented Linux/AMD64 Ubuntu host; no multi-platform or production registry claim is made.",
+      "evidence": [
+        "reports/compose-reference.md",
+        "docs/image-provenance.md"
+      ]
+    },
+    {
+      "id": "kubernetes-5g-path",
+      "claim": "The kind and Helm deployment completes registration, PDU session establishment, and bidirectional user-plane validation.",
+      "scope_limit": "One local kind node, one gNB, one UPF, and synthetic subscribers; this is not a carrier production topology.",
+      "evidence": [
+        "reports/platform-validation.md",
+        "docs/architecture/complete-system-architecture.md"
+      ]
+    },
+    {
+      "id": "five-ue-two-dnn",
+      "claim": "Five concurrent synthetic UEs use unique sessions across internet and enterprise DNNs with cross-DNN isolation.",
+      "scope_limit": "Exactly five UEs and two DNN contracts were accepted; general scale and slice isolation are not claimed.",
+      "evidence": [
+        "reports/platform-validation.md",
+        "docs/architecture/complete-system-architecture.md"
+      ]
+    },
+    {
+      "id": "observability-stack",
+      "claim": "Prometheus, Grafana, Loki, Alloy, and kube-state-metrics provide bounded metrics, logs, dashboards, and exercised alerts.",
+      "scope_limit": "Single-node, single-replica local observability with no external alert delivery or high-availability claim.",
+      "evidence": [
+        "docs/architecture/observability.md",
+        "docs/runbooks/observability.md",
+        "reports/observability-validation.md"
+      ]
+    },
+    {
+      "id": "reviewed-performance",
+      "claim": "A controlled 1/3/5-UE matrix produced reviewed throughput, procedure, and resource evidence through the UE tunnel.",
+      "scope_limit": "Local experimental results are not capacity, radio performance, or production service-level objectives.",
+      "evidence": [
+        "reports/performance-results.md",
+        "docs/architecture/performance-engineering.md"
+      ]
+    },
+    {
+      "id": "reviewed-recovery",
+      "claim": "Controlled AMF, SMF, and UPF failures produced reviewed detection, restoration, and user-plane disruption evidence.",
+      "scope_limit": "Single-replica operator-assisted recovery is measured; high availability and automatic failover are not claimed.",
+      "evidence": [
+        "reports/resilience-results.md",
+        "docs/architecture/resilience-engineering.md"
+      ]
+    },
+    {
+      "id": "ci-security-supply-chain",
+      "claim": "Hosted deterministic checks and local privileged validation cover policy, secrets, image vulnerabilities, SBOMs, and live regressions.",
+      "scope_limit": "The hosted runner is deliberately unprivileged; real 5G and host-network checks remain a separate local gate.",
+      "evidence": [
+        "reports/supply-chain-assurance.md",
+        "docs/architecture/supply-chain-security.md",
+        "docs/runbooks/supply-chain-assurance.md"
+      ]
+    }
+  ]
+}

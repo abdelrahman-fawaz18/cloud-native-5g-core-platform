@@ -2,18 +2,18 @@ misconfigurations:
   - id: KSV-0119
     paths:
       - "charts/cn5g/templates/deployments-ran.yaml"
-      - "configs/kubernetes/phase-03/03-n6-routing-probes.yaml"
-      - "configs/kubernetes/phase-05/invalid-ue-pod.yaml"
+      - "configs/kubernetes/networking-qualification/03-n6-routing-probes.yaml"
+      - "configs/kubernetes/platform/invalid-ue-pod.yaml"
     statement: >-
       NET_RAW is restricted to synthetic UE and feasibility ICMP probes. The
       released chart still drops ALL capabilities first, never uses privileged
-      mode, and the Phase 9 Conftest policy rejects NET_RAW everywhere else.
+      mode, and the repository Conftest policy rejects NET_RAW everywhere else.
     expired_at: 2027-08-20
   - id: KSV-0009
     paths:
-      - "configs/kubernetes/phase-03/03-n6-routing-probes.yaml"
+      - "configs/kubernetes/networking-qualification/03-n6-routing-probes.yaml"
     statement: >-
-      The short-lived Phase 3 node observer deliberately enters the disposable
+      The short-lived networking-qualification node observer deliberately enters the disposable
       kind node network to prove an N6 route. It is not part of the released
       Helm topology and is deleted by the scoped feasibility lifecycle.
     expired_at: 2027-08-20

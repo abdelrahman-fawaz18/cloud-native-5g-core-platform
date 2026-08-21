@@ -46,19 +46,19 @@ data:
         fallback_scrape_protocol: PrometheusText0.0.4
         static_configs:
           - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "alert-exercise") }}:8080"]
-      - job_name: phase07-reviewed-results
+      - job_name: performance-reviewed-results
         # The reviewed result fixture uses the same deliberately minimal
         # BusyBox HTTP boundary as the alert exercise and therefore needs the
         # explicit Prometheus 3 text-protocol fallback.
         fallback_scrape_protocol: PrometheusText0.0.4
         static_configs:
-          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "phase07-results") }}:8080"]
-      - job_name: phase08-reviewed-results
+          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "performance-results") }}:8080"]
+      - job_name: resilience-reviewed-results
         # This reviewed result fixture is immutable, bounded, and served by
-        # the same least-privileged BusyBox HTTP boundary as Phase 7.
+        # the same least-privileged BusyBox HTTP boundary as performance campaign.
         fallback_scrape_protocol: PrometheusText0.0.4
         static_configs:
-          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "phase08-results") }}:8080"]
+          - targets: ["{{ include "cn5g-observability.componentName" (dict "root" . "component" "resilience-results") }}:8080"]
       - job_name: kubernetes-node
         scheme: https
         authorization:
@@ -96,7 +96,7 @@ data:
       - name: cn5g-platform
         rules:
           - alert: Cn5gPrometheusTargetDown
-            expr: (up{job=~"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|phase07-reviewed-results|phase08-reviewed-results"} == 0) or on() (cn5g_observability_alert_exercise{scenario="target-down"} == 1)
+            expr: (up{job=~"open5gs-.*|cn5g-ue-user-plane|kube-state-metrics|performance-reviewed-results|resilience-reviewed-results"} == 0) or on() (cn5g_observability_alert_exercise{scenario="target-down"} == 1)
             for: 30s
             labels: {severity: critical, service: cn5g}
             annotations:
@@ -114,7 +114,7 @@ data:
             for: 60s
             labels: {severity: warning, service: cn5g-control-plane}
             annotations:
-              summary: "The active AMF UE count differs from the Phase 5 contract"
+              summary: "The active AMF UE count differs from the platform contract"
               description: "Expected five active AMF sessions; observed {{ "{{" }} $value {{ "}}" }}."
           - alert: Cn5gUserPlaneProbeFailed
             expr: (cn5g_ue_user_plane_probe_success == 0) or on() (cn5g_observability_alert_exercise{scenario="user-plane"} == 1)

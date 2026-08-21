@@ -7,8 +7,8 @@ Large raw measurements stay untracked. Every reported value must identify the
 topology, versions, host resources, workload, duration, repetitions, and
 limitations.
 
-Phase 7 begins with the tracked contract in
-[`phase-07/experiment.json`](phase-07/experiment.json). Raw per-run iperf3,
+The performance experiment begins with the tracked contract in
+[`performance/experiment.json`](performance/experiment.json). Raw per-run iperf3,
 ICMP, Kubernetes, Prometheus, and host-safety captures are written beneath
 `benchmarks/raw/`, which is intentionally ignored. Only summaries generated
 from complete retained runs are eligible for review and publication.
@@ -23,14 +23,21 @@ uses an explicit 10 Mbit/s offered load per UE after an exploratory unbounded
 reverse run stalled at the one-UE condition; that bounded result is a service
 load check and must not be presented as maximum downlink capacity.
 
-After the raw campaign reaches `raw_complete`, run
-`./scripts/phase07-lab.sh analyze`. The analyzer refuses incomplete or
-hash-mismatched evidence, filters resource series by the condition's runtime
-Pod identities, and regenerates the tracked files under `phase-07/results/`
-plus the sanitized Phase 7 report.
+Use the primary interface for preparation, pilot, matrix, and analysis:
 
-Phase 8 uses the separate tracked contract in
-[`phase-08/experiment.json`](phase-08/experiment.json). It deletes exactly one
+```bash
+sudo ./scripts/cn5g-platform.sh campaign performance prepare
+sudo ./scripts/cn5g-platform.sh campaign performance pilot
+sudo ./scripts/cn5g-platform.sh campaign performance run
+sudo ./scripts/cn5g-platform.sh campaign performance analyze
+```
+
+The analyzer refuses incomplete or hash-mismatched evidence, filters resource
+series by the condition's runtime Pod identities, and regenerates the tracked
+files under `performance/results/` plus the sanitized performance report.
+
+The recovery experiment uses the separate tracked contract in
+[`resilience/experiment.json`](resilience/experiment.json). It deletes exactly one
 AMF, SMF, or UPF Pod per attempt, distinguishes Kubernetes detection and Pod
 readiness from end-to-end service recovery, and performs three repetitions per
 component only after all three pilots pass. MongoDB recreation and invalid
@@ -39,8 +46,8 @@ distributions.
 
 Each accepted recovery attempt retains Kubernetes events, bounded Loki logs,
 Prometheus ranges, a two-second service timeline, exact Pod/PVC identities,
-and pre/post validation locally under `benchmarks/raw/phase-08/`. The analyzer
+and pre/post validation locally under `benchmarks/raw/resilience/`. The analyzer
 accepts only the exact nine-condition campaign with complete baseline
-restoration and generates reviewed Phase 8 artifacts. The accepted campaign
-now supplies the Reliability and Recovery Grafana dashboard through a
+restoration and generates reviewed resilience artifacts. The accepted campaign
+supplies the Reliability and Recovery Grafana dashboard through a
 deterministic 75-series reviewed metric fixture.

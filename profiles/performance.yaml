@@ -1,0 +1,9 @@
+# Temporary overlay used only during controlled performance campaigns.
+platform:
+  enabled: true
+
+observability:
+  enabled: true
+
+performance:
+  enabled: true

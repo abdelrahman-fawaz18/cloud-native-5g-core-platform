@@ -8,7 +8,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/part-of: cn5g-platform
-cn5g.io/phase: "06"
+cn5g.io/domain: observability
 {{- end }}
 
 {{- define "cn5g-observability.componentLabels" -}}
@@ -29,7 +29,7 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 helm.sh/chart: cn5g-observability-0.1.0
 app.kubernetes.io/part-of: cn5g-platform
-cn5g.io/phase: "06"
+cn5g.io/domain: observability
 app.kubernetes.io/component: {{ .component }}
 {{- end }}
 

@@ -1,8 +1,8 @@
 {
   "uid": "cn5g-performance",
   "title": "CN5G Performance And Capacity Experiments",
-  "description": "Reviewed Phase 7 local-lab results for 1, 3, and 5 concurrent synthetic UEs. Values come from one accepted nine-condition campaign and are not live carrier-capacity metrics.",
-  "tags": ["cn5g", "phase-07", "performance", "reviewed-evidence"],
+  "description": "Reviewed performance campaign local-lab results for 1, 3, and 5 concurrent synthetic UEs. Values come from one accepted nine-condition campaign and are not live carrier-capacity metrics.",
+  "tags": ["cn5g", "performance", "performance", "reviewed-evidence"],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 2,
@@ -24,42 +24,42 @@
   "panels": [
     {
       "id": 1, "type": "text", "title": "How to read this reviewed experiment", "gridPos": {"h": 5, "w": 24, "x": 0, "y": 0},
-      "options": {"mode": "markdown", "content": "### One accepted campaign, not a live speed test\nEvery value below is generated from the reviewed Phase 7 `summary.json`: three repetitions at each of **1, 3, and 5 concurrent UEs**. The exporter repeats immutable reviewed gauges so the evidence remains visible after the temporary benchmark sidecars and 24-hour raw Prometheus history are gone. Use the **Selected UE load** variable for detailed procedure and resource panels. [Experiment contract](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/phase-07/experiment.json) · [Reviewed report](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/reports/07_phase07_performance.md) · [Machine-readable summary](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/phase-07/results/summary.json)"}
+      "options": {"mode": "markdown", "content": "### One accepted campaign, not a live speed test\nEvery value below is generated from the reviewed performance campaign `summary.json`: three repetitions at each of **1, 3, and 5 concurrent UEs**. The exporter repeats immutable reviewed gauges so the evidence remains visible after the temporary benchmark sidecars and 24-hour raw Prometheus history are gone. Use the **Selected UE load** variable for detailed procedure and resource panels. [Experiment contract](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/performance/experiment.json) · [Reviewed report](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/reports/performance-results.md) · [Machine-readable summary](https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform/blob/main/benchmarks/performance/results/summary.json)"}
     },
     {
       "id": 2, "type": "stat", "title": "Campaign state", "description": "One means the exported campaign passed the deterministic analyzer and has status reviewed_complete.", "gridPos": {"h": 5, "w": 4, "x": 0, "y": 5},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_campaign_info{status=\"reviewed_complete\"}", "instant": true}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_campaign_info{status=\"reviewed_complete\"}", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "mappings": [{"type": "value", "options": {"1": {"text": "REVIEWED", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 3, "type": "stat", "title": "Accepted conditions", "description": "Three repetitions at each of three UE levels produced nine accepted conditions.", "gridPos": {"h": 5, "w": 4, "x": 4, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_accepted_conditions", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_accepted_conditions", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 9, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 9}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 4, "type": "stat", "title": "Repetitions / level", "description": "Independent accepted repetitions for every concurrency level.", "gridPos": {"h": 5, "w": 4, "x": 8, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_repetitions", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_repetitions", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "max": 3, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 5, "type": "stat", "title": "Measured interval", "description": "iperf3 measured interval after the excluded three-second warm-up.", "gridPos": {"h": 5, "w": 4, "x": 12, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_measurement_duration_seconds", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_measurement_duration_seconds", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "s", "decimals": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 6, "type": "stat", "title": "Idle baseline", "description": "Duration of the timestamped idle observation. Component comparisons below use accepted active-condition windows filtered by runtime Pod identity.", "gridPos": {"h": 5, "w": 4, "x": 16, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_idle_baseline_duration_seconds", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_idle_baseline_duration_seconds", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "s", "decimals": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 7, "type": "stat", "title": "New restarts", "description": "Sum of new container restarts across all nine accepted conditions. Healthy accepted value is zero.", "gridPos": {"h": 5, "w": 4, "x": 20, "y": 5},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(cn5g_phase07_reviewed_new_restarts)", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "sum(cn5g_performance_reviewed_new_restarts)", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
@@ -70,56 +70,56 @@
     {
       "id": 9, "type": "bargauge", "title": "Forward TCP aggregate median", "description": "Median aggregate delivered forward TCP rate at each UE level. The non-monotonic aggregate result characterizes this local simulated path only.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 13},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"aggregate\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"aggregate\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "bps", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 10, "type": "bargauge", "title": "Forward TCP per-UE median", "description": "Median of the per-UE forward TCP delivered rates. The falling share as concurrency rises is the clearest contention signal.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 13},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"per_ue_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"per_ue_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "bps", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 11, "type": "bargauge", "title": "Forward TCP fairness", "description": "Median Jain fairness index across per-UE forward TCP results. One is perfectly equal; it does not indicate high throughput by itself.", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 22},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_jain_fairness_ratio{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_jain_fairness_ratio{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.95}, {"color": "green", "value": 0.99}]}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 12, "type": "bargauge", "title": "Reverse TCP target delivered", "description": "Median delivered reverse TCP rate divided by the fixed 10 Mbit/s-per-UE offered service load.", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 22},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_target_attainment_ratio{traffic=\"tcp_reverse\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_target_attainment_ratio{traffic=\"tcp_reverse\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.95}, {"color": "green", "value": 0.99}]}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 13, "type": "bargauge", "title": "UDP target delivered", "description": "Median delivered UDP rate divided by the fixed 1 Mbit/s-per-UE offered load.", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 22},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_target_attainment_ratio{traffic=\"udp\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_target_attainment_ratio{traffic=\"udp\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1.01, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.95}, {"color": "green", "value": 0.99}]}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 14, "type": "bargauge", "title": "Forward TCP retransmissions", "description": "Median forward retransmissions per accepted condition. The increase with UE count supports, but does not alone prove, the contention reading.", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 30},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_tcp_retransmissions{direction=\"forward\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_tcp_retransmissions{direction=\"forward\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 15, "type": "bargauge", "title": "ICMP round-trip time", "description": "Median of the accepted condition-level average ICMP round-trip times. This is local user-space simulation latency, not radio latency.", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 30},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_icmp_rtt_seconds{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_icmp_rtt_seconds{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 16, "type": "bargauge", "title": "UDP jitter p95", "description": "Median of each accepted condition's p95 UDP jitter. With three repetitions, cross-run p95 statistics remain cautious descriptive evidence.", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 30},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_udp_jitter_seconds{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_udp_jitter_seconds{statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
@@ -129,39 +129,39 @@
     },
     {
       "id": 18, "type": "stat", "title": "Registration success", "description": "Accepted successful registrations divided by registration attempts at the selected UE load.", "gridPos": {"h": 6, "w": 6, "x": 0, "y": 41},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_procedure_success_ratio{procedure=\"registration\",ue_level=\"$ue_level\"}", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_procedure_success_ratio{procedure=\"registration\",ue_level=\"$ue_level\"}", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 19, "type": "stat", "title": "PDU-session success", "description": "Accepted successful PDU sessions divided by session attempts at the selected UE load.", "gridPos": {"h": 6, "w": 6, "x": 6, "y": 41},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_procedure_success_ratio{procedure=\"pdu_session\",ue_level=\"$ue_level\"}", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_procedure_success_ratio{procedure=\"pdu_session\",ue_level=\"$ue_level\"}", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 20, "type": "stat", "title": "UDP loss", "description": "Maximum UDP packet-loss ratio in accepted conditions at the selected UE load.", "gridPos": {"h": 6, "w": 6, "x": 12, "y": 41},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_udp_loss_ratio{ue_level=\"$ue_level\",statistic=\"maximum\"}", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_udp_loss_ratio{ue_level=\"$ue_level\",statistic=\"maximum\"}", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.001}, {"color": "red", "value": 0.01}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 21, "type": "stat", "title": "Procedure restarts", "description": "New container restarts in accepted conditions at the selected UE level.", "gridPos": {"h": 6, "w": 6, "x": 18, "y": 41},
-      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_new_restarts{ue_level=\"$ue_level\"}", "instant": true}],
+      "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_new_restarts{ue_level=\"$ue_level\"}", "instant": true}],
       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
       "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 22, "type": "bargauge", "title": "Registration latency by UE level", "description": "Median across three repetitions of the condition-level median registration latency.", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 47},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_procedure_latency_seconds{procedure=\"registration\",estimator=\"condition_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_procedure_latency_seconds{procedure=\"registration\",estimator=\"condition_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 23, "type": "bargauge", "title": "PDU-session latency by UE level", "description": "Median across three repetitions of the condition-level median PDU-session establishment latency.", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 47},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_procedure_latency_seconds{procedure=\"pdu_session\",estimator=\"condition_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_procedure_latency_seconds{procedure=\"pdu_session\",estimator=\"condition_median\",statistic=\"median\"}", "instant": true, "legendFormat": "{{ue_level}} UEs"}],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
@@ -172,14 +172,14 @@
     {
       "id": 25, "type": "bargauge", "title": "Median component CPU peak", "description": "Median condition-level CPU peak for principal traffic-path components at the selected UE load. UE is the aggregate of active UE runtime containers.", "gridPos": {"h": 10, "w": 12, "x": 0, "y": 58},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_component_cpu_peak_cores{ue_level=\"$ue_level\",statistic=\"median\",component=~\"ue/ue|gnb|upf|smf|amf\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_component_cpu_peak_cores{ue_level=\"$ue_level\",statistic=\"median\",component=~\"ue/ue|gnb|upf|smf|amf\"}", "instant": true, "legendFormat": "{{component}}"}],
       "fieldConfig": {"defaults": {"unit": "cores", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
     {
       "id": 26, "type": "bargauge", "title": "Median component memory peak", "description": "Median condition-level working-set memory peak for principal traffic-path components at the selected UE load.", "gridPos": {"h": 10, "w": 12, "x": 12, "y": 58},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_component_memory_peak_bytes{ue_level=\"$ue_level\",statistic=\"median\",component=~\"ue/ue|gnb|upf|smf|amf\"}", "instant": true, "legendFormat": "{{component}}"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_component_memory_peak_bytes{ue_level=\"$ue_level\",statistic=\"median\",component=~\"ue/ue|gnb|upf|smf|amf\"}", "instant": true, "legendFormat": "{{component}}"}],
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
@@ -187,7 +187,7 @@
       "id": 27, "type": "bargauge", "title": "Forward TCP distribution at selected load", "description": "Minimum, median, nearest-rank p95, and maximum aggregate forward TCP results across the three accepted repetitions at the selected UE load.", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 68},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
-        {"refId": "A", "expr": "cn5g_phase07_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"aggregate\",ue_level=\"$ue_level\",statistic=~\"minimum|median|p95_nearest_rank|maximum\"}", "instant": true, "legendFormat": "{{statistic}}"}
+        {"refId": "A", "expr": "cn5g_performance_reviewed_throughput_bits_per_second{direction=\"forward\",scope=\"aggregate\",ue_level=\"$ue_level\",statistic=~\"minimum|median|p95_nearest_rank|maximum\"}", "instant": true, "legendFormat": "{{statistic}}"}
       ],
       "fieldConfig": {"defaults": {"unit": "bps", "min": 0, "color": {"mode": "continuous-BlPu"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
@@ -195,7 +195,7 @@
     {
       "id": 28, "type": "bargauge", "title": "Procedure p95 at selected load", "description": "Nearest-rank p95 of condition-level p95 procedure latency. With only three repetitions this equals the maximum repetition and is not a stable production tail estimate.", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 68},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "cn5g_phase07_reviewed_procedure_latency_seconds{ue_level=\"$ue_level\",estimator=\"condition_p95\",statistic=\"p95_nearest_rank\"}", "instant": true, "legendFormat": "{{procedure}}"}],
+      "targets": [{"refId": "A", "expr": "cn5g_performance_reviewed_procedure_latency_seconds{ue_level=\"$ue_level\",estimator=\"condition_p95\",statistic=\"p95_nearest_rank\"}", "instant": true, "legendFormat": "{{procedure}}"}],
       "fieldConfig": {"defaults": {"unit": "s", "min": 0, "color": {"mode": "continuous-YlRd"}}, "overrides": []},
       "options": {"displayMode": "gradient", "orientation": "horizontal", "showUnfilled": true, "valueMode": "color", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}}
     },
