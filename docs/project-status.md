@@ -13,8 +13,8 @@ Last updated: 2026-08-20
 | 6 — Observability and operational visibility | Complete | Metrics, logs, dashboards, bounded cardinality, persistence, and three alert firing/resolution lifecycles verified |
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
 | 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
-| 9 — CI and supply-chain security | Local gates accepted; hosted gate pending | Quality, schema, policy, secret, vulnerability, image, SBOM, negative-control, promotion, and privileged integration gates passed locally |
-| 10 | Not started | Final phase remains gated by Phase 9 completion |
+| 9 — CI and supply-chain security | Complete | Local privileged integration plus hosted quality, schema, policy, secret, vulnerability, image, SBOM, and negative-control gates passed |
+| 10 — Documentation and public release | Not started | Final evidence review, clean reproduction, visual documentation, release readiness, and tagged release remain |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
