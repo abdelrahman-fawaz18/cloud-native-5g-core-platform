@@ -33,6 +33,7 @@ Phase-specific extensions:
 - [Phase 9 CI and supply-chain architecture](architecture/phase-09-ci-security.md)
 - [Phase 10 release-readiness architecture](architecture/phase-10-release-readiness.md)
 - [Phase 10 release runbook](runbooks/phase-10-release.md)
+- [Privacy-reviewed dashboard evidence gallery](dashboard-gallery.md)
 
 Because this is a long-form reference, it can be read in parts:
 
@@ -45,6 +46,8 @@ Because this is a long-form reference, it can be read in parts:
   system with production practice.
 - Sections 25-30 provide troubleshooting, a concise narrative, a glossary,
   readiness questions, the documentation index, and authoritative references.
+- Sections 31-36 document the accepted multi-UE, observability, performance,
+  recovery, CI/security, and release-readiness phases.
 
 ---
 
@@ -4814,3 +4817,148 @@ The compact mental model is:
 > Hosted CI proves that the proposed artifacts obey the repository contract;
 > the local privileged gate proves that those artifacts preserve the real 5G
 > and observability behavior. Phase 9 accepted both boundaries before release.
+
+---
+
+## 36. Phase 10 Documentation, Evidence Review, And Release Readiness
+
+Phase 10 converts the accepted implementation into a release that another
+engineer can inspect and reproduce. It adds no new 5G feature. Its job is to
+make every public claim traceable, demonstrate that the repository works from
+a clean checkout, revalidate the live privileged path, review all published
+visuals for privacy, and prevent publication until every required boundary
+agrees on the same commit.
+
+### 36.1 Why a separate release phase is necessary
+
+A working cluster is not automatically a trustworthy public project. Runtime
+state can hide missing files, an uncommitted fix can make a local test pass,
+screenshots can expose private data, and a polished README can accidentally
+claim more than the experiment measured. Phase 10 addresses these gaps with
+four independent evidence classes:
+
+| Evidence class | What it establishes | What it cannot establish alone |
+| --- | --- | --- |
+| Tracked source and hosted checks | files, links, syntax, schemas, policies, scans, and builds are reproducible without private host state | SCTP, PFCP, GTP-U, TUN, or live UE behavior |
+| Clean local clone | the exact commit contains everything required by deterministic gates | a fresh Kubernetes runtime or retained database behavior |
+| Local privileged validation | the real five-UE/two-DNN platform and observability stack still pass | repository cleanliness or hosted-runner independence |
+| Reviewed public evidence | claims and screenshots are bounded, attributable, and privacy-safe | proof beyond the referenced machine-readable results and tests |
+
+The final decision requires all four; no single green check substitutes for
+the others.
+
+### 36.2 Evidence flow and commit binding
+
+```mermaid
+flowchart LR
+    SRC["Exact Git commit"] --> CLEAN["Clean-clone quality and manifest gates"]
+    SRC --> HOSTED["Hosted CI and supply-chain gates"]
+    SRC --> LIVE["Local privileged Phase 5, 6, and 9 gate"]
+    P7["Reviewed Phase 7 report"] --> CLAIMS["Bounded claim contract"]
+    P8["Reviewed Phase 8 report"] --> CLAIMS
+    LIVE --> SHOTS["Privacy-reviewed Grafana captures"]
+    SHOTS --> VM["UID, time, variables, limitation, SHA-256"]
+    CLEAN --> AUDIT{"Fail-closed release audit"}
+    HOSTED --> AUDIT
+    LIVE --> AUDIT
+    CLAIMS --> AUDIT
+    VM --> AUDIT
+    AUDIT -->|all identities match| READY["READY decision"]
+    AUDIT -->|missing, stale, or mismatched| STOP["Release blocked"]
+```
+
+The ignored clean-clone and privileged reports store the tested 40-character
+Git identity. After any tracked correction, both reports become stale by
+design and must be regenerated. This prevents results from an older commit
+being presented as evidence for a newer release candidate.
+
+### 36.3 The bounded public claim contract
+
+[`phase-10-evidence.json`](../release/phase-10-evidence.json) is the release
+claim index. Each entry has a stable identifier, a precise statement, an
+explicit scope limit, and one or more tracked evidence links. The claims cover
+the reproducible container baseline, real Kubernetes 5G path, five-UE/two-DNN
+contract, observability stack, reviewed performance and recovery experiments,
+and CI/security supply chain.
+
+The contract deliberately avoids production language. The accepted system is
+one local kind node, one gNB, one UPF, single replicas, five synthetic UEs, and
+two controlled DNN endpoints. It does not claim carrier scale, radio-channel
+performance, multi-node availability, automatic stateful failover, production
+storage, or production security.
+
+### 36.4 Visual evidence as an index, not a replacement for tests
+
+Four selected Grafana views provide a fast visual entry point:
+
+1. **Service Overview** — workload and telemetry health, alerts, registered
+   UEs, PFCP sessions, and successful user-plane paths.
+2. **Control, Sessions, UEs, And DNNs** — AMF/RAN/PFCP state and the bounded
+   per-UE operational contract across `internet` and `enterprise`.
+3. **Performance And Capacity Experiments** — the reviewed nine-condition
+   Phase 7 campaign and its method boundaries.
+4. **Reliability And Recovery** — the reviewed Phase 8 recovery campaign,
+   operator-assisted restoration, and preserved MongoDB state.
+
+The [dashboard gallery](dashboard-gallery.md) explains each image. The
+machine-readable [`dashboard-evidence.json`](../release/dashboard-evidence.json)
+records dashboard UID and title, source commit, UTC capture time, time range,
+variables, scenario, proof, limitation, file path, and SHA-256 checksum.
+`check-phase10-release.py` rejects missing roles, unknown UIDs, source-title
+mismatches, images below 1200 by 600 pixels, altered checksums, and PNG text or
+EXIF metadata.
+
+The screenshots contain only synthetic project information and exclude
+browser chrome, terminal prompts, local paths, usernames, credentials, and
+subscriber identities. Dashboard JSON, Prometheus metrics, experiment
+summaries, and validation scripts remain authoritative.
+
+### 36.5 Candidate, privileged, and clean-runtime gates
+
+The Phase 10 lifecycle helper exposes narrowly scoped actions:
+
+| Action | Boundary | Pass marker |
+| --- | --- | --- |
+| `preflight` | structure, claims, privacy, and Phase 9 policy prerequisites | `phase10_preflight=pass` |
+| `quality` | complete deterministic Phase 9 quality suite plus Phase 10 candidate checks | `phase10_quality=pass` |
+| `clean-checkout` | a new ignored clone of the exact committed candidate | `phase10_clean_checkout=pass` |
+| `verify-visuals` | capture dimensions, identities, checksums, and metadata boundary | `phase10_visual_evidence=pass` |
+| `privileged-gate` | live Phase 5/6 validation and Phase 9 local security evidence | `phase10_privileged_gate=pass` |
+| `hosted-gate` | non-privileged public-release checks suitable for GitHub Actions | `phase10_hosted_gate=pass` |
+| `release-audit` | accepted public evidence plus matching local reports for the current commit | `phase10_release_audit=pass` |
+
+Clean-checkout reproduction is intentionally different from clean deployment.
+The former proves repository completeness without changing the cluster. The
+latter recreates the project runtime and then performs scoped teardown. Since
+deleting this kind node also destroys project-owned local-path storage, the
+clean deployment/teardown exercise requires a fresh host snapshot, exact
+target inspection, and explicit operator confirmation.
+
+### 36.6 Privacy and publication boundary
+
+The publication scan rejects tracked private migration material, `AGENTS.md`,
+artifacts, kubeconfigs, packet captures, key material, token-shaped content,
+absolute user home paths, and copied terminal prompts. Raw host snapshots,
+scanner details, Software Bills of Materials, kubeconfigs, credentials, and
+live privileged evidence remain ignored with restricted permissions.
+
+Adding a release decision does not publish anything. Tag creation, a GitHub
+release, or a public image push are separate external state changes and
+require explicit authorization after all gates pass.
+
+### 36.7 Current candidate state
+
+The candidate structure, claim traceability, privacy checks, deterministic
+clean-clone run, local privileged validation, and four-image visual gate have
+passed for the recorded candidate lineage. The privileged run revalidated
+five registered UEs, five PFCP sessions, both DNNs, cross-DNN denial,
+bidirectional tunnel counters, bounded metrics, centralized logs, and six
+Grafana dashboards. A stale gNB session was detected rather than hidden; the
+project-owned dependency-ordered session repair restored the baseline before
+the successful rerun.
+
+Phase 10 remains open until the clean deployment/teardown exercise passes,
+final documentation changes are committed, clean-clone and privileged
+evidence are regenerated for that exact commit, hosted CI passes, and the
+release-readiness report records an explicit decision. Version tagging and
+GitHub release publication follow only after separate approval.

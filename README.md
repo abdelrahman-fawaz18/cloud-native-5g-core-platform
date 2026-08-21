@@ -41,6 +41,18 @@ published a sixth reviewed reliability dashboard. See the [project
 status](docs/project-status.md), [container report](reports/02_container_baseline.md),
 and [architecture decisions](docs/adr/README.md).
 
+## Visual Proof
+
+| Healthy five-UE service | Reviewed performance evidence |
+| --- | --- |
+| ![Healthy CN5G service overview](docs/images/dashboards/service-overview-healthy.png) | ![Reviewed Phase 7 performance experiment](docs/images/dashboards/phase07-performance-reviewed.png) |
+
+These Grafana views are generated from version-controlled dashboards and
+checked against accepted machine-readable evidence. The
+[dashboard evidence gallery](docs/dashboard-gallery.md) also shows the
+per-UE/two-DNN service contract and reviewed recovery experiment, with the
+scope and limitations of every capture.
+
 ## Verified Phase 2 Baseline
 
 Phase 2 establishes the protocol-correct container reference that later
@@ -572,6 +584,7 @@ machine-readable measurements, and concise reports.
 - [Phase 9 detailed implementation model](docs/README.md#35-phase-9-continuous-integration-and-supply-chain-security)
 - [Phase 10 release-readiness architecture](docs/architecture/phase-10-release-readiness.md)
 - [Phase 10 release runbook](docs/runbooks/phase-10-release.md)
+- [Privacy-reviewed dashboard evidence gallery](docs/dashboard-gallery.md)
 - [Third-party software notices](THIRD_PARTY_NOTICES.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)

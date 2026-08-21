@@ -16,6 +16,7 @@ CONTRACT = ROOT / "release" / "phase-10-evidence.json"
 ARCHITECTURE = ROOT / "docs" / "architecture" / "phase-10-release-readiness.md"
 RUNBOOK = ROOT / "docs" / "runbooks" / "phase-10-release.md"
 VISUAL_RULES = ROOT / "docs" / "images" / "dashboards" / "README.md"
+GALLERY = ROOT / "docs" / "dashboard-gallery.md"
 
 
 class Phase10StaticTests(unittest.TestCase):
@@ -114,6 +115,16 @@ class Phase10StaticTests(unittest.TestCase):
         ):
             self.assertIn(required, public)
         self.assertNotIn("/home/", public)
+
+    def test_gallery_links_every_required_visual_role(self):
+        gallery = GALLERY.read_text(encoding="utf-8")
+        for image in (
+            "service-overview-healthy.png",
+            "telecom-sessions-and-dnns-healthy.png",
+            "phase07-performance-reviewed.png",
+            "phase08-reliability-reviewed.png",
+        ):
+            self.assertIn(image, gallery)
 
     def test_license_and_third_party_notices_exist(self):
         license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")

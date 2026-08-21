@@ -71,6 +71,7 @@ def check_structure() -> None:
         "tests/test_phase10_static.py",
         "docs/architecture/phase-10-release-readiness.md",
         "docs/runbooks/phase-10-release.md",
+        "docs/dashboard-gallery.md",
         "docs/images/dashboards/README.md",
     )
     for item in required:

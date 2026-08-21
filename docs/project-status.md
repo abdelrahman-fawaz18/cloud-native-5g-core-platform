@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 | Phase | State | Current gate |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ Last updated: 2026-08-20
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
 | 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
 | 9 — CI and supply-chain security | Complete | Local privileged integration plus hosted quality, schema, policy, secret, vulnerability, image, SBOM, and negative-control gates passed |
-| 10 — Documentation and public release | In progress | Candidate claim/privacy/license gates pass; clean-clone, live, visual, final readiness, and separately authorized publication gates remain |
+| 10 — Documentation and public release | In progress | Candidate structure, claims, privacy, clean-clone, local privileged validation, and four dashboard captures pass; clean deployment/teardown, final commit-bound reruns, hosted CI, and separately authorized publication remain |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -297,5 +297,6 @@ reversible Helm rollout. The complete Phase 5 and Phase 6 regressions passed,
 including five unique UE sessions, both DNN paths, cross-DNN isolation,
 node/container metrics, centralized logs, and six dashboards. The local
 privileged report also revalidated nine reviewed Phase 7 and nine reviewed
-Phase 8 conditions. Phase 9 remains in progress until the GitHub-hosted
-workflow passes for the exact reviewed feature-branch commit.
+Phase 8 conditions. GitHub Actions then passed the safe, five-image supply-chain,
+and aggregate release-gate jobs for the exact reviewed implementation commit,
+completing Phase 9.
