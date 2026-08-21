@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -42,7 +42,12 @@ host would create an unacceptable security boundary.
   capabilities that ordinary hosted checks do not guarantee.
 - The host contains two unrelated technical environments that must not share a
   CI blast radius.
-- No CI workflow or runner is configured yet.
+- `.github/workflows/ci.yml` now runs two hosted, unprivileged jobs with
+  read-only repository permissions and immutable Action identities.
+- `scripts/phase09-lab.sh privileged-gate` runs the accepted Phase 5 and Phase
+  6 integration validators locally and records a restricted JSON result.
+- The hosted workflow contains no deployment, secret consumption, or
+  self-hosted runner registration.
 
 ## Consequences
 

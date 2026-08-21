@@ -18,7 +18,7 @@ and rollback behavior.
 
 ## Decision
 
-- Build `cn5g/benchmark:0.1.0` from digest-pinned Alpine 3.22.1 with exact
+- Build `cn5g/benchmark:0.1.0` from digest-pinned Alpine 3.22.5 with exact
   `iperf3`, `iproute2`, and `iputils` package versions.
 - Add an idle, unprivileged benchmark client sidecar to each UE Pod and an
   unprivileged iperf3 server sidecar to each controlled DNN endpoint only when

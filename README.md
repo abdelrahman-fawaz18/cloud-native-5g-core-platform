@@ -17,7 +17,9 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-Phases 0-8 are complete. Phase 7 retained its exploratory failures, passed a
+Phases 0-9 are complete. Phase 9 accepted both its local privileged integration
+gate and its GitHub-hosted CI and supply-chain gates for the reviewed
+implementation commit. Phase 7 retained its exploratory failures, passed a
 route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
 produced deterministic reviewed summaries and plots, and passed its scoped
 rollback with the Phase 5/6 regression gates intact. The accepted runtime has
@@ -534,6 +536,10 @@ machine-readable measurements, and concise reports.
 - [Phase 8 reviewed reliability report](reports/08_phase08_reliability.md)
 - [Phase 8 recovery runbook](docs/runbooks/phase-08-recovery.md)
 - [Phase 8 machine-readable experiment contract](benchmarks/phase-08/experiment.json)
+- [Phase 9 CI and supply-chain architecture](docs/architecture/phase-09-ci-security.md)
+- [Phase 9 release-gate runbook](docs/runbooks/phase-09-release-gate.md)
+- [Phase 9 reviewed security report](reports/09_phase09_security.md)
+- [Phase 9 detailed implementation model](docs/README.md#35-phase-9-continuous-integration-and-supply-chain-security)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)

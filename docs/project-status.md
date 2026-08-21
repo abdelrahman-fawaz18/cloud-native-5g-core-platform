@@ -13,7 +13,8 @@ Last updated: 2026-08-20
 | 6 — Observability and operational visibility | Complete | Metrics, logs, dashboards, bounded cardinality, persistence, and three alert firing/resolution lifecycles verified |
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
 | 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
-| 9-10 | Not started | Each later phase remains gated by the preceding verified baseline |
+| 9 — CI and supply-chain security | Local gates accepted; hosted gate pending | Quality, schema, policy, secret, vulnerability, image, SBOM, negative-control, promotion, and privileged integration gates passed locally |
+| 10 | Not started | Final phase remains gated by Phase 9 completion |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -279,3 +280,22 @@ resolved. A 2,606-second interactive Grafana soak retained the same Ready Pod
 with zero restarts and measured a 468.6 MiB peak under the 768 MiB limit. The
 complete Phase 5 and Phase 6 regression passed, and the post-Phase-8 host-state
 snapshot was captured locally. Phase 8 is complete.
+
+Phase 9 local evidence is accepted. Eleven tools were checksum-verified, all
+third-party workflow actions were pinned to full commit identities, 190 tests
+passed, 70 rendered resources passed Kubernetes 1.36 schema validation, and
+910 policy evaluations passed. Gitleaks found no unresolved secret in 40
+commits, Trivy found no unresolved fixed high/critical repository or image
+finding, and representative unpinned-action, floating-image, privileged-Pod,
+and synthetic-token controls were all rejected.
+
+Five local images passed the image gate and produced five SPDX 2.3 JSON SBOMs.
+The gate rejected the original Alpine 3.22.1 endpoint, rebuilt both
+Alpine-based images from the official Alpine 3.22.5 security-maintenance
+manifest, and promoted only the active data-network endpoint through a
+reversible Helm rollout. The complete Phase 5 and Phase 6 regressions passed,
+including five unique UE sessions, both DNN paths, cross-DNN isolation,
+node/container metrics, centralized logs, and six dashboards. The local
+privileged report also revalidated nine reviewed Phase 7 and nine reviewed
+Phase 8 conditions. Phase 9 remains in progress until the GitHub-hosted
+workflow passes for the exact reviewed feature-branch commit.

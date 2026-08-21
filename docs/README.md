@@ -2302,7 +2302,10 @@ After this foundation, use the following review order:
 16. [Phase 8 recovery model](#34-phase-8-controlled-reliability-and-recovery)
     — exact Pod faults, detection/readiness/service boundaries, corrected
     sample freshness, repeated recovery, safety controls, and reviewed results.
-17. [Complete accepted-system architecture](architecture/complete-system-architecture.md)
+17. [Phase 9 CI and supply-chain model](#35-phase-9-continuous-integration-and-supply-chain-security)
+    — hosted and privileged boundaries, immutable tools, policy as code,
+    secret/vulnerability scans, SBOMs, negative controls, and image promotion.
+18. [Complete accepted-system architecture](architecture/complete-system-architecture.md)
     — Helm and Kubernetes ownership, every Pod/container, 5G and telemetry
     interfaces, address/port inventory, probes, storage, security, and a
     registration-to-ping walkthrough.
@@ -4622,3 +4625,188 @@ The compact mental model is:
 > single-replica topology, so the automation labelled the operator repair
 > honestly, validated the complete service, and published only the reviewed,
 > sanitized evidence.
+
+---
+
+## 35. Phase 9 Continuous Integration And Supply-Chain Security
+
+Phase 9 turns the checks accumulated in earlier phases into repeatable release
+gates. Continuous Integration (CI) means that a clean hosted runner checks each
+proposed change automatically. Supply-chain security means that the project
+also verifies the tools, source inputs, container contents, workflow actions,
+and Kubernetes permissions used to produce and operate that change.
+
+This phase separates two trust boundaries deliberately:
+
+```mermaid
+flowchart LR
+    C["Commit or pull request"] --> H["GitHub-hosted runner"]
+    H --> Q["Quality and deterministic tests"]
+    H --> M["Helm schema and policy checks"]
+    H --> S["Secret and vulnerability scans"]
+    H --> I["Build, scan, and inventory images"]
+    Q --> HG["Hosted gate"]
+    M --> HG
+    S --> HG
+    I --> HG
+
+    O["Trusted local operator"] --> P["Local privileged gate"]
+    P --> P5["Real Phase 5 validation"]
+    P5 --> P6["Real Phase 6 validation"]
+    P6 --> LE["Permission-restricted local evidence"]
+
+    HG --> R{"Release review"}
+    LE --> R
+```
+
+The hosted runner never receives a kubeconfig, subscriber material, Docker
+socket, TUN device, or access to the personal cluster. It can prove that code,
+manifests, policies, and images satisfy their declared contracts. Only the
+trusted local operator can prove real SCTP, PFCP, GTP-U, UE tunnel, DNN,
+Prometheus, Loki, and Grafana behavior. Neither result substitutes for the
+other.
+
+### 35.1 Immutable tools and workflow identity
+
+Eleven command-line tools have exact versions, official release URLs, and
+SHA-256 checksums in `versions/phase-09.env`. The bootstrap action installs
+them only under ignored project artifacts and verifies every downloaded byte
+before execution. GitHub Actions references use full 40-character commit
+identities rather than mutable tags.
+
+Workflow permissions are exactly `contents: read`; checkout does not retain
+credentials; jobs use Ubuntu 24.04 hosted runners and explicit timeouts; and
+the workflow does not use `pull_request_target`, repository secrets, a
+self-hosted runner, image pushes, or cluster deployment.
+
+### 35.2 Manifest policy as code
+
+Policy as code expresses security requirements as executable rules rather
+than relying only on review prose. Conftest evaluates Open Policy Agent (OPA)
+Rego rules against all 70 deterministically rendered Kubernetes resources.
+Kubeconform separately validates them against the Kubernetes 1.36 schema.
+
+The default policy rejects privileged containers, host namespaces, unexpected
+host paths, floating images, privilege escalation, broad Linux capabilities,
+and unnecessary ServiceAccount tokens. Narrow exceptions are tied to exact
+workloads and real 5G requirements:
+
+- UE and UPF containers need `/dev/net/tun` and `NET_ADMIN` to configure their
+  tunnel interfaces;
+- UE probes retain `NET_RAW` for source-bound packet tests;
+- MongoDB keeps only the identity and ownership capabilities required by its
+  pinned image; and
+- Prometheus receives GET-only `nodes/proxy` access so kubelet and cAdvisor
+  metrics remain TLS-verified through the Kubernetes API proxy.
+
+The accepted render passed 910 policy evaluations with no warnings, failures,
+or exceptions.
+
+### 35.3 Scanning and the SBOM
+
+Gitleaks scans both Git history and the working tree for credentials. Trivy
+scans repository dependencies, configuration, secrets, and all five project
+images for fixed high or critical findings. A Software Bill of Materials
+(SBOM) is a machine-readable inventory of packages inside an artifact; Syft
+generates one SPDX 2.3 JSON SBOM for each image.
+
+An SBOM is not a statement that an image is perfectly secure. It records what
+was present so later audits and vulnerability matching can be precise.
+
+The first image scan did useful work: it rejected Alpine 3.22.1 because fixed
+high/critical OpenSSL, musl, and zlib findings were present. The two
+Alpine-based images were rebuilt from the official Linux/AMD64 Alpine 3.22.5
+security-maintenance manifest and then passed the same gate. The active
+data-network export is:
+
+```text
+sha256:7a5f7ab23fe5eefb12a6a2de097d01c4dbdc939be741561dc90e8e7b3c3d4bb8
+size: 5,114,825 bytes
+```
+
+Five images passed high/critical vulnerability and secret scanning, and five
+structurally valid SPDX SBOMs were retained locally with restricted
+permissions. Raw scanner output remains ignored because it can expose package
+and filesystem metadata; only reviewed conclusions belong in the repository.
+
+### 35.4 Negative controls
+
+A clean repository alone does not prove a detector works. Phase 9 therefore
+injects four temporary bad inputs and requires each control to reject it:
+
+| Negative input | Required detector behavior |
+| --- | --- |
+| Action referenced as `@main` | workflow policy rejects the mutable identity |
+| Dockerfile using `alpine:latest` | image-source policy rejects the floating base |
+| privileged Kubernetes Pod | Rego policy rejects privileged mode |
+| generated GitHub-like synthetic token | Gitleaks rejects the secret pattern |
+
+These fixtures exist only in an ignored temporary directory and are removed
+after the test. No real credential is used.
+
+### 35.5 Controlled image promotion and rollback
+
+Because the Alpine remediation changed an active endpoint, its deployment was
+kept separate from scanning. The lifecycle first verified the exact image ID,
+all five clean scan reports, and all five SBOMs. It then retained the previous
+data-network image, recorded Helm revision 16, loaded only the accepted image
+into the project kind node, completed a server-side Helm dry run, and upgraded
+the core to revision 17.
+
+An expected-image annotation on the Pod template forced Kubernetes to replace
+both DNN endpoint Pods rather than silently reusing the mutable local tag. The
+promotion action is resumable: it recognizes an already active accepted image
+and skips a second core upgrade. Its explicit rollback action restores the
+retained image and Helm revision only after the operator supplies
+`--confirm`; it does not delete namespaces, volumes, routes, images, or the
+cluster.
+
+The first post-rollout validator found stale UPF source-policy state in the
+long-running single-node lab. The established dependency-ordered Phase 5
+session repair restored it. The resumed promotion then passed all five UE
+registrations and PDU sessions, both DNNs, cross-DNN denial, unique F-SEIDs,
+bidirectional tunnel counters, metrics, logs, and six dashboards.
+
+### 35.6 Accepted local and hosted evidence
+
+The local Phase 9 gate accepted:
+
+- 190 repository tests;
+- 70 schema-valid rendered Kubernetes resources;
+- 910 passing policy evaluations;
+- clean 40-commit secret-history and repository security scans;
+- four passing negative-control detections;
+- five clean image scans and five SPDX SBOMs;
+- the remediated data-network rollout;
+- the complete Phase 5 and Phase 6 regression; and
+- nine reviewed Phase 7 plus nine reviewed Phase 8 conditions.
+
+This proves repeatable controls for this repository and accepted local lab. It
+does **not** prove the absence of every vulnerability, signed provenance,
+registry security, production hardening, multi-node availability, or carrier-
+grade security.
+
+GitHub Actions run `32419738287` independently evaluated implementation commit
+`75e346c330edf35c9f8310ea291d267062f4d24b`. Its safe job passed in 50 seconds;
+its five-image build, scan, and SPDX SBOM job passed in 7 minutes 48 seconds;
+and the aggregate release gate passed only after both jobs succeeded. Review of
+the two retained artifact bundles confirmed zero Gitleaks findings, zero
+unresolved fixed high/critical Trivy findings, zero reported image secrets,
+and five structurally valid SPDX 2.3 inventories.
+
+The detailed sources are:
+
+| Question | Source |
+| --- | --- |
+| How are hosted and local trust boundaries designed? | [`phase-09-ci-security.md`](architecture/phase-09-ci-security.md) |
+| How are the gates run and recovered? | [`phase-09-release-gate.md`](runbooks/phase-09-release-gate.md) |
+| Which controls were accepted? | [`09_phase09_security.md`](../reports/09_phase09_security.md) |
+| Which versions and checksums are trusted? | [`phase-09.env`](../versions/phase-09.env) |
+| Which Kubernetes rules are enforced? | [`kubernetes.rego`](../policy/kubernetes.rego) |
+| Why is the privileged gate local? | [`ADR-0008`](adr/0008-ci-privileged-test-boundary.md) |
+
+The compact mental model is:
+
+> Hosted CI proves that the proposed artifacts obey the repository contract;
+> the local privileged gate proves that those artifacts preserve the real 5G
+> and observability behavior. Phase 9 accepted both boundaries before release.

@@ -96,7 +96,7 @@ class Phase07StaticTests(unittest.TestCase):
 
     def test_benchmark_image_source_and_packages_are_exactly_pinned(self):
         self.assertIn(
-            "FROM alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f",
+            "FROM alpine:3.22.5@sha256:7c8cb692ae09657cbc4a3f3cbd0e8d5a2690ba38386aaaf252dbb060bf5eb2e6",
             self.dockerfile,
         )
         for package in (
