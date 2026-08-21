@@ -277,6 +277,12 @@ manifest rather than assuming that its suffix equals the new rollback
 revision. Post-apply rollback and already-complete subscriber cleanup are both
 verified resumable states.
 
+If a deliberately deleted kind cluster leaves an ignored rollback checkpoint,
+the replacement Phase 4 release has a different PVC identity and Helm
+lineage. `phase05-lab.sh reset-stale-state --confirm` verifies both mismatches
+and archives the old mode-0600 checkpoint instead of deleting or silently
+reusing it. The normal Phase 5 preflight can then establish a new lineage.
+
 ## Phase 6 Observability Lifecycle
 
 The Phase 6 workflow begins only from a validated Phase 5 release:

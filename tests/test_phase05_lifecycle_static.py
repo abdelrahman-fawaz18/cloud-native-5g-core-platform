@@ -149,6 +149,17 @@ class Phase05LifecycleStaticTests(unittest.TestCase):
         self.assertNotIn("db.dropDatabase", self.lifecycle)
         self.assertNotIn("deleteMany({})", self.lifecycle)
 
+    def test_stale_state_reset_preserves_old_cluster_lineage(self):
+        for expected in (
+            "reset-stale-state --confirm",
+            "stale-state reset requires the deployed Phase 4 topology",
+            "rollback state belongs to the current PVC and is not stale",
+            "refusing stale-state reset with a matching Helm revision",
+            'mv -- "$state_file" "$archive"',
+            "phase05_stale_state=archived",
+        ):
+            self.assertIn(expected, self.lifecycle)
+
     def test_reprovision_waiter_detects_success_failure_and_timeout(self):
         self.assertIn("wait_for_reprovision_job", self.lifecycle)
         self.assertIn("reprovision_job_completion=pass", self.lifecycle)

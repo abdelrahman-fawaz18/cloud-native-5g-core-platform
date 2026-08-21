@@ -106,6 +106,18 @@ sudo ./scripts/kind-feasibility.sh delete --confirm
 sudo ./scripts/kind-feasibility.sh verify-delete
 ```
 
+If the clean exercise stops because it exposes a repository defect, correct
+and commit that defect before continuing. The restricted target record still
+contains the deleted node identity. Rebind it only to a clean descendant
+commit after a different replacement node exists:
+
+```bash
+sudo ./scripts/phase10-lab.sh rebind-clean-runtime
+```
+
+The action rejects a dirty tree, a non-descendant commit, a source node that
+still exists, or an unchanged replacement-node identity.
+
 Create a new node and deploy the final stack from tracked inputs and retained
 local Secret material:
 

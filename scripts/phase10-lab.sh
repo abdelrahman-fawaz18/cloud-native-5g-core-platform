@@ -5,7 +5,7 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 Usage: ./scripts/phase10-lab.sh ACTION
-       sudo ./scripts/phase10-lab.sh privileged-gate|clean-runtime-preflight|verify-clean-deployment|verify-clean-teardown
+       sudo ./scripts/phase10-lab.sh privileged-gate|clean-runtime-preflight|rebind-clean-runtime|verify-clean-deployment|verify-clean-teardown
 
 Actions:
   preflight       Check the Phase 10 candidate structure, claim links,
@@ -16,6 +16,10 @@ Actions:
   clean-runtime-preflight
                   Record the exact existing project cluster/PVC targets before
                   the separately confirmed clean deployment exercise.
+  rebind-clean-runtime
+                  After a stopped lifecycle exposes and fixes repository code,
+                  preserve the deleted-node identity while rebinding the
+                  in-progress clean exercise to its descendant commit.
   verify-clean-deployment
                   Require a newly created kind node, run the local privileged
                   gate, and record the clean deployment for this Git commit.
@@ -39,7 +43,7 @@ EOF
 
 action=${1:-}
 case "$action" in
-  preflight|quality|clean-checkout|clean-runtime-preflight|verify-clean-deployment|verify-clean-teardown|verify-visuals|privileged-gate|hosted-gate|release-audit|status)
+  preflight|quality|clean-checkout|clean-runtime-preflight|rebind-clean-runtime|verify-clean-deployment|verify-clean-teardown|verify-visuals|privileged-gate|hosted-gate|release-audit|status)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     ;;
   -h|--help) usage; exit 0 ;;
@@ -192,6 +196,46 @@ clean_runtime_preflight() {
   printf 'phase10_clean_runtime_targets=reviewed cluster=%s node=%s pvcs=%s\n' \
     "$KIND_CLUSTER_NAME" "$source_node_id" "$pvc_count"
   printf 'warning=confirmed_kind_deletion_will_remove_project_owned_local_path_data\n'
+}
+
+rebind_clean_runtime() {
+  require_sudo_operator
+  require_command docker git jq
+  require_clean_candidate
+  [[ -f $clean_runtime_state && ! -L $clean_runtime_state ]] || {
+    printf 'error: clean-runtime target review evidence is absent\n' >&2
+    return 1
+  }
+  local previous_commit commit source_node_id recreated_node_id
+  previous_commit=$(jq -r '.git_commit // ""' "$clean_runtime_state")
+  commit=$(current_commit)
+  source_node_id=$(jq -r '.source_node_id // ""' "$clean_runtime_state")
+  [[ -n $previous_commit && -n $source_node_id ]] || {
+    printf 'error: clean-runtime target review identity is incomplete\n' >&2
+    return 1
+  }
+  git -C "$project_root" merge-base --is-ancestor "$previous_commit" "$commit" || {
+    printf 'error: clean-runtime rebind requires a descendant commit\n' >&2
+    return 1
+  }
+  ! docker container inspect "$source_node_id" >/dev/null 2>&1 || {
+    printf 'error: reviewed source kind node still exists\n' >&2
+    return 1
+  }
+  recreated_node_id=$(docker inspect --format '{{.Id}}' "$node_container")
+  [[ $recreated_node_id != "$source_node_id" ]] || {
+    printf 'error: replacement kind node identity did not change\n' >&2
+    return 1
+  }
+  jq --arg previous_commit "$previous_commit" --arg commit "$commit" \
+    --arg rebound_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '.target_review_commit=(.target_review_commit // $previous_commit) | .git_commit=$commit | .rebound_at=$rebound_at | .rebind_reason="repository correction after fail-closed clean deployment stop"' \
+    "$clean_runtime_state" >"${clean_runtime_state}.tmp"
+  mv -- "${clean_runtime_state}.tmp" "$clean_runtime_state"
+  chown "$SUDO_UID:$SUDO_GID" "$clean_runtime_state"
+  chmod 0600 "$clean_runtime_state"
+  printf 'phase10_clean_runtime_rebind=pass from=%s to=%s source_node=preserved\n' \
+    "$previous_commit" "$commit"
 }
 
 verify_clean_deployment() {
@@ -392,6 +436,7 @@ case "$action" in
   quality) quality ;;
   clean-checkout) clean_checkout ;;
   clean-runtime-preflight) clean_runtime_preflight ;;
+  rebind-clean-runtime) rebind_clean_runtime ;;
   verify-clean-deployment) verify_clean_deployment ;;
   verify-clean-teardown) verify_clean_teardown ;;
   verify-visuals) verify_visuals ;;

@@ -27,6 +27,10 @@ Actions:
   rollback        Restore the saved Phase 4 revision, remove only four
                   Phase 5-managed subscriber records, and validate Phase 4.
   status          Show the Helm release and Phase 5 namespace-scoped objects.
+  reset-stale-state --confirm
+                  Preserve and archive a rollback state from a deleted cluster
+                  only when the current release is a different Phase 4/PVC
+                  lineage. This never changes the live release or database.
   remove-secret --confirm
                   Remove only the verified Phase 5 Secret after rollback.
 
@@ -38,9 +42,9 @@ EOF
 action=${1:-}
 case "$action" in
   preflight|prepare-secret|upgrade|repair-sessions|validate|test-invalid-ue|test-reprovision|observe-resources|rollback|status) ;;
-  remove-secret)
+  remove-secret|reset-stale-state)
     if [[ ${2:-} != "--confirm" ]]; then
-      printf 'error: remove-secret requires --confirm\n' >&2
+      printf 'error: %s requires --confirm\n' "$action" >&2
       exit 2
     fi
     ;;
@@ -60,8 +64,8 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
   exit 3
 fi
 
-for required_command in awk base64 chmod cmp df docker helm install jq kubectl \
-  mktemp python3 rm sed seq sha256sum sleep sort stat unlink; do
+for required_command in awk base64 chmod cmp date df docker helm install jq \
+  kubectl mktemp mv python3 rm sed seq sha256sum sleep sort stat unlink; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     printf 'error: required command is unavailable: %s\n' "$required_command" >&2
     exit 4
@@ -444,6 +448,38 @@ verify_pvc_identity() {
     return 1
   fi
   printf 'mongodb_pvc_identity=preserved\n'
+}
+
+reset_stale_state() {
+  verify_release_deployed
+  if [[ $(release_phase05_enabled) != "false" ]]; then
+    printf 'error: stale-state reset requires the deployed Phase 4 topology\n' >&2
+    return 1
+  fi
+  read_state
+  local current_revision pvc_json current_uid current_volume archive
+  current_revision=$(release_json | jq -er '.version')
+  pvc_json=$("${kubectl_namespace[@]}" get pvc \
+    "mongodb-data-${release}-mongodb-0" --output json)
+  current_uid=$(jq -er '.metadata.uid' <<<"$pvc_json")
+  current_volume=$(jq -er '.spec.volumeName' <<<"$pvc_json")
+  if [[ $current_uid == "$PVC_UID" || $current_volume == "$PVC_VOLUME" ]]; then
+    printf 'error: rollback state belongs to the current PVC and is not stale\n' >&2
+    return 1
+  fi
+  if [[ $current_revision == "$BASE_REVISION" ]]; then
+    printf 'error: refusing stale-state reset with a matching Helm revision\n' >&2
+    return 1
+  fi
+  archive="${state_file}.stale-$(date -u +%Y%m%dT%H%M%SZ)"
+  [[ ! -e $archive && ! -L $archive ]] || {
+    printf 'error: stale-state archive target already exists\n' >&2
+    return 1
+  }
+  mv -- "$state_file" "$archive"
+  chmod 0600 "$archive"
+  printf 'phase05_stale_state=archived old_revision=%s current_revision=%s\n' \
+    "$BASE_REVISION" "$current_revision"
 }
 
 controlled_upgrade() {
@@ -988,6 +1024,7 @@ case "$action" in
   test-reprovision) require_cluster; test_reprovision ;;
   observe-resources) require_cluster; observe_phase05_resources ;;
   rollback) require_cluster; verify_release_deployed; controlled_rollback ;;
+  reset-stale-state) require_cluster; reset_stale_state ;;
   status)
     require_cluster
     helm --kubeconfig "$kubeconfig" --namespace "$namespace" list --all
