@@ -118,6 +118,17 @@ sudo ./scripts/phase10-lab.sh rebind-clean-runtime
 The action rejects a dirty tree, a non-descendant commit, a source node that
 still exists, or an unchanged replacement-node identity.
 
+If the fresh Phase 5 or Phase 6 lifecycle detects an ignored checkpoint from
+the deleted cluster, archive the checkpoint only through its guarded action:
+
+```bash
+sudo ./scripts/phase05-lab.sh reset-stale-state --confirm
+sudo ./scripts/phase06-lab.sh reset-stale-state --confirm
+```
+
+Both actions require proof that the live release and persistent-volume
+lineage differ from the retained state; neither action changes the live stack.
+
 Create a new node and deploy the final stack from tracked inputs and retained
 local Secret material:
 

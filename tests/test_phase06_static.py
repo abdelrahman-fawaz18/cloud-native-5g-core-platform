@@ -372,6 +372,17 @@ class Phase06StaticTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.lifecycle)
 
+    def test_stale_state_reset_archives_only_a_proven_old_lineage(self):
+        for expected in (
+            "reset-stale-state --confirm",
+            "stale-state reset requires the deployed Phase 5 topology",
+            "stale-state reset requires observability to be absent",
+            "refusing stale-state reset with a matching Helm revision",
+            'mv -- "$file" "$archive"',
+            "phase06_stale_state=archived",
+        ):
+            self.assertIn(expected, self.lifecycle)
+
     def test_public_phase06_artifacts_do_not_embed_local_identity_or_secrets(self):
         content = self.core_rendered + self.obs_rendered + self.lifecycle + self.versions
         self.assertNotIn("/home/", content)

@@ -285,6 +285,12 @@ reusing it. The normal Phase 5 preflight can then establish a new lineage.
 
 ## Phase 6 Observability Lifecycle
 
+The equivalent `phase06-lab.sh reset-stale-state --confirm` recovery is
+available before a fresh observability install. It requires a Phase 5-only
+replacement release, an absent observability release, and a mismatching saved
+core revision. It validates and archives the old base, dashboard-hardening,
+and Grafana-soak checkpoints without changing Kubernetes resources.
+
 The Phase 6 workflow begins only from a validated Phase 5 release:
 
 ```bash

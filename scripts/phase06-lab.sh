@@ -25,6 +25,10 @@ Actions:
                   After at least 30 minutes of interactive dashboard use,
                   verify no Grafana restart/OOM and at least 20% memory
                   headroom under the accepted 768 MiB limit.
+  reset-stale-state --confirm
+                  Archive Phase 6 checkpoints from a deleted cluster only
+                  when the replacement release is a different Phase 5
+                  lineage and observability is not installed.
   rollback-hardening --confirm
                   Roll back only the observability release to the revision
                   recorded before Stage A, preserving both telemetry PVCs.
@@ -44,7 +48,7 @@ EOF
 action=${1:-}
 case "$action" in
   preflight|prepare-secret|install|validate|test-alerts|grafana|verify-grafana-soak|status) ;;
-  rollback-hardening|uninstall|destroy)
+  reset-stale-state|rollback-hardening|uninstall|destroy)
     if [[ ${2:-} != "--confirm" ]]; then
       printf 'error: %s requires --confirm\n' "$action" >&2
       exit 2
@@ -67,7 +71,7 @@ if [[ ${project_root##*/} != "cloud-native-5g-core-platform" ]]; then
 fi
 
 for required_command in awk base64 chmod cmp curl date df docker grep helm jq \
-  kubectl mktemp openssl python3 rm sed sha256sum sleep stat; do
+  kubectl mktemp mv openssl python3 rm sed sha256sum sleep stat; do
   command -v "$required_command" >/dev/null 2>&1 || {
     printf 'error: required command is unavailable: %s\n' "$required_command" >&2
     exit 4
@@ -283,6 +287,72 @@ prepare_secret() {
   fi
   verify_secret
   printf 'phase06_secret_preparation=pass\n'
+}
+
+reset_stale_state() {
+  require_cluster
+  verify_phase05_release
+  [[ -f $state_file && ! -L $state_file ]] || {
+    printf 'error: Phase 6 base checkpoint is absent or unsafe\n' >&2
+    return 1
+  }
+  local mode saved_revision current_revision phase06_enabled timestamp file archive
+  mode=$(stat -c '%a' "$state_file")
+  [[ $mode == 600 ]] || {
+    printf 'error: Phase 6 base checkpoint must use mode 600\n' >&2
+    return 1
+  }
+  saved_revision=$(awk -F= '$1 == "BASE_CORE_REVISION" && $2 ~ /^[0-9]+$/ {print $2}' "$state_file")
+  [[ -n $saved_revision ]] || {
+    printf 'error: Phase 6 base checkpoint is invalid\n' >&2
+    return 1
+  }
+  current_revision=$(helm --kubeconfig "$kubeconfig" --namespace "$core_namespace" \
+    status "$core_release" --output json | jq -er '.version')
+  phase06_enabled=$(helm --kubeconfig "$kubeconfig" --namespace "$core_namespace" \
+    get values "$core_release" --all --output json | jq -r '.phase06.enabled // false')
+  [[ $phase06_enabled == false ]] || {
+    printf 'error: stale-state reset requires the deployed Phase 5 topology\n' >&2
+    return 1
+  }
+  if helm --kubeconfig "$kubeconfig" --namespace "$namespace" \
+    status "$release" >/dev/null 2>&1; then
+    printf 'error: stale-state reset requires observability to be absent\n' >&2
+    return 1
+  fi
+  [[ $current_revision != "$saved_revision" ]] || {
+    printf 'error: refusing stale-state reset with a matching Helm revision\n' >&2
+    return 1
+  }
+  for file in "$hardening_state_file" "$grafana_soak_state_file"; do
+    if [[ -e $file || -L $file ]]; then
+      [[ -f $file && ! -L $file && $(stat -c '%a' "$file") == 600 ]] || {
+        printf 'error: Phase 6 checkpoint is unsafe: %s\n' "$file" >&2
+        return 1
+      }
+      jq -e 'type == "object"' "$file" >/dev/null || {
+        printf 'error: Phase 6 JSON checkpoint is invalid: %s\n' "$file" >&2
+        return 1
+      }
+    fi
+  done
+  timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+  for file in "$state_file" "$hardening_state_file" "$grafana_soak_state_file"; do
+    [[ -e $file ]] || continue
+    archive="${file}.stale-${timestamp}"
+    [[ ! -e $archive && ! -L $archive ]] || {
+      printf 'error: stale-state archive target already exists: %s\n' "$archive" >&2
+      return 1
+    }
+  done
+  for file in "$state_file" "$hardening_state_file" "$grafana_soak_state_file"; do
+    [[ -e $file ]] || continue
+    archive="${file}.stale-${timestamp}"
+    mv -- "$file" "$archive"
+    chmod 0600 "$archive"
+  done
+  printf 'phase06_stale_state=archived old_revision=%s current_revision=%s\n' \
+    "$saved_revision" "$current_revision"
 }
 
 server_dry_run() {
@@ -895,6 +965,7 @@ case "$action" in
       port-forward --address 127.0.0.1 "service/${release}-grafana" 13000:3000
     ;;
   verify-grafana-soak) verify_grafana_soak ;;
+  reset-stale-state) reset_stale_state ;;
   rollback-hardening) rollback_hardening ;;
   status)
     require_cluster
