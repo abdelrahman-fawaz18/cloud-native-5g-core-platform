@@ -128,14 +128,7 @@ basic_preflight() {
   fi
   printf 'host_lab_services=active\n'
 
-  for process_name in nr-gnb nr-ue; do
-    if pgrep -x "$process_name" >/dev/null 2>&1; then
-      printf 'error: host process is already running: %s\n' \
-        "$process_name" >&2
-      return 1
-    fi
-  done
-  printf 'host_ran_or_simulation_processes=none\n'
+  verify_ran_process_ownership
 
   available_kib=$(df -Pk /var/lib/docker | awk 'NR == 2 { print $4 }')
   minimum_kib=$((12 * 1024 * 1024))
@@ -154,6 +147,37 @@ basic_preflight() {
   fi
   printf 'host_memory_available_gib=%s\n' \
     "$((available_memory_kib / 1024 / 1024))"
+}
+
+verify_ran_process_ownership() {
+  local owned_node_id="" process_name pid cgroup
+  local observed=0 owned=0
+  if [[ $action == status || $action == delete ]] && \
+     docker container inspect cn5g-control-plane >/dev/null 2>&1; then
+    owned_node_id=$(docker container inspect --format '{{.Id}}' \
+      cn5g-control-plane)
+  fi
+  for process_name in nr-gnb nr-ue; do
+    while read -r pid; do
+      [[ -n $pid ]] || continue
+      observed=$((observed + 1))
+      cgroup=$(<"/proc/$pid/cgroup")
+      if [[ -n $owned_node_id && \
+            $cgroup == *"docker-${owned_node_id}.scope/"* ]]; then
+        owned=$((owned + 1))
+        continue
+      fi
+      printf 'error: unrelated host process is already running: %s pid=%s\n' \
+        "$process_name" "$pid" >&2
+      return 1
+    done < <(pgrep -x "$process_name" 2>/dev/null || true)
+  done
+  if (( observed == 0 )); then
+    printf 'host_ran_or_simulation_processes=none\n'
+  else
+    printf 'project_kind_ran_processes=owned node=%s count=%s\n' \
+      "$owned_node_id" "$owned"
+  fi
 }
 
 cluster_names() {

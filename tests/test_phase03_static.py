@@ -161,6 +161,12 @@ class Phase03StaticTests(unittest.TestCase):
         self.assertIn('confirmation != "--confirm"', self.lifecycle)
         self.assertIn("cn5g-control-plane", self.lifecycle)
 
+    def test_delete_allows_only_ran_processes_owned_by_exact_kind_node(self):
+        self.assertIn("verify_ran_process_ownership", self.lifecycle)
+        self.assertIn("docker-${owned_node_id}.scope/", self.lifecycle)
+        self.assertIn("project_kind_ran_processes=owned", self.lifecycle)
+        self.assertIn("unrelated host process is already running", self.lifecycle)
+
     def test_cluster_lifecycle_avoids_broad_or_implicit_cleanup(self):
         body = re.sub(r"cat <<'EOF'.*?\nEOF", "", self.lifecycle, flags=re.S)
         for forbidden in (
