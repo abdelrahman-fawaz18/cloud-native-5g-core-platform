@@ -17,10 +17,12 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-Phases 0-9 are complete. Phase 10 is assembling and independently checking the
-final release evidence. Phase 9 accepted both its local privileged integration
-gate and its GitHub-hosted CI and supply-chain gates for the reviewed
-implementation commit. Phase 7 retained its exploratory failures, passed a
+Phases 0-10 are complete. Phase 10 accepted the bounded public claim contract,
+clean-checkout reproduction, a fresh-cluster deployment and scoped teardown,
+local privileged integration, repository privacy checks, and four sanitized
+dashboard captures. Phase 9 accepted both its local privileged integration
+gate and its GitHub-hosted CI and supply-chain gates. Phase 7 retained its
+exploratory failures, passed a
 route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
 produced deterministic reviewed summaries and plots, and passed its scoped
 rollback with the Phase 5/6 regression gates intact. The accepted runtime has
@@ -584,6 +586,7 @@ machine-readable measurements, and concise reports.
 - [Phase 9 detailed implementation model](docs/README.md#35-phase-9-continuous-integration-and-supply-chain-security)
 - [Phase 10 release-readiness architecture](docs/architecture/phase-10-release-readiness.md)
 - [Phase 10 release runbook](docs/runbooks/phase-10-release.md)
+- [Phase 10 release-readiness report](reports/10_release_readiness.md)
 - [Privacy-reviewed dashboard evidence gallery](docs/dashboard-gallery.md)
 - [Third-party software notices](THIRD_PARTY_NOTICES.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)

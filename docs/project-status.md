@@ -14,7 +14,7 @@ Last updated: 2026-08-21
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
 | 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
 | 9 — CI and supply-chain security | Complete | Local privileged integration plus hosted quality, schema, policy, secret, vulnerability, image, SBOM, and negative-control gates passed |
-| 10 — Documentation and public release | In progress | Candidate structure, claims, privacy, clean-clone, local privileged validation, and four dashboard captures pass; clean deployment/teardown, final commit-bound reruns, hosted CI, and separately authorized publication remain |
+| 10 — Documentation and public release | Complete | Bounded claims, privacy, visuals, clean clone, fresh deployment/teardown, local privileged validation, and release audit passed; publication remains separately authorized |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the
@@ -300,3 +300,20 @@ privileged report also revalidated nine reviewed Phase 7 and nine reviewed
 Phase 8 conditions. GitHub Actions then passed the safe, five-image supply-chain,
 and aggregate release-gate jobs for the exact reviewed implementation commit,
 completing Phase 9.
+
+Phase 10 release evidence is accepted. The tracked claim contract connects
+seven bounded statements to sixteen reviewable evidence files, and four
+metadata-stripped Grafana captures provide a visual index without replacing
+the underlying tests. A clean local clone reproduced the deterministic gates.
+The destructive runtime exercise reviewed and deleted only the project-owned
+kind node, created a different node identity, installed Phases 4-6 from the
+tracked lifecycle, and passed the complete five-UE, two-DNN, observability,
+and local privileged gates. It then removed the observability release and
+telemetry data, rolled the core back through its guarded lifecycle, and proved
+the named cluster, kubeconfig, node container, and empty owned network absent.
+Protected host Open5GS and MongoDB services remained active. Stale ignored
+checkpoints exposed by the fresh runtime were archived through lineage-aware,
+fail-closed recovery actions rather than silently reused. The final audit
+binds clean-clone, clean-runtime, privileged, visual, claim, and privacy
+evidence to one commit. Tagging, a GitHub release, and any public image push
+remain separate publication decisions.

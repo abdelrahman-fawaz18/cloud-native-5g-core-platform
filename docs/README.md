@@ -4949,19 +4949,25 @@ Adding a release decision does not publish anything. Tag creation, a GitHub
 release, or a public image push are separate external state changes and
 require explicit authorization after all gates pass.
 
-### 36.7 Current candidate state
+### 36.7 Accepted release state
 
-The candidate structure, claim traceability, privacy checks, deterministic
-clean-clone run, local privileged validation, and four-image visual gate have
-passed for the recorded candidate lineage. The privileged run revalidated
-five registered UEs, five PFCP sessions, both DNNs, cross-DNN denial,
-bidirectional tunnel counters, bounded metrics, centralized logs, and six
-Grafana dashboards. A stale gNB session was detected rather than hidden; the
-project-owned dependency-ordered session repair restored the baseline before
-the successful rerun.
+The final structure, seven bounded claims, privacy boundary, deterministic
+clean clone, local privileged validation, and four-image visual gate passed.
+The privileged run revalidated five registered UEs, five PFCP sessions, both
+DNNs, cross-DNN denial, bidirectional tunnel counters, bounded metrics,
+centralized logs, and six Grafana dashboards.
 
-Phase 10 remains open until the clean deployment/teardown exercise passes,
-final documentation changes are committed, clean-clone and privileged
-evidence are regenerated for that exact commit, hosted CI passes, and the
-release-readiness report records an explicit decision. Version tagging and
-GitHub release publication follow only after separate approval.
+The clean-runtime exercise then deleted only the reviewed project kind node,
+created a different node identity, and rebuilt the stack from Phase 4 through
+Phase 6. The fresh deployment created a new MongoDB claim, restored all five
+synthetic subscribers and both DNNs, and passed the complete observability
+gate. Old ignored Phase 5/6 lifecycle checkpoints were detected as a different
+Helm and volume lineage and archived with mode 0600; they were never silently
+reused. Scoped teardown subsequently proved the cluster, node container,
+project kubeconfig, and empty owned kind network absent while protected host
+Open5GS and MongoDB services remained active.
+
+The final audit requires the clean-clone, clean-runtime, and privileged
+records to name the same commit as this accepted contract and readiness
+report. Version tagging, GitHub release publication, and public image pushes
+remain separate actions requiring explicit authorization.
