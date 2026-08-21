@@ -82,6 +82,11 @@ class Phase10StaticTests(unittest.TestCase):
             '"$script_dir/phase09-lab.sh" privileged-gate',
             "phase10_clean_checkout=pass",
             "phase10_privileged_gate=pass",
+            "phase10_clean_runtime_targets=reviewed",
+            "phase10_clean_deployment=pass",
+            "phase10_clean_runtime=pass deployment=pass teardown=pass",
+            'recreated_node_id != "$source_node_id"',
+            '"$clean_runtime_evidence"',
             "phase10_hosted_gate=pass privileged_validation=not-run",
         ):
             self.assertIn(required, self.lifecycle)

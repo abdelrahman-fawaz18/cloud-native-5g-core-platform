@@ -4922,6 +4922,9 @@ The Phase 10 lifecycle helper exposes narrowly scoped actions:
 | `preflight` | structure, claims, privacy, and Phase 9 policy prerequisites | `phase10_preflight=pass` |
 | `quality` | complete deterministic Phase 9 quality suite plus Phase 10 candidate checks | `phase10_quality=pass` |
 | `clean-checkout` | a new ignored clone of the exact committed candidate | `phase10_clean_checkout=pass` |
+| `clean-runtime-preflight` | exact old kind-node identity, release revisions, and destructive PVC boundary | `phase10_clean_runtime_targets=reviewed` |
+| `verify-clean-deployment` | a different kind-node identity plus the complete local privileged gate | `phase10_clean_deployment=pass` |
+| `verify-clean-teardown` | absence of the named cluster, node, kubeconfig, and kind network | `phase10_clean_runtime=pass` |
 | `verify-visuals` | capture dimensions, identities, checksums, and metadata boundary | `phase10_visual_evidence=pass` |
 | `privileged-gate` | live Phase 5/6 validation and Phase 9 local security evidence | `phase10_privileged_gate=pass` |
 | `hosted-gate` | non-privileged public-release checks suitable for GitHub Actions | `phase10_hosted_gate=pass` |

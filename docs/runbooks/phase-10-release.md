@@ -79,6 +79,67 @@ After the public evidence contract and readiness report are accepted:
 ```
 
 `phase10_release_audit=pass` means the current commit has matching public,
-clean-clone, local privileged, and visual evidence. It does not itself create
-a tag, GitHub release, or public image. Those remain separately confirmed
-publication actions.
+clean-clone, clean-runtime, local privileged, and visual evidence. It does not
+itself create a tag, GitHub release, or public image. Those remain separately
+confirmed publication actions.
+
+## Clean Deployment And Teardown Exit Gate
+
+This exercise permanently removes the current `cn5g` kind node and all
+project-owned local-path data inside it. Reviewed Phase 7/8 results, scanner
+evidence, generated Secret material, and dashboard captures are stored outside
+the node and remain available. Do not run these commands without a fresh host
+snapshot and explicit confirmation.
+
+First record the exact targets:
+
+```bash
+sudo ./scripts/phase10-lab.sh clean-runtime-preflight
+```
+
+The output must name only cluster `cn5g`, node `cn5g-control-plane`, and the
+reviewed project PVC count. Then remove the old project cluster and verify its
+absence:
+
+```bash
+sudo ./scripts/kind-feasibility.sh delete --confirm
+sudo ./scripts/kind-feasibility.sh verify-delete
+```
+
+Create a new node and deploy the final stack from tracked inputs and retained
+local Secret material:
+
+```bash
+sudo ./scripts/kind-feasibility.sh preflight
+sudo ./scripts/kind-feasibility.sh create
+sudo ./scripts/helm-lab.sh load-images
+sudo ./scripts/helm-lab.sh prepare-secret
+sudo ./scripts/helm-lab.sh install
+sudo ./scripts/phase05-lab.sh prepare-secret
+sudo ./scripts/phase05-lab.sh upgrade
+sudo ./scripts/phase06-lab.sh prepare-secret
+sudo ./scripts/phase06-lab.sh install
+sudo ./scripts/phase10-lab.sh verify-clean-deployment
+```
+
+The verifier requires a different kind-node container identity and ends with
+`phase10_clean_deployment=pass`. It also refreshes the commit-bound privileged
+evidence.
+
+Finally exercise cleanup in dependency order:
+
+```bash
+sudo ./scripts/phase06-lab.sh uninstall --confirm
+sudo ./scripts/phase06-lab.sh destroy --confirm
+sudo ./scripts/phase05-lab.sh rollback
+sudo ./scripts/phase05-lab.sh remove-secret --confirm
+sudo ./scripts/helm-lab.sh uninstall --confirm
+sudo ./scripts/kind-feasibility.sh delete --confirm
+sudo ./scripts/kind-feasibility.sh verify-delete
+sudo ./scripts/phase10-lab.sh verify-clean-teardown
+```
+
+The final marker is
+`phase10_clean_runtime=pass deployment=pass teardown=pass`. If a command
+fails, preserve its output and resume only through that component's documented
+recovery action; do not skip forward or use broad Docker/Kubernetes cleanup.

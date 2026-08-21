@@ -51,10 +51,20 @@ existing project-owned cluster. A full destructive clean deployment and
 teardown is a distinct acceptance exercise because deleting the kind node also
 deletes its project-owned local-path storage.
 
+The destructive exercise is still fail-closed. `clean-runtime-preflight`
+records the existing project node identity, release revisions, PVC count, and
+current commit before deletion. After recreation,
+`verify-clean-deployment` rejects an unchanged node identity and runs the full
+local privileged gate. After teardown, `verify-clean-teardown` requires the
+named cluster, node container, project kubeconfig, and empty kind network to
+be absent while the protected host Open5GS and MongoDB services remain active.
+The final audit requires this restricted evidence for the same commit as the
+clean clone and privileged report.
+
 ## Release Decision
 
 The final audit is fail-closed. It requires accepted public claims and visuals,
-clean-clone evidence for the current commit, local privileged evidence for the
-same commit, a privacy-safe repository, and a readiness report with an explicit
+clean-clone, clean-runtime, and local privileged evidence for the current
+commit, a privacy-safe repository, and a readiness report with an explicit
 decision. A Git tag or GitHub release remains a separately authorized
 publication action after these gates pass.

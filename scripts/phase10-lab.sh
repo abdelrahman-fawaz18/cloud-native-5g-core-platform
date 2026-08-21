@@ -5,7 +5,7 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 Usage: ./scripts/phase10-lab.sh ACTION
-       sudo ./scripts/phase10-lab.sh privileged-gate
+       sudo ./scripts/phase10-lab.sh privileged-gate|clean-runtime-preflight|verify-clean-deployment|verify-clean-teardown
 
 Actions:
   preflight       Check the Phase 10 candidate structure, claim links,
@@ -13,6 +13,15 @@ Actions:
   quality         Run the complete Phase 9 quality gate plus Phase 10 checks.
   clean-checkout  Clone the exact committed candidate into ignored evidence
                   storage and rerun quality and manifest gates there.
+  clean-runtime-preflight
+                  Record the exact existing project cluster/PVC targets before
+                  the separately confirmed clean deployment exercise.
+  verify-clean-deployment
+                  Require a newly created kind node, run the local privileged
+                  gate, and record the clean deployment for this Git commit.
+  verify-clean-teardown
+                  After separately confirmed scoped teardown, prove the cn5g
+                  cluster, node, kubeconfig, and kind network are absent.
   verify-visuals  Verify accepted dashboard PNGs, metadata absence, source
                   UIDs, capture records, dimensions, and SHA-256 checksums.
   privileged-gate Run the accepted local Phase 9 privileged gate and bind its
@@ -30,7 +39,7 @@ EOF
 
 action=${1:-}
 case "$action" in
-  preflight|quality|clean-checkout|verify-visuals|privileged-gate|hosted-gate|release-audit|status)
+  preflight|quality|clean-checkout|clean-runtime-preflight|verify-clean-deployment|verify-clean-teardown|verify-visuals|privileged-gate|hosted-gate|release-audit|status)
     [[ $# -eq 1 ]] || { usage >&2; exit 2; }
     ;;
   -h|--help) usage; exit 0 ;;
@@ -47,8 +56,15 @@ project_root=$(cd -- "$script_dir/.." && pwd -P)
 report_root="$project_root/artifacts/phase-10"
 clean_evidence="$report_root/clean-checkout.json"
 privileged_evidence="$report_root/local-privileged-gate.json"
+clean_runtime_state="$report_root/clean-runtime-state.json"
+clean_runtime_evidence="$report_root/clean-runtime.json"
 phase09_bin="$project_root/artifacts/tools/phase-09/bin"
 export PATH="$phase09_bin:$PATH"
+
+# shellcheck source=../versions/phase-03.env
+source "$project_root/versions/phase-03.env"
+node_container="${KIND_CLUSTER_NAME}-control-plane"
+kubeconfig="$project_root/artifacts/kubernetes/cn5g.kubeconfig"
 
 ensure_normal_user() {
   if (( EUID == 0 )); then
@@ -133,6 +149,151 @@ clean_checkout() {
     "$commit" "$clean_evidence"
 }
 
+require_sudo_operator() {
+  if (( EUID != 0 )) || [[ -z ${SUDO_UID:-} || -z ${SUDO_GID:-} ]]; then
+    printf 'error: run this action through sudo from the normal account\n' >&2
+    return 1
+  fi
+}
+
+clean_runtime_preflight() {
+  require_sudo_operator
+  require_command docker git helm jq kind kubectl mkdir stat
+  [[ -r $kubeconfig && ! -L $kubeconfig ]] || {
+    printf 'error: project kubeconfig is absent or unsafe\n' >&2
+    return 1
+  }
+  kind get clusters | grep -Fxq "$KIND_CLUSTER_NAME" || {
+    printf 'error: expected project kind cluster is absent: %s\n' \
+      "$KIND_CLUSTER_NAME" >&2
+    return 1
+  }
+  local source_node_id core_revision observability_revision pvc_count commit
+  source_node_id=$(docker inspect --format '{{.Id}}' "$node_container")
+  core_revision=$(helm --kubeconfig "$kubeconfig" --namespace cn5g \
+    status cn5g --output json | jq -r '.version')
+  observability_revision=$(helm --kubeconfig "$kubeconfig" \
+    --namespace cn5g-observability status cn5g-observability --output json | \
+    jq -r '.version')
+  pvc_count=$(kubectl --kubeconfig "$kubeconfig" get pvc --all-namespaces \
+    --output json | jq '[.items[]] | length')
+  commit=$(current_commit)
+  mkdir -p "$report_root"
+  jq -n --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg commit "$commit" --arg cluster "$KIND_CLUSTER_NAME" \
+    --arg node_container "$node_container" --arg source_node_id "$source_node_id" \
+    --argjson core_revision "$core_revision" \
+    --argjson observability_revision "$observability_revision" \
+    --argjson pvc_count "$pvc_count" \
+    '{schema_version:1,status:"targets-reviewed",generated_at:$generated_at,git_commit:$commit,cluster:$cluster,node_container:$node_container,source_node_id:$source_node_id,core_revision:$core_revision,observability_revision:$observability_revision,pvc_count:$pvc_count,data_loss_boundary:"deleting the kind node removes project-owned local-path PVC data"}' \
+    >"$clean_runtime_state"
+  chown "$SUDO_UID:$SUDO_GID" "$clean_runtime_state"
+  chmod 0600 "$clean_runtime_state"
+  printf 'phase10_clean_runtime_targets=reviewed cluster=%s node=%s pvcs=%s\n' \
+    "$KIND_CLUSTER_NAME" "$source_node_id" "$pvc_count"
+  printf 'warning=confirmed_kind_deletion_will_remove_project_owned_local_path_data\n'
+}
+
+verify_clean_deployment() {
+  require_sudo_operator
+  require_command docker git helm jq kind kubectl
+  [[ -f $clean_runtime_state && ! -L $clean_runtime_state ]] || {
+    printf 'error: clean-runtime target review evidence is absent\n' >&2
+    return 1
+  }
+  local commit source_node_id recreated_node_id core_revision
+  local observability_revision mongodb_pvc_uid prometheus_pvc_uid loki_pvc_uid
+  commit=$(current_commit)
+  jq -e --arg commit "$commit" \
+    '.status == "targets-reviewed" and .git_commit == $commit' \
+    "$clean_runtime_state" >/dev/null || {
+      printf 'error: clean-runtime target review is stale or invalid\n' >&2
+      return 1
+    }
+  source_node_id=$(jq -r '.source_node_id' "$clean_runtime_state")
+  recreated_node_id=$(docker inspect --format '{{.Id}}' "$node_container")
+  [[ $recreated_node_id != "$source_node_id" ]] || {
+    printf 'error: kind node was not recreated; container identity is unchanged\n' >&2
+    return 1
+  }
+  privileged_gate
+  core_revision=$(helm --kubeconfig "$kubeconfig" --namespace cn5g \
+    status cn5g --output json | jq -r '.version')
+  observability_revision=$(helm --kubeconfig "$kubeconfig" \
+    --namespace cn5g-observability status cn5g-observability --output json | \
+    jq -r '.version')
+  mongodb_pvc_uid=$(kubectl --kubeconfig "$kubeconfig" --namespace cn5g \
+    get pvc mongodb-data-cn5g-mongodb-0 --output jsonpath='{.metadata.uid}')
+  prometheus_pvc_uid=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace cn5g-observability get pvc \
+    data-cn5g-observability-prometheus-0 \
+    --output jsonpath='{.metadata.uid}')
+  loki_pvc_uid=$(kubectl --kubeconfig "$kubeconfig" \
+    --namespace cn5g-observability get pvc \
+    data-cn5g-observability-loki-0 --output jsonpath='{.metadata.uid}')
+  jq --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg recreated_node_id "$recreated_node_id" \
+    --arg mongodb_pvc_uid "$mongodb_pvc_uid" \
+    --arg prometheus_pvc_uid "$prometheus_pvc_uid" \
+    --arg loki_pvc_uid "$loki_pvc_uid" \
+    --argjson core_revision "$core_revision" \
+    --argjson observability_revision "$observability_revision" \
+    '.status="deployment-pass" | .deployment_verified_at=$generated_at | .recreated_node_id=$recreated_node_id | .clean_core_revision=$core_revision | .clean_observability_revision=$observability_revision | .mongodb_pvc_uid=$mongodb_pvc_uid | .prometheus_pvc_uid=$prometheus_pvc_uid | .loki_pvc_uid=$loki_pvc_uid | .phase10_privileged_gate="pass"' \
+    "$clean_runtime_state" >"${clean_runtime_state}.tmp"
+  mv -- "${clean_runtime_state}.tmp" "$clean_runtime_state"
+  chown "$SUDO_UID:$SUDO_GID" "$clean_runtime_state"
+  chmod 0600 "$clean_runtime_state"
+  printf 'phase10_clean_deployment=pass commit=%s old_node=%s new_node=%s\n' \
+    "$commit" "$source_node_id" "$recreated_node_id"
+}
+
+verify_clean_teardown() {
+  require_sudo_operator
+  require_command docker git jq kind mkdir systemctl
+  [[ -f $clean_runtime_state && ! -L $clean_runtime_state ]] || {
+    printf 'error: clean deployment evidence is absent\n' >&2
+    return 1
+  }
+  local commit
+  commit=$(current_commit)
+  jq -e --arg commit "$commit" \
+    '.status == "deployment-pass" and .git_commit == $commit and .phase10_privileged_gate == "pass"' \
+    "$clean_runtime_state" >/dev/null || {
+      printf 'error: clean deployment evidence is stale or invalid\n' >&2
+      return 1
+    }
+  ! kind get clusters 2>/dev/null | grep -Fxq "$KIND_CLUSTER_NAME" || {
+    printf 'error: project kind cluster still exists: %s\n' "$KIND_CLUSTER_NAME" >&2
+    return 1
+  }
+  ! docker container inspect "$node_container" >/dev/null 2>&1 || {
+    printf 'error: project kind node container still exists: %s\n' \
+      "$node_container" >&2
+    return 1
+  }
+  [[ ! -e $kubeconfig && ! -L $kubeconfig ]] || {
+    printf 'error: project kubeconfig still exists\n' >&2
+    return 1
+  }
+  ! docker network inspect "$KIND_DOCKER_NETWORK_NAME" >/dev/null 2>&1 || {
+    printf 'error: kind Docker network still exists\n' >&2
+    return 1
+  }
+  [[ $(systemctl is-active open5gs-amfd.service) == active && \
+     $(systemctl is-active mongod.service) == active ]] || {
+    printf 'error: protected host lab services are not active after teardown\n' >&2
+    return 1
+  }
+  mkdir -p "$report_root"
+  jq --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '.status="pass" | .completed_at=$completed_at | .clean_deployment="pass" | .scoped_teardown="pass" | .protected_host_services="active"' \
+    "$clean_runtime_state" >"$clean_runtime_evidence"
+  chown "$SUDO_UID:$SUDO_GID" "$clean_runtime_evidence"
+  chmod 0600 "$clean_runtime_evidence"
+  printf 'phase10_clean_runtime=pass deployment=pass teardown=pass commit=%s\n' \
+    "$commit"
+}
+
 verify_visuals() {
   ensure_normal_user
   "$script_dir/check-phase10-release.py" visuals
@@ -176,7 +337,7 @@ verify_local_evidence() {
   require_command jq
   local commit
   commit=$(current_commit)
-  for path in "$clean_evidence" "$privileged_evidence"; do
+  for path in "$clean_evidence" "$privileged_evidence" "$clean_runtime_evidence"; do
     [[ -f $path && ! -L $path ]] || {
       printf 'error: local Phase 10 evidence is absent or unsafe: %s\n' "$path" >&2
       return 1
@@ -192,7 +353,7 @@ verify_local_evidence() {
         return 1
       }
   done
-  printf 'phase10_local_evidence=pass commit=%s clean_clone=pass privileged=pass\n' \
+  printf 'phase10_local_evidence=pass commit=%s clean_clone=pass privileged=pass clean_runtime=pass\n' \
     "$commit"
 }
 
@@ -205,7 +366,7 @@ release_audit() {
 }
 
 status() {
-  local contract_status visual_status clean_status privileged_status
+  local contract_status visual_status clean_status privileged_status runtime_status
   contract_status=$(python3 -c \
     'import json,sys; print(json.load(open(sys.argv[1]))["status"])' \
     "$project_root/release/phase-10-evidence.json")
@@ -215,18 +376,24 @@ status() {
   [[ -s $clean_evidence ]] && clean_status=present
   privileged_status=absent
   [[ -s $privileged_evidence ]] && privileged_status=present
+  runtime_status=absent
+  [[ -s $clean_runtime_evidence ]] && runtime_status=present
   printf 'branch=%s\n' "$(git -C "$project_root" branch --show-current)"
   printf 'commit=%s\n' "$(current_commit)"
   printf 'phase10_contract=%s\n' "$contract_status"
   printf 'phase10_visual_evidence=%s\n' "$visual_status"
   printf 'phase10_clean_checkout_evidence=%s\n' "$clean_status"
   printf 'phase10_privileged_evidence=%s\n' "$privileged_status"
+  printf 'phase10_clean_runtime_evidence=%s\n' "$runtime_status"
 }
 
 case "$action" in
   preflight) preflight ;;
   quality) quality ;;
   clean-checkout) clean_checkout ;;
+  clean-runtime-preflight) clean_runtime_preflight ;;
+  verify-clean-deployment) verify_clean_deployment ;;
+  verify-clean-teardown) verify_clean_teardown ;;
   verify-visuals) verify_visuals ;;
   privileged-gate) privileged_gate ;;
   hosted-gate) hosted_gate ;;
