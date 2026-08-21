@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 VERSIONS = ROOT / "versions" / "assurance-toolchain.env"
 LIFECYCLE = ROOT / "scripts" / "supply-chain-assurance.sh"
+GITLEAKS_IGNORE = ROOT / ".gitleaksignore"
 CHECKER = ROOT / "scripts" / "check-supply-chain-policies.py"
 POLICY = ROOT / "policy" / "kubernetes.rego"
 ARCHITECTURE = ROOT / "docs" / "architecture" / "supply-chain-security.md"
@@ -215,6 +216,18 @@ class SupplyChainAssuranceStaticTests(unittest.TestCase):
         self.assertIn("useDefault = true", gitleaks)
         self.assertIn("targetRules", gitleaks)
         self.assertNotIn("stopwords", gitleaks)
+
+        ignored_fingerprints = [
+            line for line in GITLEAKS_IGNORE.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ]
+        self.assertEqual(
+            ignored_fingerprints,
+            [
+                "97bee1b3cc9cdfa26474b45255893261ca93de62:"
+                "charts/cn5g/values.yaml:generic-api-key:50"
+            ],
+        )
 
     def test_public_assurance_docs_explain_claims_and_rollback_without_private_data(self):
         public = "\n".join(
