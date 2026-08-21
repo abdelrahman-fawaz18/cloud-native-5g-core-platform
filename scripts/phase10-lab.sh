@@ -116,7 +116,7 @@ clean_checkout() {
   mkdir -p "$report_root"
   local workspace checkout commit branch
   workspace=$(mktemp -d "$report_root/clean-checkout.XXXXXX")
-  checkout="$workspace/repository"
+  checkout="$workspace/cloud-native-5g-core-platform"
   commit=$(current_commit)
   branch=$(git -C "$project_root" branch --show-current)
   git clone --quiet --local --no-hardlinks --no-checkout "$project_root" "$checkout"
