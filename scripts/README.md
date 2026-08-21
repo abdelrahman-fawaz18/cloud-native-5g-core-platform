@@ -64,6 +64,20 @@ targets, and support a dry-run or read-only mode where practical.
   5/6 validation after every attempt. Separate actions prove MongoDB PVC
   persistence and invalid-configuration rejection without mixing those safety
   questions into the timing matrix.
+- `phase09-lab.sh`: owns the hosted-safe and local-privileged release gates.
+  It bootstraps checksum-verified tools, applies repository and Kubernetes
+  policies, scans source and five images, generates SPDX Software Bills of
+  Materials, proves four negative controls, promotes only the accepted local
+  data-network image, and retains an exact scoped rollback state. It never
+  pushes an image, deploys from hosted CI, or registers a self-hosted runner.
+- `phase10-lab.sh`: owns final candidate, clean-clone, visual, privileged, and
+  release-audit gates. It binds ignored local evidence to the exact Git commit
+  and refuses a final pass until the tracked claim contract, sanitized
+  dashboard manifest, and readiness report are accepted. It does not delete
+  the lab or publish a tag or release.
+- `check-phase10-release.py`: checks public claim links, tracked-file privacy,
+  prohibited publication paths, dashboard source UIDs, PNG dimensions and
+  metadata, image checksums, and the final readiness decision.
 - `generate-phase07-dashboard-metrics.py` and
   `generate-phase08-dashboard-metrics.py`: deterministically convert only
   reviewed summaries into bounded Prometheus fixtures. Their `--check` mode

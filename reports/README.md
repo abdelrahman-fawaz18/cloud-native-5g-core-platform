@@ -16,6 +16,8 @@ and whether the tested gate passed or failed.
 - [Phase 6 observability validation summary](#phase-6-observability-validation-summary)
 - [Phase 7 performance and capacity experiment report](07_phase07_performance.md)
 - [Phase 8 reliability and recovery experiment report](08_phase08_reliability.md)
+- [Phase 9 CI and supply-chain security report](09_phase09_security.md)
+- Phase 10 release-readiness report is created only after its final gates pass.
 
 The validation evidence below is paired with the
 [complete Phase 4 visual system guide](../docs/README.md#23-phase-4-complete-system-and-operational-model),

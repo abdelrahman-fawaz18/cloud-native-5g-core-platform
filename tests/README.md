@@ -3,8 +3,9 @@
 The current test suite covers repository, Compose, Phase 3 feasibility, Phase
 4 static contracts, Phase 5 identity/chart/lifecycle contracts, Phase 6
 observability architecture/security/lifecycle contracts, Phase 7 experiment
-and dashboard contracts, and Phase 8 recovery, analyzer, reviewed-metric, and
-dashboard contracts. Later phases extend it with release automation.
+and dashboard contracts, Phase 8 recovery and reviewed-metric contracts,
+Phase 9 Continuous Integration and supply-chain controls, and Phase 10
+release-readiness contracts.
 
 Current Phase 4 coverage includes:
 
@@ -21,12 +22,6 @@ Current Phase 4 coverage includes:
   gates; and
 - negative checks for unsafe cleanup, embedded local identity, broad host
   network mutation, and committed subscriber material.
-
-Planned later-phase coverage includes:
-
-- performance methodology;
-- controlled failure and recovery;
-- cleanup and repeatability.
 
 Tests that require privileged networking must be clearly separated from tests
 safe for hosted Continuous Integration runners.
@@ -82,3 +77,18 @@ live dashboard gate subsequently passed with two reviewed-results targets,
 exactly 75 Phase 8 series, six provisioned dashboards, all three alert
 lifecycles, a 2,606-second zero-restart Grafana soak, and the final Phase 5/6
 regression.
+
+Phase 9 coverage verifies immutable workflow/tool/image identities, read-only
+hosted permissions, pinned dependency installation, Kubernetes schema and
+policy-as-code enforcement, secret and vulnerability scanning, five SPDX
+Software Bills of Materials, four negative-control failure classes, narrow
+privilege exceptions, controlled image promotion, and exact rollback state.
+The live 5G regression remains a separate local privileged gate.
+
+Phase 10 coverage verifies a bounded claim-to-evidence contract, repository
+privacy and publication boundaries, license and third-party notices, clean-
+clone and local-evidence commit binding, and fail-closed visual evidence. The
+visual gate requires four source-UID-bound PNGs with exact checksums, minimum
+dimensions, capture context, and no text or EXIF metadata. Final release tests
+cannot pass while the evidence contract is a candidate or the readiness
+report lacks an explicit decision.

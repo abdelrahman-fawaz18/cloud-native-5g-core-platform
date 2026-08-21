@@ -14,7 +14,7 @@ Last updated: 2026-08-20
 | 7 — Performance and capacity experiments | Complete | Nine-condition matrix, deterministic analysis, scoped rollback, and Phase 5/6 regression verified |
 | 8 — Reliability and recovery | Complete | Nine recovery conditions, MongoDB persistence, invalid-config rejection, deterministic analysis, reviewed dashboard, alert regression, Grafana soak, and final Phase 5/6 regression passed |
 | 9 — CI and supply-chain security | Complete | Local privileged integration plus hosted quality, schema, policy, secret, vulnerability, image, SBOM, and negative-control gates passed |
-| 10 — Documentation and public release | Not started | Final evidence review, clean reproduction, visual documentation, release readiness, and tagged release remain |
+| 10 — Documentation and public release | In progress | Candidate claim/privacy/license gates pass; clean-clone, live, visual, final readiness, and separately authorized publication gates remain |
 
 Pinned Docker Engine `29.7.1`, containerd `2.2.6`, Buildx `0.36.0`, and Docker
 Compose `5.3.1` are installed. The interactive account was not added to the

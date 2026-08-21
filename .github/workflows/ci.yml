@@ -1,4 +1,4 @@
-name: Phase 9 release gates
+name: Phase 10 release gates
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: phase09-${{ github.workflow }}-${{ github.ref }}
+  group: phase10-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,6 +48,8 @@ jobs:
           printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Run the canonical safe gate
         run: ./scripts/phase09-lab.sh safe-gate
+      - name: Verify final publication evidence
+        run: ./scripts/check-phase10-release.py public-release
       - name: Upload restricted machine-readable scan reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -87,12 +89,12 @@ jobs:
           retention-days: 14
 
   hosted-release-gate:
-    name: Hosted release gate
+    name: Aggregate hosted release gate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     needs: [safe-deterministic-gates, image-supply-chain]
     steps:
       - name: Confirm the hosted boundary
         run: |
-          printf '%s\n' 'phase09_hosted_release_gate=pass'
+          printf '%s\n' 'phase10_hosted_release_gate=pass'
           printf '%s\n' 'privileged_5g_integration=not-run-see-local-gate'

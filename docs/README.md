@@ -29,6 +29,10 @@ Phase-specific extensions:
 - [Complete accepted-system architecture](architecture/complete-system-architecture.md)
 - [Phase 7 reviewed performance report](../reports/07_phase07_performance.md)
 - [ADR-0009 benchmark traffic-path decision](adr/0009-phase-07-benchmark-path.md)
+- [Phase 8 controlled recovery methodology](architecture/phase-08-reliability-methodology.md)
+- [Phase 9 CI and supply-chain architecture](architecture/phase-09-ci-security.md)
+- [Phase 10 release-readiness architecture](architecture/phase-10-release-readiness.md)
+- [Phase 10 release runbook](runbooks/phase-10-release.md)
 
 Because this is a long-form reference, it can be read in parts:
 

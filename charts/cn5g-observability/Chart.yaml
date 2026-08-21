@@ -7,3 +7,4 @@ appVersion: "phase-08-dashboard"
 kubeVersion: ">=1.36.0-0"
 annotations:
   cn5g.io/phase: "08-dashboard"
+  artifacthub.io/license: Apache-2.0

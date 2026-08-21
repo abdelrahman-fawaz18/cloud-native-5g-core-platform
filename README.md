@@ -17,7 +17,8 @@ and reliability rather than repeating the original single-host installation.
 
 ## Current Status
 
-Phases 0-9 are complete. Phase 9 accepted both its local privileged integration
+Phases 0-9 are complete. Phase 10 is assembling and independently checking the
+final release evidence. Phase 9 accepted both its local privileged integration
 gate and its GitHub-hosted CI and supply-chain gates for the reviewed
 implementation commit. Phase 7 retained its exploratory failures, passed a
 route-enforced pilot, completed all nine repeated 1/3/5-UE matrix conditions,
@@ -253,8 +254,9 @@ document the full evidence and limitations.
 
 Phase 6 adds an independent telemetry lifecycle around the accepted Phase 5
 service. Prometheus pulls Kubernetes, node, container, Open5GS, UE-probe, and
-reviewed Phase 7 result metrics; Alloy sends project-scoped logs to Loki; and
-Grafana renders five version-controlled dashboards from Prometheus and Loki.
+reviewed Phase 7/8 result metrics; Alloy sends project-scoped logs to Loki;
+and Grafana renders six version-controlled dashboards from Prometheus and
+Loki.
 
 ```mermaid
 flowchart LR
@@ -263,8 +265,8 @@ flowchart LR
     K8S["Kubernetes API + kubelet"] --> KSM["kube-state-metrics"] --> PROM
     K8S -->|"node/container metrics"| PROM
     LOGS["Project Pod logs + Events"] --> ALLOY["Grafana Alloy"] --> LOKI["Loki"]
-    RESULTS["Reviewed Phase 7 summary\n556 bounded gauges"] --> PROM
-    PROM --> GRAFANA["Grafana\n5 provisioned dashboards"]
+    RESULTS["Reviewed Phase 7/8 summaries\nbounded gauges"] --> PROM
+    PROM --> GRAFANA["Grafana\n6 provisioned dashboards"]
     LOKI --> GRAFANA
     PROM --> ALERTS["Prometheus alert rules"]
 ```
@@ -419,7 +421,31 @@ post-Phase-8 host snapshot also passed. See the [methodology](docs/architecture/
 [runbook](docs/runbooks/phase-08-recovery.md), [reviewed report](reports/08_phase08_reliability.md),
 and [machine-readable summary](benchmarks/phase-08/results/summary.json).
 
-## Target Capabilities
+## Verified Phase 9 CI And Supply-Chain Gates
+
+Phase 9 separates checks that are safe on a GitHub-hosted runner from checks
+that require the local kind cluster, TUN devices, SCTP, and scoped networking
+capabilities. The hosted path uses read-only repository permissions and
+immutable action identities. It runs source, documentation, workflow, Helm,
+Kubernetes-schema, policy-as-code, secret, vulnerability, and image gates.
+
+Five locally built images passed fixed high/critical vulnerability and secret
+scanning and produced five SPDX 2.3 Software Bills of Materials. Four negative
+controls proved that the gates reject a mutable action, floating base image,
+privileged Pod, and synthetic secret. The data-network image was rebuilt from
+the accepted Alpine 3.22.5 manifest, promoted with exact rollback state, and
+passed the complete Phase 5/6 regression. The separate local privileged gate
+also verified all nine reviewed Phase 7 and nine reviewed Phase 8 conditions.
+
+GitHub Actions run `32434705350` accepted the final merged Phase 9 commit. This
+proves the declared repository and local-lab controls; it does not prove that
+all vulnerabilities are absent, that images are signed, or that the single-
+node lab has production security or availability. See the [security
+architecture](docs/architecture/phase-09-ci-security.md), [release-gate
+runbook](docs/runbooks/phase-09-release-gate.md), and [reviewed
+report](reports/09_phase09_security.md).
+
+## Implemented Capabilities
 
 - pinned and reproducible container images;
 - a reversible local Kubernetes environment;
@@ -427,8 +453,8 @@ and [machine-readable summary](benchmarks/phase-08/results/summary.json).
 - meaningful startup, readiness, and liveness checks;
 - automated synthetic subscriber generation and provisioning;
 - concurrent UE registration and Protocol Data Unit (PDU) sessions;
-- at least two Data Network Names (DNNs) or network slices;
-- Prometheus metrics and version-controlled Grafana dashboards;
+- two isolated Data Network Names (DNNs), without claiming network slicing;
+- Prometheus metrics and six version-controlled Grafana dashboards;
 - centralized, correlated operational logs;
 - repeatable throughput, latency, loss, and resource measurements;
 - controlled component-failure and recovery experiments;
@@ -436,7 +462,7 @@ and [machine-readable summary](benchmarks/phase-08/results/summary.json).
   tests, and container artifacts;
 - concise, sanitized evidence and operational runbooks.
 
-## Roadmap Target Architecture
+## Accepted Architecture
 
 ```mermaid
 flowchart LR
@@ -449,8 +475,10 @@ flowchart LR
     DB[("MongoDB")]
     DN["Controlled data network"]
     PROM["Prometheus"]
-    GRAF["Grafana"]
-    LOGS["Centralized logs"]
+    GRAF["Grafana\n6 dashboards"]
+    LOKI["Loki"]
+    ALLOY["Grafana Alloy"]
+    KSM["kube-state-metrics"]
 
     UE <-->|"Simulated radio"| GNB
     GNB <-->|"N2: NGAP over SCTP"| AMF
@@ -460,19 +488,20 @@ flowchart LR
     SMF <-->|"N4: PFCP"| UPF
     GNB <-->|"N3: GTP-U"| UPF
     UPF <-->|"N6: IP"| DN
-    PROM --> GRAF
+    KSM --> PROM --> GRAF
+    ALLOY --> LOKI --> GRAF
     AMF --> PROM
     SMF --> PROM
     UPF --> PROM
-    AMF --> LOGS
-    SMF --> LOGS
-    UPF --> LOGS
-    GNB --> LOGS
-    UE --> LOGS
+    AMF --> ALLOY
+    SMF --> ALLOY
+    UPF --> ALLOY
+    GNB --> ALLOY
+    UE --> ALLOY
 ```
 
-The target topology builds on the accepted kind, Helm, and five-UE/two-DNN
-baseline. Phase 6 added operational metrics, dashboards, alerts, and correlated
+The accepted topology builds on the kind, Helm, and five-UE/two-DNN baseline.
+Phase 6 added operational metrics, dashboards, alerts, and correlated
 logs without changing the accepted subscriber or user-plane contracts. Phase
 7 added a temporary, route-enforced benchmark overlay, preserved reviewed
 results, and then rolled that overlay back to the accepted Phase 6 runtime.
@@ -495,6 +524,7 @@ cloud-native-5g-core-platform/
 ├── benchmarks/             Reproducible experiment definitions and summaries
 ├── docs/                   Architecture, decisions, operation, and analysis
 ├── reports/                Sanitized validation and experiment reports
+├── release/                Claim and visual-evidence contracts
 ├── versions/               Exact tool, image, and source provenance manifests
 ├── captures/               Intentionally reviewed protocol evidence
 ├── screenshots/            Selected visual evidence
@@ -540,9 +570,20 @@ machine-readable measurements, and concise reports.
 - [Phase 9 release-gate runbook](docs/runbooks/phase-09-release-gate.md)
 - [Phase 9 reviewed security report](reports/09_phase09_security.md)
 - [Phase 9 detailed implementation model](docs/README.md#35-phase-9-continuous-integration-and-supply-chain-security)
+- [Phase 10 release-readiness architecture](docs/architecture/phase-10-release-readiness.md)
+- [Phase 10 release runbook](docs/runbooks/phase-10-release.md)
+- [Third-party software notices](THIRD_PARTY_NOTICES.md)
 - [CN5G Helm chart architecture and lifecycle](charts/cn5g/README.md)
 - [Kubernetes lifecycle automation](scripts/README.md#helm-managed-single-ue-lifecycle)
 - [Architecture Decision Records](docs/adr/README.md)
+
+## License
+
+Original project material is licensed under the [Apache License 2.0](LICENSE).
+Open5GS, UERANSIM, MongoDB, observability components, base distributions, and
+other third-party software retain their own licenses; see
+[Third-Party Software Notices](THIRD_PARTY_NOTICES.md) and the [image
+provenance record](docs/image-provenance.md).
 
 ## Authoritative References
 
