@@ -10,6 +10,13 @@ observability, controlled performance experiments, and recovery engineering.
 
 ![Platform overview](docs/images/platform-overview.svg)
 
+## What I implemented
+
+I wrote the project-specific Helm charts, deployment profiles, lifecycle and validation commands,
+telecom probes, observability provisioning, experiment analysis, and scoped teardown and release
+checks. Open5GS, UERANSIM, Kubernetes, Prometheus, Grafana, Loki, and Alloy are upstream components
+integrated by the project.
+
 ## What this system does
 
 The default deployment creates a complete local mobile network inside a
@@ -219,3 +226,4 @@ deep dives are:
 Project-authored material is licensed under the [Apache License 2.0](LICENSE).
 Upstream Open5GS, UERANSIM, container images, and tools retain their own
 licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
