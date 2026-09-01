@@ -223,4 +223,3 @@ deep dives are:
 Project-authored material is licensed under the [Apache License 2.0](LICENSE).
 Upstream Open5GS, UERANSIM, container images, and tools retain their own
 licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
-
