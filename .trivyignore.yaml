@@ -1,3 +1,15 @@
+vulnerabilities:
+  - id: CVE-2026-14456
+    purls:
+      - "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64&distro=3.22.5"
+      - "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64&distro=3.22.5"
+    statement: >-
+      The affected OpenSSL QUIC server code is not used by these images. The
+      data-network image serves HTTP through BusyBox, and the benchmark image
+      runs iperf3; neither exposes a QUIC listener. Remove this exception when
+      the pinned Alpine 3.22 base includes OpenSSL 3.5.8-r0 or later.
+    expired_at: 2026-11-30
+
 misconfigurations:
   - id: KSV-0119
     paths:
@@ -37,3 +49,4 @@ misconfigurations:
       entrypoint and enforces non-root UID/GID 65532 with all capabilities
       dropped; static and rendered-policy tests verify both boundaries.
     expired_at: 2027-08-20
+
