@@ -28,32 +28,32 @@ single-node [kind](https://kind.sigs.k8s.io/) cluster:
   isolated `enterprise` DNN;
 - every UE receives a unique session address and reaches only its intended
   controlled data endpoint;
-- Prometheus, Grafana, Loki, Alloy, and kube-state-metrics expose the
-  platform's service, resource, log, experiment, and recovery evidence; and
-- lifecycle commands validate, test, and remove only resources proven to be
-  owned by this project.
+- Prometheus, Grafana, Loki, Alloy, and kube-state-metrics expose service health,
+  resource use, logs, experiment results, and recovery timing; and
+- lifecycle commands validate, test, and remove only resources identified as
+  project-owned.
 
 This is an engineering integration platform, not a carrier production
-topology. Its scope is deliberately bounded to one local Kubernetes node, one
-gNodeB, one User Plane Function (UPF), five synthetic subscribers, and two
-controlled data networks.
+topology. The tested setup uses one local Kubernetes node, one gNodeB, one User
+Plane Function (UPF), five synthetic subscribers, and two controlled data
+networks.
 
 ## Operational views
 
-The dashboards are provisioned from Git and validated against live or
-reviewed machine-readable evidence. Screenshots are sanitized and checksum
-bound to their source dashboards.
+The dashboards are provisioned from Git and checked against saved metrics and
+test results. Each screenshot is sanitized and linked to its source dashboard
+by checksum.
 
 | Live service health | Per-UE and DNN behavior |
 | --- | --- |
 | [![CN5G service overview](docs/images/dashboards/service-overview-healthy.png)](docs/images/dashboards/service-overview-healthy.png) | [![5G UE and DNN view](docs/images/dashboards/telecom-sessions-and-dnns-healthy.png)](docs/images/dashboards/telecom-sessions-and-dnns-healthy.png) |
 
-| Reviewed performance campaign | Reviewed recovery campaign |
+| Performance test results | Recovery test results |
 | --- | --- |
-| [![Performance evidence](docs/images/dashboards/performance-reviewed.png)](docs/images/dashboards/performance-reviewed.png) | [![Resilience evidence](docs/images/dashboards/resilience-reviewed.png)](docs/images/dashboards/resilience-reviewed.png) |
+| [![Performance test dashboard](docs/images/dashboards/performance-reviewed.png)](docs/images/dashboards/performance-reviewed.png) | [![Recovery test dashboard](docs/images/dashboards/resilience-reviewed.png)](docs/images/dashboards/resilience-reviewed.png) |
 
-See the [dashboard evidence gallery](docs/dashboard-gallery.md) for panel
-scope, provenance, and limitations.
+See the [dashboard gallery](docs/dashboard-gallery.md) for each panel's data
+source and limitations.
 
 ## Architecture at a glance
 
@@ -84,30 +84,28 @@ maps ownership, Pods and sidecars, stable service names, runtime address
 domains, every relevant port, telemetry flow, and one end-to-end example from
 a stopped UE to a returned ping.
 
-## Verified engineering claims
+## What was tested
 
-| Capability | Accepted evidence | Scope boundary |
+| Area | Result | Limits |
 | --- | --- | --- |
 | 5G control plane | 5G-AKA authentication, NAS security, registration, unique PDU sessions, nine stable NRF profiles | Synthetic subscribers on one local cluster |
 | User plane | N4 PFCP, N3 GTP-U, bidirectional tunnel counters, HTTP and ICMP through `uesimtun0` | One gNodeB and one UPF |
 | Network separation | 3 `internet` UEs, 2 `enterprise` UEs, fail-closed source policy, every cross-DNN request denied | Exactly two controlled DNNs |
-| Performance | Nine accepted conditions: three repetitions at 1, 3, and 5 UEs; deterministic reports and plots | Local comparative experiment, not carrier capacity |
+| Performance | Three runs at 1, 3, and 5 UEs; reports and plots generated from saved results | Local comparison, not carrier capacity |
 | Recovery | Nine controlled AMF, SMF, and UPF failures with measured detection and restoration | Single replicas; recovery was operator-assisted, not high availability |
-| Observability | Six dashboards, bounded metric cardinality, centralized logs, and three alerts proven through firing and resolution | Single-replica local telemetry stack |
+| Observability | Six dashboards, controlled metric cardinality, centralized logs, and three alerts tested from trigger through resolution | Single-replica local telemetry stack |
 | Persistence | MongoDB subscriber state survives Pod recreation and controlled release lifecycle tests | Local-path PersistentVolume, not replicated storage |
-| Supply chain | Pinned inputs, High/Critical image scan gates, SPDX SBOMs, policy checks, secret scanning, and read-only hosted CI | Local images; no production registry or signing claim |
+| Supply chain | Pinned inputs, High/Critical image scan gates, SPDX SBOMs, policy checks, secret scanning, and read-only hosted CI | Local images; no production registry or signing |
 | Release lifecycle | Clean-cluster installation from tracked inputs and exact project-owned teardown both passed | Documented Ubuntu/AMD64 environment |
 
-Reviewed measurements and their limitations are preserved under
-[`reports/`](reports/README.md). Raw scanner output, credentials, kubeconfigs,
-packet-level diagnostics, and host snapshots remain local and excluded from
-Git.
+Measurements and test limitations are documented under [`reports/`](reports/README.md).
+Raw scanner output, credentials, kubeconfigs, packet-level diagnostics, and
+host snapshots remain local and excluded from Git.
 
 ## Deploy the default platform
 
-The default profile is the strongest accepted configuration: five UEs, two
-DNNs, and the observability stack. Smaller configurations are explicit
-options, not steps that must be run first.
+The default profile deploys five UEs, two DNNs, and the observability stack.
+Smaller configurations are optional and do not need to be run first.
 
 ```bash
 git clone https://github.com/abdelrahman-fawaz18/cloud-native-5g-core-platform.git
@@ -158,8 +156,8 @@ quietly fall back to the simpler model.
 
 ## Optional engineering campaigns
 
-Performance and resilience tests operate on the accepted default platform;
-they do not represent separate products.
+Performance and recovery tests use the default platform; they are not separate
+products.
 
 ```bash
 # Route-enforced traffic pilot, repeated matrix, deterministic analysis
@@ -174,9 +172,9 @@ sudo ./scripts/cn5g-platform.sh campaign resilience run
 sudo ./scripts/cn5g-platform.sh campaign resilience analyze
 ```
 
-Every condition has resource abort floors, exact fault or traffic boundaries,
-restoration gates, and retained failed-attempt evidence. Only accepted
-conditions enter reviewed summaries.
+Each run defines resource abort thresholds, fault or traffic windows, and
+restoration checks. Summaries include only runs that completed those checks;
+failed attempts are kept for diagnosis.
 
 ## Repository map
 
@@ -187,27 +185,26 @@ conditions enter reviewed summaries.
 | [`containers/`](containers/README.md) | Pinned local image builds and entrypoints |
 | [`scripts/`](scripts/README.md) | Unified lifecycle, validation, campaigns, and assurance tooling |
 | [`docs/`](docs/README.md) | Architecture, operations, runbooks, and design decisions |
-| [`reports/`](reports/README.md) | Sanitized reviewed evidence and measured limitations |
-| [`benchmarks/`](benchmarks/README.md) | Experiment contracts and accepted machine-readable results |
+| [`reports/`](reports/README.md) | Sanitized measurements, test results, and limitations |
+| [`benchmarks/`](benchmarks/README.md) | Experiment definitions and machine-readable results |
 | [`policy/`](policy/README.md) | Kubernetes admission-style security policy |
-| [`release/`](release/README.md) | Bounded public claims and visual evidence contracts |
+| [`release/`](release/README.md) | Release checks and generated figures |
 
-## Design principles
+## Implementation choices
 
-- **Evidence before claims.** Results are accepted only when the protocol,
-  traffic, recovery, or security behavior is reproducible and preserved.
+- **Repeatable tests.** Results are kept with the configuration, procedure, and
+  saved output needed to inspect them.
 - **Least privilege.** No workload is privileged. UPF receives `NET_ADMIN`;
   UE Pods receive only `NET_ADMIN` and `NET_RAW`; controlled data endpoints
   run with no effective capabilities.
-- **Stable control, dynamic runtime.** Services and DNS provide stable
+- **Runtime discovery.** Services and DNS provide stable
   discovery while validators derive current Pod addresses and exact node-side
   routes rather than assuming stale allocations.
-- **Scoped lifecycle.** Cleanup checks identity and ownership; scripts never
+- **Targeted cleanup.** Cleanup checks identity and ownership; scripts never
   run broad Docker prunes, flush host firewall state, or remove unrelated
   resources.
-- **Honest boundaries.** Single-node behavior is not presented as high
-  availability, local throughput is not presented as carrier capacity, and
-  simulated radio is not presented as RF performance.
+- **Documented limits.** The results cover a single-node test environment, not
+  high availability, carrier capacity, or RF performance.
 
 ## Documentation
 
