@@ -8,7 +8,7 @@ A reproducible Open5GS and UERANSIM 5G Standalone platform on Kubernetes,
 built to demonstrate real signalling, isolated user-plane traffic,
 observability, controlled performance experiments, and recovery engineering.
 
-![Platform overview](docs/images/platform-overview.svg)
+![Cloud-native 5G platform showing five synthetic UEs, UERANSIM gNodeB, Open5GS core, isolated DNN paths, operational evidence, and the platform engineering workflow](docs/images/platform-overview.png)
 
 ## What I implemented
 
