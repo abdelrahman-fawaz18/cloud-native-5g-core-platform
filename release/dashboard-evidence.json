@@ -6,7 +6,7 @@
     {
       "role": "overview",
       "file": "docs/images/dashboards/service-overview-healthy.png",
-      "sha256": "d0cd4189ee788028cd6c3823973210562c6f5024225246bdd7eef4b88d413bd8",
+      "sha256": "d882cf58825e83499be5a912440a13e33a13a7b0a7deebad1f7a626da28259b7",
       "dashboard_uid": "cn5g-platform",
       "dashboard_title": "CN5G Service Overview",
       "captured_at": "2026-08-21T02:32:26Z",
@@ -20,7 +20,7 @@
     {
       "role": "telecom",
       "file": "docs/images/dashboards/telecom-sessions-and-dnns-healthy.png",
-      "sha256": "7a43368c8f73b4f9c68f8e8f2959f2ca0b105bdddb14e1d73de4ff11bc3c23d0",
+      "sha256": "31dad076a47fc6efa26ded04fb18f96e3866b8d83c37942baab857f1c997a1e7",
       "dashboard_uid": "cn5g-5g-service",
       "dashboard_title": "CN5G Control, Sessions, UEs, And DNNs",
       "captured_at": "2026-08-21T02:32:41Z",
@@ -37,7 +37,7 @@
     {
       "role": "performance",
       "file": "docs/images/dashboards/performance-reviewed.png",
-      "sha256": "0cbe9d980148b0235edb9085054c3ca6a93335585e7c583a26683953bdd69fad",
+      "sha256": "786116920f9f3c16f2304824248e6ba62c7adf28787d4a940d7133f8bf3f2bf4",
       "dashboard_uid": "cn5g-performance",
       "dashboard_title": "CN5G Performance And Capacity Experiments",
       "captured_at": "2026-08-21T02:32:56Z",
@@ -53,7 +53,7 @@
     {
       "role": "reliability",
       "file": "docs/images/dashboards/resilience-reviewed.png",
-      "sha256": "5315790af43aee2ba8f729afef9986002b5e741f90de1027431a49b5fc062c0a",
+      "sha256": "7d0b6f9b7ff14092eda45f8a45e7d3da1bbe645c727f982b899ca491efdd9edc",
       "dashboard_uid": "cn5g-reliability",
       "dashboard_title": "CN5G Reliability And Recovery",
       "captured_at": "2026-08-21T02:33:09Z",

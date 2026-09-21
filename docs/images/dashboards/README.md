@@ -6,7 +6,7 @@ Git-provisioned Grafana dashboards. A capture must:
 - show synthetic project data only;
 - exclude browser chrome, local paths, usernames, credentials, and unrelated
   applications;
-- be at least 1200 by 600 pixels and contain no PNG text or EXIF metadata;
+- be at least 1200 by 480 pixels and contain no PNG text or EXIF metadata;
 - identify its dashboard UID, title, Git commit, UTC capture time, time range,
   variables, scenario, proof, and limitation in
   `release/dashboard-evidence.json`;

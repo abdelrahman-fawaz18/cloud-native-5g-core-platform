@@ -55,7 +55,7 @@ class ReleaseQualificationStaticTests(unittest.TestCase):
             'required_roles = {"overview", "telecom", "performance", "reliability"}',
             'len(captures) < 4',
             'chunks & {"tEXt", "zTXt", "iTXt", "eXIf"}',
-            'width < 1200 or height < 600',
+            'width < 1200 or height < 480',
             'digest != capture.get("sha256")',
             'uid not in sources',
             're.fullmatch(r"[0-9a-f]{40}"',

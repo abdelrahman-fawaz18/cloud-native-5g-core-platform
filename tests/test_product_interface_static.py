@@ -99,7 +99,7 @@ class ProductInterfaceStaticTests(unittest.TestCase):
 
     def test_landing_page_uses_product_visuals_and_one_quickstart(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("docs/images/platform-overview.svg", readme)
+        self.assertIn("docs/images/platform-overview.png", readme)
         self.assertIn("service-overview-healthy.png", readme)
         self.assertIn("performance-reviewed.png", readme)
         self.assertIn("resilience-reviewed.png", readme)

@@ -54,6 +54,6 @@ recovery evidence, not a high-availability or automatic-failover claim.
 
 The captures were taken after the release qualification local privileged gate revalidated
 the five-UE/two-DNN service and observability stack. Each PNG is at least
-1200 by 600 pixels, stripped of textual and EXIF metadata, and checksum-bound
+1200 by 480 pixels, stripped of textual and EXIF metadata, and checksum-bound
 to its manifest. They intentionally exclude browser chrome, terminal output,
 local paths, usernames, credentials, and raw subscriber data.

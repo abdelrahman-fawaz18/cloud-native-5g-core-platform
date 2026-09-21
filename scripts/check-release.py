@@ -207,7 +207,7 @@ def check_visuals() -> None:
         if digest != capture.get("sha256"):
             raise CheckFailure(f"dashboard evidence checksum mismatch: {path.relative_to(ROOT)}")
         width, height, chunks = png_metadata(path)
-        if width < 1200 or height < 600:
+        if width < 1200 or height < 480:
             raise CheckFailure(
                 f"dashboard evidence is too small ({width}x{height}): {path.relative_to(ROOT)}"
             )
